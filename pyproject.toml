@@ -1,0 +1,16 @@
+[project]
+name = "ntu-course-index"
+version = "0.1.0"
+description = "MCP server for NTU Singapore course indexes and timetables"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=2,<3",
+]
+
+[project.scripts]
+ntu-course-index = "ntu_course_index:main"
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"

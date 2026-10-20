@@ -9,7 +9,12 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field, model_validator
 
 from .domain import Course, compare_indexes as compare, course_metadata, find_matching_indexes as find
-from .ntu_client import NTURequestError, get_course as fetch_course, validate_course_code
+from .ntu_client import (
+    NTURequestError,
+    get_course as fetch_course,
+    get_graduate_course_schedule as fetch_graduate_course_schedule,
+    validate_course_code,
+)
 
 
 Day = Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
@@ -87,10 +92,11 @@ mcp = MCPServer(
     "ntu-course-index",
     version="0.1.0",
     instructions=(
-        "Read-only NTU class schedule tools. Academic year is the first year printed by NTU "
-        "(2026 means AY2026/27). Semester is 1, 2, or S. Data comes from the official public "
-        "class schedule and is not registration vacancy or enrollment data. Unknown timetable "
-        "details are preserved and marked uncertain."
+        "Read-only NTU timetable tools. Undergraduate tools use the official public Class Schedule; "
+        "graduate lookup uses GSLink/PGR and reports the currently published term as class groups, "
+        "not indexes. Academic year is the first year printed by NTU (2026 means AY2026/27); "
+        "undergraduate semester is 1, 2, or S. Results are not STARS vacancy data. Unknown "
+        "undergraduate timetable details are preserved and marked uncertain."
     ),
 )
 _read_only = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
@@ -154,6 +160,15 @@ def get_course_indexes(course_code: str, academic_year: int, semester: Semester)
         }
     )
     return result
+
+
+@mcp.tool(annotations=_read_only)
+def get_graduate_course_schedule(course_code: str) -> dict[str, Any]:
+    """Get a graduate course's class groups for NTU's currently published academic term."""
+    try:
+        return fetch_graduate_course_schedule(course_code)
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
 
 
 @mcp.tool(annotations=_read_only)

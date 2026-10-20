@@ -2,7 +2,14 @@ from pathlib import Path
 import unittest
 
 from ntu_course_index.domain import session_signature
-from ntu_course_index.parser import CourseUnavailable, NTUPageError, parse_course_page, parse_teaching_weeks
+from ntu_course_index.parser import (
+    CourseUnavailable,
+    NTUPageError,
+    parse_course_description,
+    parse_course_page,
+    parse_graduate_course_page,
+    parse_teaching_weeks,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -13,6 +20,41 @@ def load_fixture(name: str) -> str:
 
 
 class CoursePageTests(unittest.TestCase):
+    def test_public_graduate_course_timetable(self) -> None:
+        graduate_html = load_fixture("ee6102-graduate-2026-1.html")
+        course = parse_graduate_course_page(graduate_html, "EE6102")
+        self.assertEqual((course["course_code"], course["course_name"], course["au"]),
+                         ("EE6102", "Cyber Security & Blockchain Technology", 3.0))
+        self.assertEqual((course["academic_year"], course["term"]), (2026, "1"))
+        groups = course["class_groups"]
+        self.assertEqual([group["class_group"] for group in groups], ["A", "B"])
+        self.assertEqual(groups[0]["sessions"][0]["day"], "FRI")
+        self.assertEqual(groups[0]["sessions"][0]["start_time"], "18:30")
+        self.assertEqual(groups[0]["sessions"][0]["venue"], "LKC-LT")
+        self.assertTrue(course["schedule_complete"])
+        self.assertEqual(
+            set(course),
+            {"course_code", "course_name", "au", "academic_year", "term", "schedule_complete", "class_groups"},
+        )
+
+    def test_graduate_page_with_no_matching_course(self) -> None:
+        graduate_html = load_fixture("ee6102-graduate-2026-1.html")
+        with self.assertRaises(CourseUnavailable):
+            parse_graduate_course_page(graduate_html, "ZZ9999")
+        with self.assertRaises(NTUPageError):
+            parse_graduate_course_page("<html><body>maintenance</body></html>", "EE6102")
+
+    def test_official_course_description(self) -> None:
+        description = parse_course_description(load_fixture("sc2001-content-2026-1.html"), "SC2001")
+        self.assertIsNotNone(description)
+        self.assertIn("algorithm design and analysis", description)
+
+    def test_course_description_missing_result_and_unrecognized_page(self) -> None:
+        content = load_fixture("sc2001-content-2026-1.html")
+        self.assertIsNone(parse_course_description(content, "ZZ9999"))
+        with self.assertRaises(NTUPageError):
+            parse_course_description("<html><body>maintenance</body></html>", "SC2001")
+
     def test_sc2001_2026_semester_one(self) -> None:
         course = parse_course_page(load_fixture("sc2001-2026-1.html"), "SC2001")
         self.assertEqual(course.course_name, "ALGORITHM DESIGN & ANALYSIS~")

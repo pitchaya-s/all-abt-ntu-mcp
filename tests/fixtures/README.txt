@@ -1,6 +1,12 @@
 These public timetable responses were fetched from NTU's official class schedule
 on 2026-10-21 for offline parser tests. The endpoint returns Windows-1252 HTML.
+The SC2001 course-description response was fetched from NTU's official Content
+of Courses endpoint on 2026-10-21; it also uses Windows-1252 HTML.
+The EE6102 graduate schedule response was fetched from NTU GSLink/PGR on
+2026-10-21; public enrolment-count cells were blanked in this test fixture.
 SC2001 and SC2207 are AY2026 Semester 1; MH2802 is AY2026 Semester 1;
 SC2001 2025-2 covers a separate academic term.
 
 Source: https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE.main_display1
+Course content source: https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SUBJ_CONT.main_display1
+Graduate schedule source: https://wish.wis.ntu.edu.sg/pls/webexe/pgr$subrs_timetable.examTimetable?bOption=Next&choiceSubj=EE6102

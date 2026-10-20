@@ -1,29 +1,31 @@
 # NTU Course Index MCP
 
-A local, read-only MCP server for NTU Singapore course schedules. It fetches course data from NTU's public Class Schedule endpoint, queries the full-time schedule option, and does not use third-party course databases.
+A local, read-only MCP server for NTU Singapore course schedules. It fetches undergraduate course data from NTU's public Class Schedule endpoint and graduate course-group schedules from NTU's GSLink/PGR timetable. It does not use third-party course databases.
+
+Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
 ## Install and run
 
-Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. For development and offline tests, run:
+Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the MCP server directly from GitHub with:
+
+```sh
+uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-course-index
+```
+
+For development and offline tests from a local checkout, run:
 
 ```sh
 uv sync
 ```
 
-To start the MCP server in an isolated `uvx` environment from this local checkout, run:
-
-```sh
-uvx --from /path/to/ntu-stars-mcp ntu-course-index
-```
-
-Replace the path with the repository's absolute path. The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
+The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
 ## Codex setup
 
 Register the local server with the Codex CLI:
 
 ```sh
-codex mcp add ntu-course-index -- uvx --from /path/to/ntu-stars-mcp ntu-course-index
+codex mcp add ntu-course-index -- uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-course-index
 codex mcp list
 ```
 
@@ -32,7 +34,7 @@ Replace the directory with the repository's absolute path on your machine. Codex
 ```toml
 [mcp_servers.ntu-course-index]
 command = "uvx"
-args = ["--from", "/path/to/ntu-stars-mcp", "ntu-course-index"]
+args = ["--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-course-index"]
 ```
 
 Restart Codex after adding or changing the server.
@@ -42,28 +44,39 @@ Restart Codex after adding or changing the server.
 Register the server for your user so it is available across Claude Code projects:
 
 ```sh
-claude mcp add --scope user ntu-course-index -- uvx --from /path/to/ntu-stars-mcp ntu-course-index
+claude mcp add --scope user ntu-course-index -- uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-course-index
 claude mcp get ntu-course-index
 ```
 
-Replace the path with the repository's absolute path. Check the connection with `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for scope and configuration details.
+Check the connection with `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for scope and configuration details.
 
 ## Tools
 
-Every tool takes `academic_year` and `semester`. NTU labels academic years by their first year, so `academic_year: 2026` means AY2026/27. Semester is `1`, `2`, or `"S"` for Special Term.
+Undergraduate tools take `academic_year` and `semester`. NTU labels academic years by their first year, so `academic_year: 2026` means AY2026/27. Semester is `1`, `2`, or `"S"` for Special Term. `get_graduate_course_schedule` returns the latest term published by GSLink/PGR.
 
 | Tool | Purpose |
 | --- | --- |
 | `get_course` | Course metadata and every index with all sessions |
 | `get_course_indexes` | All indexes and complete lesson schedules |
+| `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions |
 | `get_index_schedule` | Full schedule for one index |
 | `compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks |
 | `find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes |
+
+Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
+
+Graduate schedules use class groups rather than undergraduate index numbers. PGR reports the currently published term and does not provide teaching weeks.
 
 Example inputs:
 
 ```json
 {"course_code":"SC2001","academic_year":2026,"semester":1}
+```
+
+Graduate lookup uses only the course code and returns NTU's currently published term:
+
+```json
+{"course_code":"EE6102"}
 ```
 
 ```json

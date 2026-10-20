@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,9 @@ class Course:
     semester: str | None = None
     retrieved_at: str | None = None
     source_url: str | None = None
+    course_description: str | None = None
+    course_description_status: Literal["available", "not_listed", "unavailable"] = "unavailable"
+    course_description_source: str | None = None
 
     def with_request_metadata(
         self, *, academic_year: int, semester: str, retrieved_at: str, source_url: str
@@ -59,12 +62,29 @@ class Course:
             source_url=source_url,
         )
 
+    def with_course_description(
+        self,
+        *,
+        description: str | None,
+        status: Literal["available", "not_listed", "unavailable"],
+        source_url: str,
+    ) -> Course:
+        return replace(
+            self,
+            course_description=description,
+            course_description_status=status,
+            course_description_source=source_url,
+        )
+
 
 def course_metadata(course: Course) -> dict[str, Any]:
     return {
         "course_code": course.course_code,
         "course_name": course.course_name,
         "au": course.au,
+        "course_description": course.course_description,
+        "course_description_status": course.course_description_status,
+        "course_description_source": course.course_description_source,
         "prerequisites": course.details.get("prerequisite"),
         "course_notes": [
             {"label": label, "text": text}

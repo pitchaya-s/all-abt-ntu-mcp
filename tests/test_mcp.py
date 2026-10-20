@@ -5,7 +5,7 @@ from unittest.mock import patch
 from mcp import Client
 
 from ntu_course_index.mcp_server import mcp
-from ntu_course_index.parser import parse_course_page
+from ntu_course_index.parser import parse_course_description, parse_course_page, parse_graduate_course_page
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sc2001-2026-1.html"
@@ -14,8 +14,20 @@ COURSE = parse_course_page(HTML, "SC2001").with_request_metadata(
     academic_year=2026,
     semester="1",
     retrieved_at="2026-10-21T00:00:00+00:00",
-    source_url="https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE.main_display1",
+    source_url="https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE_NEW.main_display1",
+).with_course_description(
+    description=parse_course_description(
+        (Path(__file__).parent / "fixtures" / "sc2001-content-2026-1.html").read_bytes().decode("windows-1252"),
+        "SC2001",
+    ),
+    status="available",
+    source_url="https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SUBJ_CONT.main_display1",
 )
+GRADUATE_HTML = (Path(__file__).parent / "fixtures" / "ee6102-graduate-2026-1.html").read_bytes().decode("windows-1252")
+GRADUATE_COURSE = {
+    **parse_graduate_course_page(GRADUATE_HTML, "EE6102"),
+    "source_url": "https://wish.wis.ntu.edu.sg/pls/webexe/pgr$subrs_timetable.examTimetable?bOption=Next&choiceSubj=EE6102",
+}
 
 
 class MCPClientTests(unittest.IsolatedAsyncioTestCase):
@@ -29,6 +41,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "get_course",
                         "get_course_indexes",
+                        "get_graduate_course_schedule",
                         "get_index_schedule",
                         "compare_indexes",
                         "find_matching_indexes",
@@ -48,6 +61,22 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertFalse(course_result.is_error)
                 self.assertEqual(course_result.structured_content["index_count"], 36)
+                self.assertEqual(course_result.structured_content["course_description_status"], "available")
+                self.assertIn("algorithm design and analysis", course_result.structured_content["course_description"])
+
+                with patch(
+                    "ntu_course_index.mcp_server.fetch_graduate_course_schedule",
+                    return_value=GRADUATE_COURSE,
+                ):
+                    graduate_result = await client.call_tool(
+                        "get_graduate_course_schedule", {"course_code": "EE6102"}
+                    )
+                self.assertFalse(graduate_result.is_error)
+                self.assertEqual(graduate_result.structured_content["academic_year"], 2026)
+                self.assertEqual(
+                    [group["class_group"] for group in graduate_result.structured_content["class_groups"]],
+                    ["A", "B"],
+                )
 
                 comparison = await client.call_tool(
                     "compare_indexes",

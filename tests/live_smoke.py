@@ -14,7 +14,7 @@ async def main() -> None:
     async with Client(
         StdioServerParameters(
             command="uvx",
-            args=["--from", str(ROOT), "ntu-course-index"],
+            args=["--no-cache", "--from", str(ROOT), "ntu-course-index"],
             cwd=str(ROOT),
         )
     ) as client:
@@ -36,6 +36,9 @@ async def main() -> None:
             data = result.structured_content
             assert data["course_code"] == code
             assert data["index_count"] == expected_count, (code, data["index_count"])
+            if code == "SC2001" and year == 2026 and semester == 1:
+                assert data["course_description_status"] == "available"
+                assert "algorithm design and analysis" in data["course_description"].lower()
             print(
                 f"Live MCP smoke passed: {data['course_code']} {data['course_name']}; "
                 f"{data['index_count']} indexes from AY{data['academic_year']} semester {data['semester']}."
@@ -51,6 +54,22 @@ async def main() -> None:
         tutorial = next(item for item in sessions if item["lesson_type"] == "TUT")
         assert tutorial["day"] == "TUE" and tutorial["start_time"] == "16:30"
         print("Live MCP smoke passed: SC2001 index 10143 includes its Tuesday tutorial and all four sessions.")
+
+        graduate = await client.call_tool("get_graduate_course_schedule", {"course_code": "EE6102"})
+        if graduate.is_error:
+            raise RuntimeError(graduate.content)
+        graduate_data = graduate.structured_content
+        assert graduate_data["course_code"] == "EE6102"
+        assert graduate_data["class_groups"]
+        assert set(graduate_data) == {
+            "course_code", "course_name", "au", "academic_year", "term", "schedule_complete", "class_groups", "source_url"
+        }
+        graduate_sessions = [session for group in graduate_data["class_groups"] for session in group["sessions"]]
+        assert any(session["day"] == "FRI" and session["start_time"] == "18:30" for session in graduate_sessions)
+        print(
+            f"Live MCP smoke passed: graduate EE6102 AY{graduate_data['academic_year']} term "
+            f"{graduate_data['term']}, {len(graduate_data['class_groups'])} class group(s)."
+        )
 
         comparison = await client.call_tool(
             "compare_indexes",

@@ -1,8 +1,8 @@
 # NTU Course Index MCP
 
-A local, read-only MCP server for NTU Singapore course schedules. It fetches undergraduate course data from NTU's public Class Schedule endpoint and graduate course-group schedules from NTU's GSLink/PGR timetable. It does not use third-party course databases.
+A local, read-only MCP server for NTU Singapore course and exam schedules. It fetches undergraduate course data from NTU's public Class Schedule and General Access exam timetable, and graduate course-group schedules from NTU's GSLink/PGR timetable. It does not use third-party course databases.
 
-Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
+Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
 ## Install and run
 
@@ -52,13 +52,14 @@ Check the connection with `claude mcp list` or `/mcp` inside Claude Code. See [C
 
 ## Tools
 
-Undergraduate tools take `academic_year` and `semester`. NTU labels academic years by their first year, so `academic_year: 2026` means AY2026/27. Semester is `1`, `2`, or `"S"` for Special Term. `get_graduate_course_schedule` returns the latest term published by GSLink/PGR.
+Class schedule tools take `academic_year` and `semester`. NTU labels academic years by their first year, so `academic_year: 2026` means AY2026/27. Semester is `1`, `2`, or `"S"` for Special Term. The exam lookup defaults to the latest published exam term; pass both `academic_year` and semester (`1` or `2`) to request a specific published term. It uses General Access, returns exam dates and times, and does not include exam-seat assignments. `get_graduate_course_schedule` returns the latest term published by GSLink/PGR.
 
 | Tool | Purpose |
 | --- | --- |
 | `get_course` | Course metadata and every index with all sessions |
 | `get_course_indexes` | All indexes and complete lesson schedules |
 | `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions |
+| `get_undergraduate_exam_schedule` | Undergraduate exam date, time, duration, and published-term notice |
 | `get_index_schedule` | Full schedule for one index |
 | `compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks |
 | `find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes |
@@ -77,6 +78,12 @@ Graduate lookup uses only the course code and returns NTU's currently published 
 
 ```json
 {"course_code":"EE6102"}
+```
+
+Undergraduate exam lookup uses the latest public term, or an explicitly requested published semester:
+
+```json
+{"course_code":"SC2001"}
 ```
 
 ```json
@@ -110,6 +117,12 @@ The live stdio smoke test launches through `uvx` and makes real requests to NTU 
 uv run python tests/live_smoke.py
 ```
 
+The undergraduate exam smoke test exercises NTU's public General Access flow through MCP:
+
+```sh
+uv run python tests/live_exam_smoke.py
+```
+
 ## Verified response examples
 
 Live official pages fetched on 2026-10-21 returned 36 indexes for SC2001, 13 for SC2207, and 12 for MH2802 in AY2026 semester 1. For SC2001 index `10143`, the endpoint lists two shared `LEC/STUDIO` sessions, a Tuesday `TUT` from 16:30 to 17:20 in `TR+7` during weeks 2–13, and a Monday `LAB` from 10:30 to 12:20 in `HWLAB2` during odd weeks 1–13.
@@ -126,6 +139,8 @@ Live official pages fetched on 2026-10-21 returned 36 indexes for SC2001, 13 for
   ]
 }
 ```
+
+The public exam timetable currently lists SC2001's AY2026 Semester 1 exam on 2026-11-23 at 13:00 for 120 minutes. The response carries NTU's notice that the timetable may change; exam-seat assignments are published separately.
 
 ## Limits
 

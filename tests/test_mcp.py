@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from mcp import Client
 
+from ntu_course_index.parser.exam import parse_undergraduate_exam_schedule
 from ntu_course_index.mcp_server import mcp
 from ntu_course_index.parser import parse_course_description, parse_course_page, parse_graduate_course_page
 
@@ -28,6 +29,10 @@ GRADUATE_COURSE = {
     **parse_graduate_course_page(GRADUATE_HTML, "EE6102"),
     "source_url": "https://wish.wis.ntu.edu.sg/pls/webexe/pgr$subrs_timetable.examTimetable?bOption=Next&choiceSubj=EE6102",
 }
+EXAM_COURSE = parse_undergraduate_exam_schedule(
+    (Path(__file__).parent / "fixtures" / "undergrad-exam-sc2001-2026-1.html").read_bytes().decode("windows-1252"),
+    "SC2001",
+)
 
 
 class MCPClientTests(unittest.IsolatedAsyncioTestCase):
@@ -42,6 +47,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "get_course",
                         "get_course_indexes",
                         "get_graduate_course_schedule",
+                        "get_undergraduate_exam_schedule",
                         "get_index_schedule",
                         "compare_indexes",
                         "find_matching_indexes",
@@ -77,6 +83,17 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     [group["class_group"] for group in graduate_result.structured_content["class_groups"]],
                     ["A", "B"],
                 )
+
+                with patch(
+                    "ntu_course_index.mcp_server.fetch_undergraduate_exam_schedule",
+                    return_value=EXAM_COURSE,
+                ):
+                    exam_result = await client.call_tool(
+                        "get_undergraduate_exam_schedule", {"course_code": "SC2001"}
+                    )
+                self.assertFalse(exam_result.is_error)
+                self.assertEqual(exam_result.structured_content["exams"][0]["date"], "2026-11-23")
+                self.assertEqual(exam_result.structured_content["exams"][0]["start_time"], "13:00")
 
                 comparison = await client.call_tool(
                     "compare_indexes",

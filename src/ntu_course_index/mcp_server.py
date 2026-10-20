@@ -13,12 +13,14 @@ from .ntu_client import (
     NTURequestError,
     get_course as fetch_course,
     get_graduate_course_schedule as fetch_graduate_course_schedule,
+    get_undergraduate_exam_schedule as fetch_undergraduate_exam_schedule,
     validate_course_code,
 )
 
 
 Day = Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 Semester = Literal[1, 2, "S"]
+ExamSemester = Literal[1, 2]
 TimeText = Annotated[str, Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$", description="24-hour time in HH:MM format")]
 WeekNumber = Annotated[int, Field(ge=1, le=20)]
 
@@ -94,7 +96,8 @@ mcp = MCPServer(
     instructions=(
         "Read-only NTU timetable tools. Undergraduate tools use the official public Class Schedule; "
         "graduate lookup uses GSLink/PGR and reports the currently published term as class groups, "
-        "not indexes. Academic year is the first year printed by NTU (2026 means AY2026/27); "
+        "not indexes. Undergraduate exam lookup uses General Access and returns published exam times, "
+        "not exam-seat assignments. Academic year is the first year printed by NTU (2026 means AY2026/27); "
         "undergraduate semester is 1, 2, or S. Results are not STARS vacancy data. Unknown "
         "undergraduate timetable details are preserved and marked uncertain."
     ),
@@ -167,6 +170,17 @@ def get_graduate_course_schedule(course_code: str) -> dict[str, Any]:
     """Get a graduate course's class groups for NTU's currently published academic term."""
     try:
         return fetch_graduate_course_schedule(course_code)
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
+
+
+@mcp.tool(annotations=_read_only)
+def get_undergraduate_exam_schedule(
+    course_code: str, academic_year: int | None = None, semester: ExamSemester | None = None
+) -> dict[str, Any]:
+    """Get public General Access exam dates and times for a course in the latest or specified published term."""
+    try:
+        return fetch_undergraduate_exam_schedule(course_code, academic_year, semester)
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 

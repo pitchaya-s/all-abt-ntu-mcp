@@ -87,7 +87,9 @@ The process uses MCP stdio, so it stays open while its MCP client is connected. 
 
 ```text
 src/ntu_stars_mcp/
-├── mcp_server.py  MCP tools and input/output schemas
+├── mcp_server.py  MCP tools and input schemas
+├── schemas.py     Typed public results and generated output schemas
+├── compact.py     Remove redundant output fields
 ├── domain/        Course/session models, index comparison, and timetable matching
 ├── ntu_client/    Public course, vacancy, graduate, and exam requests, caching, and rate limits
 ├── parser/        Course, vacancy, exam, Degree Audit, and Planner calendar HTML parsers
@@ -115,6 +117,8 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 | `get_degree_audit` | Your AU requirements, results, and registered courses | Yes |
 
 Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
+
+All tools publish concrete `outputSchema` definitions. Responses are compact by default, with no detail-level setting: sessions inherit course/index identifiers from their enclosing result, and empty raw fields are omitted. Comparison/search results keep timetable provenance rather than repeating course descriptions. Teaching weeks, venues, groups, remarks, unknown raw values, and safety warnings are retained. Personal tables omit `rows` only when `headers` and `records` reconstruct them exactly; saved-plan sessions inherit their index from the plan's course list. Raw graduate schedules and exam duration text remain when they contain information not represented by parsed fields.
 
 Vacancy lookup is available **09:00–22:00 Singapore time (UTC+8)**, without login. Both index tools return `vacancies_available`, `waitlist_length`, and `vacancy_status`, with snapshot time and cache age in `vacancy_metadata`. Counts are attached only when NTU's published vacancy term matches the requested timetable. Outside those hours (`closed`), on a term mismatch (`term_mismatch`), for an unlisted index (`not_listed`), or on an NTU error (`unavailable`), counts are `null` and schedules remain available. A reported `0` is distinct from an unknown count.
 
@@ -173,11 +177,21 @@ Unrecognized NTU day or time values are retained in `raw_day` or `raw_time`. Mat
 
 ## Verify
 
-The offline parser, scheduling, error-handling, and MCP-client tests use saved official HTML fixtures:
+The offline tests cover parsing, scheduling, lossless compaction, output-schema validation, tool calls/errors, and resource discovery. Protocol tests use Python SDK clients and an independent JSON-RPC client over stdio, including protocol versions `2025-06-18` and `2025-11-25`:
 
 ```sh
 uv run python -m unittest discover -s tests -v
 ```
+
+An optional check uses the official TypeScript SDK. Node dependencies stay in a temporary directory:
+
+```sh
+NTU_MCP_TEST_SDK="$(mktemp -d)"
+npm install --prefix "$NTU_MCP_TEST_SDK" --ignore-scripts --no-audit --no-fund @modelcontextprotocol/sdk@1.32.1
+uv run node tests/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
+```
+
+These interoperability checks use offline fixtures and never submit registrations or edit saved plans.
 
 The live stdio smoke test launches through `uvx` and makes real requests to NTU for SC2001, SC2207, and MH2802 in AY2026 semester 1, plus SC2001 in AY2025 semester 2. It also checks vacancies through both index tools for SC2001 and SC2207 in AY2026 semester 2, or verifies the closed status outside service hours:
 

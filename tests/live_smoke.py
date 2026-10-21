@@ -76,8 +76,10 @@ async def main() -> None:
             result = await client.call_tool("get_index", {**args, "index": selected["index"]})
             assert not result.is_error, result.content
             one_index = result.structured_content
-            for field in ["vacancy_status", "vacancies_available", "waitlist_length", "sessions"]:
+            for field in ["vacancy_status", "vacancies_available", "waitlist_length"]:
                 assert one_index[field] == selected[field]
+            assert len(one_index["sessions"]) == len(selected["sessions"])
+            assert one_index["sessions"] == selected["sessions"]
             if status == "available":
                 assert one_index["vacancy_metadata"]["retrieved_at"]
                 assert one_index["vacancy_metadata"]["from_cache"]

@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 async def main() -> None:
     async with Client(StdioServerParameters(
         command="uvx",
-        args=["--from", str(ROOT), "--with", "playwright>=1.50,<2", "ntu-stars-mcp"],
+        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "ntu-stars-mcp"],
         env={key: os.environ[key] for key in ("NTU_WISH_USERNAME", "NTU_WISH_PASSWORD", "NTU_PERSONAL_CACHE_TTL_SECONDS") if key in os.environ},
         cwd=str(ROOT),
     )) as client:

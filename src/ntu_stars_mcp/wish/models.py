@@ -1,11 +1,11 @@
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from ..ntu_client.http import NTURequestError
 
 class PersonalTable(TypedDict):
     section: str | None
     headers: list[str]
-    rows: list[list[str]]
+    rows: NotRequired[list[list[str]]]
     records: list[dict[str, str]]
 
 class AuthStatus(TypedDict):
@@ -22,7 +22,7 @@ class PlannedCourse(TypedDict):
 
 class PlannerSession(TypedDict):
     course_code: str
-    index: str | None
+    index: NotRequired[str | None]
     lesson_type: str
     group: str
     day: str
@@ -31,7 +31,7 @@ class PlannerSession(TypedDict):
     venue: str
     teaching_weeks: list[int] | None
     remarks: str | None
-    raw_time: str | None
+    raw_time: NotRequired[str | None]
 
 class SavedPlan(TypedDict):
     plan_number: int

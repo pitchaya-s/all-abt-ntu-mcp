@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field, model_validator
 
+from .compact import exam_fields, graduate_fields, personal_fields, saved_plan_fields, session_fields, timetable_fields
 from .domain import Course, compare_indexes as compare, course_metadata, find_matching_indexes as find
+from .schemas import (
+    CompareIndexesResult,
+    CourseIndexesResult,
+    CourseMetadataResult,
+    GraduateCourseResult,
+    IndexResult,
+    MatchingIndexesResult,
+    UndergraduateExamResult,
+)
 from .wish import (
     AuthStatus,
     DegreeAuditResult,
@@ -116,6 +126,9 @@ mcp = MCPServer(
         "STARS vacancy snapshots only when the published vacancy term matches the requested term. Unknown "
         "undergraduate timetable details are preserved and marked uncertain. Optional personal tools "
         "use NTU_WISH_USERNAME and NTU_WISH_PASSWORD; personal records are cached only in memory. "
+        "Session identifiers are inherited from their enclosing course/index; common_sessions apply to "
+        "every indexes_compared entry. Personal tables omit rows only when headers and records reconstruct "
+        "them exactly. Unknown raw values and timetable details are preserved. "
         "save_stars_plan replaces a saved plan's entire course/index list and verifies it by reloading; "
         "it does not register, drop, or swap registered courses."
         " register_courses is VERY DANGEROUS and can change official enrolment. Always preview first, "
@@ -159,14 +172,14 @@ def _index_vacancies(index: str, metadata: dict[str, Any], indexes: dict[str, An
     }
 
 @mcp.tool(annotations=_read_only)
-def get_course_metadata(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
+def get_course_metadata(course_code: str, academic_year: int, semester: Semester) -> CourseMetadataResult:
     """Get course name, AUs, prerequisites, description, and term metadata."""
     course = _load_course(course_code, academic_year, semester)
-    return course_metadata(course)
+    return cast(CourseMetadataResult, course_metadata(course))
 
 @mcp.tool(annotations=_read_only)
-def get_course_indexes(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
-    """List all indexes with complete sessions, vacancies, and waitlists where NTU publishes matching-term counts."""
+def get_course_indexes(course_code: str, academic_year: int, semester: Semester) -> CourseIndexesResult:
+    """List all indexes with complete timetable details and matching-term vacancies/waitlists. Sessions inherit course_code and index from their enclosing result; null raw_day/raw_time are omitted."""
     course = _load_course(course_code, academic_year, semester)
     vacancy_metadata, vacancies = _load_vacancies(course)
     return {
@@ -180,27 +193,27 @@ def get_course_indexes(course_code: str, academic_year: int, semester: Semester)
                 "index": index,
                 **_index_vacancies(index, vacancy_metadata, vacancies),
                 "schedule_complete": _schedule_complete(sessions),
-                "sessions": [session.to_dict() for session in sessions],
+                "sessions": [session_fields(session.to_dict()) for session in sessions],
             }
             for index, sessions in course.indexes.items()
         ],
     }
 
 @mcp.tool(annotations=_read_only)
-def get_graduate_course_schedule(course_code: str) -> dict[str, Any]:
+def get_graduate_course_schedule(course_code: str) -> GraduateCourseResult:
     """Get a graduate course's class groups for NTU's currently published academic term."""
     try:
-        return fetch_graduate_course_schedule(course_code)
+        return cast(GraduateCourseResult, graduate_fields(fetch_graduate_course_schedule(course_code)))
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
 @mcp.tool(annotations=_read_only)
 def get_undergraduate_exam_schedule(
     course_code: str, academic_year: int | None = None, semester: ExamSemester | None = None
-) -> dict[str, Any]:
+) -> UndergraduateExamResult:
     """Get public General Access exam dates and times for a course in the latest or specified published term."""
     try:
-        return fetch_undergraduate_exam_schedule(course_code, academic_year, semester)
+        return cast(UndergraduateExamResult, exam_fields(fetch_undergraduate_exam_schedule(course_code, academic_year, semester)))
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
@@ -213,7 +226,7 @@ def ntu_auth_status() -> AuthStatus:
 def get_stars_planner(refresh: bool = False) -> StarsPlannerResult:
     """Get registered courses, the published term, and saved Plans 1–3 with indexes and timetables. Use refresh after editing a plan."""
     try:
-        return fetch_stars_planner(refresh=refresh)
+        return cast(StarsPlannerResult, personal_fields(fetch_stars_planner(refresh=refresh)))
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
@@ -226,7 +239,8 @@ def save_stars_plan(
 ) -> SavePlanResult:
     """Replace saved Plan 1, 2, or 3 with the complete supplied course/index list for the current Planner term. Omitted courses are removed from that plan. Verifies persistence by loading the saved plan. Does not perform course registration, dropping, or index swapping."""
     try:
-        return persist_stars_plan(plan_number, [course.model_dump() for course in courses], academic_year, semester)
+        result = persist_stars_plan(plan_number, [course.model_dump() for course in courses], academic_year, semester)
+        return {**result, "saved_plan": saved_plan_fields(result["saved_plan"])}
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
@@ -248,14 +262,14 @@ def register_courses(
 def get_degree_audit() -> DegreeAuditResult:
     """Get your degree requirements, examination results, and registered courses from Degree Audit."""
     try:
-        return fetch_degree_audit()
+        return cast(DegreeAuditResult, personal_fields(fetch_degree_audit()))
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
 @mcp.tool(annotations=_read_only)
 def get_index(
     course_code: str, index: str, academic_year: int, semester: Semester
-) -> dict[str, Any]:
+) -> IndexResult:
     """Get one index's complete schedule, vacancies, and waitlist where matching-term counts are published."""
     try:
         code = validate_course_code(course_code)
@@ -279,7 +293,7 @@ def get_index(
         **_index_vacancies(index, vacancy_metadata, vacancies),
         "vacancy_metadata": vacancy_metadata,
         "schedule_complete": _schedule_complete(sessions),
-        "sessions": [session.to_dict() for session in sessions],
+        "sessions": [session_fields(session.to_dict()) for session in sessions],
     }
 
 @mcp.tool(annotations=_read_only)
@@ -289,7 +303,7 @@ def compare_indexes(
     academic_year: int,
     semester: Semester,
     against_sessions: list[TimeSlot] | None = None,
-) -> dict[str, Any]:
+) -> CompareIndexesResult:
     """Compare shared and index-specific sessions; optionally check clashes with supplied time slots."""
     requested = [str(index).strip() for index in indexes]
     if len(requested) < 2:
@@ -301,7 +315,20 @@ def compare_indexes(
     course = _load_course(course_code, academic_year, semester)
     existing = [slot.model_dump(exclude_none=True) for slot in against_sessions] if against_sessions is not None else None
     try:
-        return compare(course, requested, existing)
+        result = compare(course, requested, existing)
+        clash_check = result["clash_check"]
+        if clash_check is not None:
+            clash_check = {**clash_check, "clashes_by_index": {
+                index: [{**pair, "course_session": session_fields(pair["course_session"])} for pair in pairs]
+                for index, pairs in clash_check["clashes_by_index"].items()
+            }}
+        return {
+            **timetable_fields(result), "indexes_compared": result["indexes_compared"],
+            "common_sessions": [session_fields(session) for session in result["common_sessions"]],
+            "unique_sessions_by_index": {index: [session_fields(session) for session in sessions]
+                                         for index, sessions in result["unique_sessions_by_index"].items()},
+            "clash_check": clash_check,
+        }
     except ValueError as error:
         raise ToolError(str(error)) from error
 
@@ -312,12 +339,18 @@ def find_matching_indexes(
     semester: Semester,
     constraints: SearchConstraints | None = None,
     against_sessions: list[TimeSlot] | None = None,
-) -> dict[str, Any]:
+) -> MatchingIndexesResult:
     """Find indexes matching day/time/lesson/week rules and avoiding supplied timetable clashes."""
     course = _load_course(course_code, academic_year, semester)
-    rules = constraints.model_dump(exclude_none=True) if constraints is not None else SearchConstraints().model_dump(exclude_none=True)
+    rules = constraints.model_dump(exclude_none=True, exclude_defaults=True) if constraints is not None else {}
     existing = [slot.model_dump(exclude_none=True) for slot in against_sessions or []]
-    return find(course, rules, existing)
+    result = find(course, rules, existing)
+    return {
+        **timetable_fields(result), "constraints": result["constraints"],
+        "against_session_count": result["against_session_count"], "match_count": result["match_count"],
+        "matches": [{**match, "sessions": [session_fields(session) for session in match["sessions"]]}
+                    for match in result["matches"]],
+    }
 
 def main() -> None:
     try:

@@ -21,6 +21,7 @@ from .wish.session import wish_session
 from .ntu_client import (
     NTURequestError,
     get_course as fetch_course,
+    get_course_vacancies as fetch_course_vacancies,
     get_graduate_course_schedule as fetch_graduate_course_schedule,
     get_undergraduate_exam_schedule as fetch_undergraduate_exam_schedule,
     validate_course_code,
@@ -103,7 +104,8 @@ mcp = MCPServer(
         "graduate lookup uses GSLink/PGR and reports the currently published term as class groups, "
         "not indexes. Undergraduate exam lookup uses General Access and returns published exam times, "
         "not exam-seat assignments. Academic year is the first year printed by NTU (2026 means AY2026/27); "
-        "undergraduate semester is 1, 2, or S. Results are not STARS vacancy data. Unknown "
+        "undergraduate semester is 1, 2, or S. get_course_indexes and get_index include public "
+        "STARS vacancy snapshots only when the published vacancy term matches the requested term. Unknown "
         "undergraduate timetable details are preserved and marked uncertain. Optional personal tools "
         "use NTU_WISH_USERNAME and NTU_WISH_PASSWORD; personal records are cached only in memory."
     ),
@@ -125,6 +127,23 @@ def _schedule_complete(sessions: tuple[Any, ...] | list[Any]) -> bool:
         for session in sessions
     )
 
+def _load_vacancies(course: Course) -> tuple[dict[str, Any], dict[str, Any]]:
+    try:
+        result = fetch_course_vacancies(course.course_code, course.academic_year, course.semester)
+    except NTURequestError as error:
+        return {"status": "unavailable", "retrieved_at": None, "message": str(error)}, {}
+    return {key: value for key, value in result.items() if key != "indexes"}, result["indexes"]
+
+def _index_vacancies(index: str, metadata: dict[str, Any], indexes: dict[str, Any]) -> dict[str, Any]:
+    counts = indexes.get(index)
+    return {
+        "vacancy_status": metadata["status"] if metadata["status"] != "available" else (
+            "available" if counts is not None else "not_listed"
+        ),
+        "vacancies_available": counts["vacancies_available"] if counts is not None else None,
+        "waitlist_length": counts["waitlist_length"] if counts is not None else None,
+    }
+
 @mcp.tool(annotations=_read_only)
 def get_course_metadata(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
     """Get course name, AUs, prerequisites, description, and term metadata."""
@@ -133,16 +152,19 @@ def get_course_metadata(course_code: str, academic_year: int, semester: Semester
 
 @mcp.tool(annotations=_read_only)
 def get_course_indexes(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
-    """List all indexes for a course, including every lecture, tutorial, lab, and other session."""
+    """List all indexes with complete sessions, vacancies, and waitlists where NTU publishes matching-term counts."""
     course = _load_course(course_code, academic_year, semester)
+    vacancy_metadata, vacancies = _load_vacancies(course)
     return {
         "course_code": course.course_code,
         "academic_year": course.academic_year,
         "semester": course.semester,
         "index_count": len(course.indexes),
+        "vacancy_metadata": vacancy_metadata,
         "indexes": [
             {
                 "index": index,
+                **_index_vacancies(index, vacancy_metadata, vacancies),
                 "schedule_complete": _schedule_complete(sessions),
                 "sessions": [session.to_dict() for session in sessions],
             }
@@ -190,10 +212,10 @@ def get_my_degree_audit() -> DegreeAuditResult:
         raise ToolError(str(error)) from error
 
 @mcp.tool(annotations=_read_only)
-def get_index_schedule(
+def get_index(
     course_code: str, index: str, academic_year: int, semester: Semester
 ) -> dict[str, Any]:
-    """Get every scheduled session for one course index."""
+    """Get one index's complete schedule, vacancies, and waitlist where matching-term counts are published."""
     try:
         code = validate_course_code(course_code)
     except ValueError as error:
@@ -207,11 +229,14 @@ def get_index_schedule(
         raise ToolError(
             f"Index {index} is not listed for {code} in AY{academic_year}/{str(academic_year + 1)[-2:]} semester {semester}."
         )
+    vacancy_metadata, vacancies = _load_vacancies(course)
     return {
         "course_code": course.course_code,
         "academic_year": course.academic_year,
         "semester": course.semester,
         "index": index,
+        **_index_vacancies(index, vacancy_metadata, vacancies),
+        "vacancy_metadata": vacancy_metadata,
         "schedule_complete": _schedule_complete(sessions),
         "sessions": [session.to_dict() for session in sessions],
     }

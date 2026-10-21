@@ -37,7 +37,13 @@ EXAM_COURSE = parse_undergraduate_exam_schedule(
 
 class MCPClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_discover_and_call_over_mcp_client(self) -> None:
-        with patch("ntu_stars_mcp.mcp_server.fetch_course", return_value=COURSE) as fetch:
+        with (
+            patch("ntu_stars_mcp.mcp_server.fetch_course", return_value=COURSE) as fetch,
+            patch("ntu_stars_mcp.mcp_server.fetch_course_vacancies", return_value={
+                "status": "term_mismatch", "academic_year": 2026, "semester": "2",
+                "retrieved_at": "2026-10-21T00:00:00+00:00", "indexes": {},
+            }),
+        ):
             async with Client(mcp) as client:
                 listing = await client.list_tools()
                 names = {tool.name for tool in listing.tools}
@@ -51,13 +57,13 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "ntu_auth_status",
                         "get_my_stars_planner",
                         "get_my_degree_audit",
-                        "get_index_schedule",
+                        "get_index",
                         "compare_indexes",
                         "find_matching_indexes",
                     },
                 )
                 result = await client.call_tool(
-                    "get_index_schedule",
+                    "get_index",
                     {"course_code": "SC2001", "index": "10143", "academic_year": 2026, "semester": 1},
                 )
                 self.assertFalse(result.is_error)
@@ -65,6 +71,8 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.structured_content["index"], "10143")
                 self.assertNotIn("course_name", result.structured_content)
                 self.assertEqual(len(result.structured_content["sessions"]), 4)
+                self.assertEqual(result.structured_content["vacancy_status"], "term_mismatch")
+                self.assertIsNone(result.structured_content["vacancies_available"])
 
                 metadata_result = await client.call_tool(
                     "get_course_metadata",
@@ -83,6 +91,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(indexes_result.structured_content["index_count"], 36)
                 self.assertEqual(indexes_result.structured_content["indexes"][0]["index"], "10143")
                 self.assertNotIn("course_description", indexes_result.structured_content)
+                self.assertIsNone(indexes_result.structured_content["indexes"][0]["waitlist_length"])
 
                 with patch(
                     "ntu_stars_mcp.mcp_server.fetch_graduate_course_schedule",

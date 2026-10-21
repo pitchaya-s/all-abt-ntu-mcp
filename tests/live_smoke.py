@@ -21,6 +21,7 @@ async def main() -> None:
         tools = await client.list_tools()
         names = {tool.name for tool in tools.tools}
         assert "get_course_indexes" in names
+        assert "get_index" in names and "get_index_schedule" not in names
         for code, year, semester, expected_count in (
             ("SC2001", 2026, 1, 36),
             ("SC2207", 2026, 1, 13),
@@ -36,6 +37,8 @@ async def main() -> None:
             data = result.structured_content
             assert data["course_code"] == code
             assert data["index_count"] == expected_count, (code, data["index_count"])
+            assert data["vacancy_metadata"]["status"] in {"term_mismatch", "closed", "unavailable"}, data["vacancy_metadata"]
+            assert all(index["vacancies_available"] is None and index["waitlist_length"] is None for index in data["indexes"])
             if code == "SC2001" and year == 2026 and semester == 1:
                 metadata = await client.call_tool("get_course_metadata", {"course_code": code, "academic_year": year, "semester": semester})
                 assert not metadata.is_error
@@ -47,7 +50,7 @@ async def main() -> None:
             )
 
         schedule = await client.call_tool(
-            "get_index_schedule",
+            "get_index",
             {"course_code": "SC2001", "index": "10143", "academic_year": 2026, "semester": 1},
         )
         if schedule.is_error:
@@ -56,6 +59,29 @@ async def main() -> None:
         tutorial = next(item for item in sessions if item["lesson_type"] == "TUT")
         assert tutorial["day"] == "TUE" and tutorial["start_time"] == "16:30"
         print("Live MCP smoke passed: SC2001 index 10143 includes its Tuesday tutorial and all four sessions.")
+
+        for code in ["SC2001", "SC2207"]:
+            args = {"course_code": code, "academic_year": 2026, "semester": 2}
+            result = await client.call_tool("get_course_indexes", args)
+            assert not result.is_error, result.content
+            data = result.structured_content
+            status = data["vacancy_metadata"]["status"]
+            assert status in {"available", "closed"}, data["vacancy_metadata"]
+            for index in data["indexes"]:
+                assert index["vacancy_status"] == status, index
+                for field in ["vacancies_available", "waitlist_length"]:
+                    value = index[field]
+                    assert value is None if status == "closed" else isinstance(value, int) and value >= 0
+            selected = data["indexes"][0]
+            result = await client.call_tool("get_index", {**args, "index": selected["index"]})
+            assert not result.is_error, result.content
+            one_index = result.structured_content
+            for field in ["vacancy_status", "vacancies_available", "waitlist_length", "sessions"]:
+                assert one_index[field] == selected[field]
+            if status == "available":
+                assert one_index["vacancy_metadata"]["retrieved_at"]
+                assert one_index["vacancy_metadata"]["from_cache"]
+            print(f"Live MCP vacancy smoke passed: {code}, {len(data['indexes'])} indexes, vacancy status {status}.")
 
         graduate = await client.call_tool("get_graduate_course_schedule", {"course_code": "EE6102"})
         if graduate.is_error:

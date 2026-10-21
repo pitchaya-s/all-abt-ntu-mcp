@@ -1,8 +1,8 @@
 # NTU STARS MCP
 
-A local, read-only MCP server for NTU Singapore course and exam schedules. It fetches undergraduate course data from NTU's public Class Schedule and General Access exam timetable, and graduate course-group schedules from NTU's GSLink/PGR timetable. It does not use third-party course databases.
+A local, read-only MCP server for NTU Singapore course schedules, index vacancies, and exam timetables. It fetches data directly from NTU's public systems without third-party course databases.
 
-Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
+Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); vacancy and waitlist counts come from its [public vacancy form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_vacancy.check_vacancy); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
 Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
 
@@ -81,7 +81,7 @@ uv run ntu-stars-mcp
 
 For personal tools in a local checkout, run `uv sync --extra wish` and set `NTU_WISH_USERNAME` and `NTU_WISH_PASSWORD` in your environment.
 
-The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
+The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
 ## Source layout
 
@@ -89,8 +89,8 @@ The process uses MCP stdio, so it stays open while its MCP client is connected. 
 src/ntu_stars_mcp/
 ├── mcp_server.py  MCP tools and input/output schemas
 ├── domain/        Course/session models, index comparison, and timetable matching
-├── ntu_client/    Public course, graduate, and exam requests, caching, and rate limits
-├── parser/        Course, exam, Degree Audit, and Planner calendar HTML parsers
+├── ntu_client/    Public course, vacancy, graduate, and exam requests, caching, and rate limits
+├── parser/        Course, vacancy, exam, Degree Audit, and Planner calendar HTML parsers
 └── wish/          Shared browser login, personal cache, and read-only saved-plan loading
 tests/            Offline tests, sanitized fixtures, and optional live MCP smoke tests
 ```
@@ -102,8 +102,8 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 | Tool | Purpose |
 | --- | --- |
 | `get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata |
-| `get_course_indexes` | All indexes and complete lesson schedules |
-| `get_index_schedule` | Full schedule for one index |
+| `get_course_indexes` | All indexes with complete schedules, vacancies, and waitlist lengths |
+| `get_index` | One index's complete schedule, vacancies, and waitlist length |
 | `compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks |
 | `find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes |
 | `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions |
@@ -113,6 +113,8 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 | `get_my_degree_audit` | Your AU requirements, results, and registered courses (credentials required) |
 
 Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
+
+Vacancy lookup is available **09:00–22:00 Singapore time (UTC+8)**, without login. Both index tools return `vacancies_available`, `waitlist_length`, and `vacancy_status`, with snapshot time and cache age in `vacancy_metadata`. Counts are attached only when NTU's published vacancy term matches the requested timetable. Outside those hours (`closed`), on a term mismatch (`term_mismatch`), for an unlisted index (`not_listed`), or on an NTU error (`unavailable`), counts are `null` and schedules remain available. A reported `0` is distinct from an unknown count.
 
 Personal Planner results include registered courses and saved Plans 1–3 for NTU's published term. Pass `{"refresh": true}` after editing a plan to bypass the personal cache.
 
@@ -161,7 +163,7 @@ The offline parser, scheduling, error-handling, and MCP-client tests use saved o
 uv run python -m unittest discover -s tests -v
 ```
 
-The live stdio smoke test launches through `uvx` and makes real requests to NTU for SC2001, SC2207, and MH2802 in AY2026 semester 1, plus SC2001 in AY2025 semester 2:
+The live stdio smoke test launches through `uvx` and makes real requests to NTU for SC2001, SC2207, and MH2802 in AY2026 semester 1, plus SC2001 in AY2025 semester 2. It also checks vacancies through both index tools for SC2001 and SC2207 in AY2026 semester 2, or verifies the closed status outside service hours:
 
 ```sh
 uv run python tests/live_smoke.py
@@ -183,12 +185,16 @@ uv run --extra wish python tests/live_personal_smoke.py
 
 Live official pages fetched on 2026-10-21 returned 36 indexes for SC2001, 13 for SC2207, and 12 for MH2802 in AY2026 semester 1. For SC2001 index `10143`, the endpoint lists two shared `LEC/STUDIO` sessions, a Tuesday `TUT` from 16:30 to 17:20 in `TR+7` during weeks 2–13, and a Monday `LAB` from 10:30 to 12:20 in `HWLAB2` during odd weeks 1–13.
 
-`get_index_schedule` returns a structured object shaped like:
+`get_index` returns a structured object shaped like:
 
 ```json
 {
   "course_code":"SC2001",
   "index":"10143",
+  "vacancies_available":null,
+  "waitlist_length":null,
+  "vacancy_status":"term_mismatch",
+  "vacancy_metadata":{"status":"term_mismatch","academic_year":2026,"semester":"2","retrieved_at":"2026-10-21T03:00:00+00:00","source_url":"https://wish.wis.ntu.edu.sg/webexe/owa/aus_vacancy.check_vacancy2","from_cache":false,"cache_age_seconds":0},
   "schedule_complete":true,
   "sessions":[
     {"lesson_type":"TUT","group":"SCEA","day":"TUE","start_time":"16:30","end_time":"17:20","venue":"TR+7","teaching_weeks":[2,3,4,5,6,7,8,9,10,11,12,13],"remarks":"Teaching Wk2-13"}
@@ -200,4 +206,4 @@ The public exam timetable currently lists SC2001's AY2026 Semester 1 exam on 202
 
 ## Limits
 
-STARS vacancy lookup is not implemented yet.
+Vacancies reflect NTU's reported snapshot for its currently published term and can change before registration. Outside 09:00–22:00 Singapore time, vacancy requests are skipped; timetable tools still work.

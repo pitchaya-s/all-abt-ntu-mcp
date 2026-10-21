@@ -33,6 +33,11 @@ def _post(page, url: str, fields: list[tuple[str, str]], *, save: bool = False) 
         url, data=urlencode(fields), headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=REQUEST_TIMEOUT_SECONDS * 1000, max_redirects=0,
     )
+    return _response_html(response, url)
+
+
+def _response_html(response, url: str) -> str | None:
+    """Validate and dispose an authenticated HTML response without executing its scripts."""
     try:
         if response.status == 401:
             return None
@@ -42,7 +47,7 @@ def _post(page, url: str, fields: list[tuple[str, str]], *, save: bool = False) 
                 return None
             raise NTUPersonalDataError("NTU redirected the Planner display unexpectedly; no redirect was followed.")
         if response.status != 200:
-            raise NTURequestError(f"NTU returned HTTP {response.status} for the Planner {'save' if save else 'display'}.")
+            raise NTURequestError(f"NTU returned HTTP {response.status} for the STARS request.")
         content_type = Message()
         content_type["content-type"] = response.headers.get("content-type", "")
         if content_type.get_content_type() != "text/html":

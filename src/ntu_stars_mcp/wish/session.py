@@ -31,10 +31,12 @@ from .models import (
     NTUPersonalDataError,
     StarsPlannerResult,
     SavePlanResult,
+    RegistrationResult,
 )
 from .planner import PLANNER_VIEW_URL, read_stars_planner
-from .plan_editor import course_assignments, prepare_stars_plan, submit_stars_plan, validate_plan_request
+from .plan_editor import course_assignments, prepare_stars_plan, submit_stars_plan, validate_course_selection, validate_plan_request
 from .planner import SAVE_PLAN_URL
+from .registration import PendingRegistration, register_courses as run_registration
 
 PLANNER_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main"
 DEGREE_AUDIT_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display"
@@ -68,6 +70,7 @@ class WishSessionManager:
         self._last_browser_status: int | None = None
         self._executor: ThreadPoolExecutor | None = None
         self._closed = False
+        self._pending_registration: PendingRegistration | None = None
 
     @property
     def credentials_configured(self) -> bool:
@@ -108,6 +111,7 @@ class WishSessionManager:
         self._authenticated = False
         self._last_verified_at = None
         self._cache.clear()
+        self._pending_registration = None
 
     def _record_browser_response(self, response: object) -> None:
         request = getattr(response, "request", None)
@@ -306,15 +310,25 @@ class WishSessionManager:
                     del self._cache[min(self._cache, key=lambda key: self._cache[key][0])]
             return result
 
-    def _run_personal_data(self, service: str, url: str, *, refresh: bool = False) -> dict[str, object]:
+    def _run_browser_operation(self, operation, *args, **kwargs):
         # Playwright's sync browser must stay on its owning thread across MCP calls.
         with self._lock:
             if self._closed:
                 raise NTUAuthError("The WISH session manager is closed; restart the MCP server.")
             if self._executor is None:
                 self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ntu-wish")
-            future = self._executor.submit(self._get_personal_data, service, url, refresh=refresh)
-        return future.result()
+            future = self._executor.submit(operation, *args, **kwargs)
+        try:
+            return future.result()
+        except NTURequestError:
+            raise
+        except Exception as error:
+            raise NTUPersonalDataError(
+                f"Could not complete the STARS browser operation ({type(error).__name__}). Refresh the Planner before retrying."
+            ) from None
+
+    def _run_personal_data(self, service: str, url: str, *, refresh: bool = False) -> dict[str, object]:
+        return self._run_browser_operation(self._get_personal_data, service, url, refresh=refresh)
 
     def get_stars_planner(self, *, refresh: bool = False) -> StarsPlannerResult:
         return cast(StarsPlannerResult, self._run_personal_data("stars_planner", PLANNER_URL, refresh=refresh))
@@ -366,20 +380,16 @@ class WishSessionManager:
         self, plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
     ) -> SavePlanResult:
         normalized = validate_plan_request(plan_number, courses, academic_year, semester)
-        with self._lock:
-            if self._closed:
-                raise NTUAuthError("The WISH session manager is closed; restart the MCP server.")
-            if self._executor is None:
-                self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ntu-wish")
-            future = self._executor.submit(self._save_stars_plan, plan_number, normalized, academic_year, semester)
-        try:
-            return future.result()
-        except NTURequestError:
-            raise
-        except Exception as error:
-            raise NTUPersonalDataError(
-                f"Could not complete the Planner operation ({type(error).__name__}). Refresh the Planner before retrying."
-            ) from None
+        return self._run_browser_operation(self._save_stars_plan, plan_number, normalized, academic_year, semester)
+
+    def register_courses(
+        self, courses: list[dict[str, str]], academic_year: int, semester: int,
+        confirmation_token: str | None = None, user_confirmed: bool = False,
+    ) -> RegistrationResult:
+        normalized = validate_course_selection(courses, academic_year, semester)
+        if type(user_confirmed) is not bool or (confirmation_token is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", confirmation_token)):
+            raise ValueError("Provide a boolean user_confirmed and an unmodified confirmation token from the preview.")
+        return self._run_browser_operation(run_registration, self, normalized, academic_year, semester, confirmation_token, user_confirmed)
 
 wish_session = WishSessionManager()
 
@@ -396,3 +406,9 @@ def save_stars_plan(
     plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
 ) -> SavePlanResult:
     return wish_session.save_stars_plan(plan_number, courses, academic_year, semester)
+
+def register_courses(
+    courses: list[dict[str, str]], academic_year: int, semester: int,
+    confirmation_token: str | None = None, user_confirmed: bool = False,
+) -> RegistrationResult:
+    return wish_session.register_courses(courses, academic_year, semester, confirmation_token, user_confirmed)

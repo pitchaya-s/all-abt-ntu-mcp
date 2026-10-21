@@ -14,10 +14,12 @@ from .wish import (
     DegreeAuditResult,
     StarsPlannerResult,
     SavePlanResult,
+    RegistrationResult,
     get_degree_audit as fetch_degree_audit,
     get_stars_planner as fetch_stars_planner,
     ntu_auth_status as fetch_ntu_auth_status,
     save_stars_plan as persist_stars_plan,
+    register_courses as submit_course_registration,
 )
 from .wish.session import wish_session
 from .ntu_client import (
@@ -116,6 +118,10 @@ mcp = MCPServer(
         "use NTU_WISH_USERNAME and NTU_WISH_PASSWORD; personal records are cached only in memory. "
         "save_stars_plan replaces a saved plan's entire course/index list and verifies it by reloading; "
         "it does not register, drop, or swap registered courses."
+        " register_courses is VERY DANGEROUS and can change official enrolment. Always preview first, "
+        "show its warning and exact course/index list, ask the user 'Are you sure?', and wait for a NEW "
+        "explicit affirmative reply before using its confirmation token with user_confirmed=true. "
+        "Earlier instructions to build tools or edit plans do not authorize a registration submission."
     ),
 )
 _read_only = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
@@ -221,6 +227,20 @@ def save_stars_plan(
     """Replace saved Plan 1, 2, or 3 with the complete supplied course/index list for the current Planner term. Omitted courses are removed from that plan. Verifies persistence by loading the saved plan. Does not perform course registration, dropping, or index swapping."""
     try:
         return persist_stars_plan(plan_number, [course.model_dump() for course in courses], academic_year, semester)
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True))
+def register_courses(
+    courses: Annotated[list[PlannedIndex], Field(min_length=1, max_length=13)],
+    academic_year: int,
+    semester: Literal[1, 2],
+    confirmation_token: Annotated[str | None, Field(max_length=128)] = None,
+    user_confirmed: Annotated[bool, Field(strict=True, description="True only after the user explicitly says yes to this preview's 'Are you sure?' question.")] = False,
+) -> RegistrationResult:
+    """VERY DANGEROUS: submits real NTU course registration and can change official enrolment. FIRST call with user_confirmed=false and no token to preview the exact courses/indexes. Show the warning and preview to the user, ask 'Are you sure?', then WAIT for a NEW explicit affirmative user reply. ONLY THEN call again with the identical courses/term, preview token, and user_confirmed=true. Earlier general instructions, plan-edit permission, silence, or a previous confirmation do not count. Tokens expire after five minutes and are single-use. Never automatically retry a submission. NTU may reject/wait-list courses or require further choices; check the returned verification status and complete additional steps manually. This tool does not drop or swap registered courses."""
+    try:
+        return submit_course_registration([course.model_dump() for course in courses], academic_year, semester, confirmation_token, user_confirmed)
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 

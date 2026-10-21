@@ -15,11 +15,15 @@ def validate_plan_request(
 ) -> list[dict[str, str]]:
     if type(plan_number) is not int or plan_number not in {1, 2, 3}:
         raise ValueError("Choose Plan 1, 2, or 3.")
+    return validate_course_selection(courses, academic_year, semester)
+
+
+def validate_course_selection(courses: list[dict[str, str]], academic_year: int, semester: int) -> list[dict[str, str]]:
     _academic_term(academic_year, semester)
     if type(semester) is not int or semester not in {1, 2}:
-        raise ValueError("Planner semester must be 1 or 2.")
+        raise ValueError("STARS semester must be 1 or 2.")
     if not 1 <= len(courses) <= 13:
-        raise ValueError("Provide the complete plan with 1–13 courses; clearing an entire plan is not supported.")
+        raise ValueError("Provide 1–13 courses, each with an index number.")
     normalized = []
     for course in courses:
         code = validate_course_code(course["course_code"])

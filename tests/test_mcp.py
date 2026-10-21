@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 from mcp import Client
 
-from ntu_course_index.parser.exam import parse_undergraduate_exam_schedule
-from ntu_course_index.mcp_server import mcp
-from ntu_course_index.parser import parse_course_description, parse_course_page, parse_graduate_course_page
+from ntu_stars_mcp.parser.exam import parse_undergraduate_exam_schedule
+from ntu_stars_mcp.mcp_server import mcp
+from ntu_stars_mcp.parser import parse_course_description, parse_course_page, parse_graduate_course_page
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sc2001-2026-1.html"
@@ -37,17 +37,20 @@ EXAM_COURSE = parse_undergraduate_exam_schedule(
 
 class MCPClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_discover_and_call_over_mcp_client(self) -> None:
-        with patch("ntu_course_index.mcp_server.fetch_course", return_value=COURSE) as fetch:
+        with patch("ntu_stars_mcp.mcp_server.fetch_course", return_value=COURSE) as fetch:
             async with Client(mcp) as client:
                 listing = await client.list_tools()
                 names = {tool.name for tool in listing.tools}
                 self.assertEqual(
                     names,
                     {
-                        "get_course",
+                        "get_course_metadata",
                         "get_course_indexes",
                         "get_graduate_course_schedule",
                         "get_undergraduate_exam_schedule",
+                        "ntu_auth_status",
+                        "get_my_stars_planner",
+                        "get_my_degree_audit",
                         "get_index_schedule",
                         "compare_indexes",
                         "find_matching_indexes",
@@ -58,20 +61,31 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     {"course_code": "SC2001", "index": "10143", "academic_year": 2026, "semester": 1},
                 )
                 self.assertFalse(result.is_error)
+                self.assertEqual(result.structured_content["course_code"], "SC2001")
                 self.assertEqual(result.structured_content["index"], "10143")
+                self.assertNotIn("course_name", result.structured_content)
                 self.assertEqual(len(result.structured_content["sessions"]), 4)
 
-                course_result = await client.call_tool(
-                    "get_course",
+                metadata_result = await client.call_tool(
+                    "get_course_metadata",
                     {"course_code": "SC2001", "academic_year": 2026, "semester": 1},
                 )
-                self.assertFalse(course_result.is_error)
-                self.assertEqual(course_result.structured_content["index_count"], 36)
-                self.assertEqual(course_result.structured_content["course_description_status"], "available")
-                self.assertIn("algorithm design and analysis", course_result.structured_content["course_description"])
+                self.assertFalse(metadata_result.is_error)
+                self.assertEqual(metadata_result.structured_content["course_description_status"], "available")
+                self.assertIn("algorithm design and analysis", metadata_result.structured_content["course_description"])
+                self.assertNotIn("indexes", metadata_result.structured_content)
+
+                indexes_result = await client.call_tool(
+                    "get_course_indexes",
+                    {"course_code": "SC2001", "academic_year": 2026, "semester": 1},
+                )
+                self.assertFalse(indexes_result.is_error)
+                self.assertEqual(indexes_result.structured_content["index_count"], 36)
+                self.assertEqual(indexes_result.structured_content["indexes"][0]["index"], "10143")
+                self.assertNotIn("course_description", indexes_result.structured_content)
 
                 with patch(
-                    "ntu_course_index.mcp_server.fetch_graduate_course_schedule",
+                    "ntu_stars_mcp.mcp_server.fetch_graduate_course_schedule",
                     return_value=GRADUATE_COURSE,
                 ):
                     graduate_result = await client.call_tool(
@@ -85,7 +99,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
 
                 with patch(
-                    "ntu_course_index.mcp_server.fetch_undergraduate_exam_schedule",
+                    "ntu_stars_mcp.mcp_server.fetch_undergraduate_exam_schedule",
                     return_value=EXAM_COURSE,
                 ):
                     exam_result = await client.call_tool(
@@ -103,7 +117,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "academic_year": 2026,
                         "semester": 1,
                         "against_sessions": [
-                            {"day": "MON", "start_time": "12:30", "end_time": "13:20", "teaching_weeks": [2]}
+                            {"day": "TUE", "start_time": "16:30", "end_time": "17:20", "teaching_weeks": [2]}
                         ],
                     },
                 )
@@ -122,6 +136,55 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertFalse(filtered.is_error)
                 self.assertGreater(filtered.structured_content["match_count"], 0)
+
+                status = await client.call_tool("ntu_auth_status", {})
+                self.assertFalse(status.is_error)
+                self.assertIn("credentials_configured", status.structured_content)
+
+                with patch(
+                    "ntu_stars_mcp.mcp_server.fetch_my_stars_planner",
+                    return_value={
+                        "service": "stars_planner",
+                        "page_title": "STARS Planner",
+                        "academic_year": 2026,
+                        "semester": 2,
+                        "registration_notice": None,
+                        "registered_courses": [],
+                        "registered_courses_status": "not_present",
+                        "planner_tables": [],
+                        "timetable_tables": [],
+                        "timetable_status": "not_present",
+                        "saved_plans": [],
+                        "source_url": "https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main",
+                        "retrieved_at": "2026-10-21T00:00:00+00:00",
+                        "from_cache": False,
+                        "cache_age_seconds": 0,
+                    },
+                ):
+                    planner = await client.call_tool("get_my_stars_planner", {})
+                self.assertFalse(planner.is_error)
+                self.assertEqual(planner.structured_content["service"], "stars_planner")
+
+                with patch(
+                    "ntu_stars_mcp.mcp_server.fetch_my_degree_audit",
+                    return_value={
+                        "service": "degree_audit",
+                        "page_title": "Degree Audit",
+                        "requirements": [],
+                        "requirements_status": "empty",
+                        "examination_results": [],
+                        "examination_results_status": "not_present",
+                        "courses_registered": [],
+                        "courses_registered_status": "not_present",
+                        "source_url": "https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display",
+                        "retrieved_at": "2026-10-21T00:00:00+00:00",
+                        "from_cache": False,
+                        "cache_age_seconds": 0,
+                    },
+                ):
+                    audit = await client.call_tool("get_my_degree_audit", {})
+                self.assertFalse(audit.is_error)
+                self.assertEqual(audit.structured_content["service"], "degree_audit")
 
                 fetch.reset_mock()
                 invalid = await client.call_tool(

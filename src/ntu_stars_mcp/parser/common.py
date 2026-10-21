@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 
-
 class NTUPageError(ValueError):
     pass
 
-
 class CourseUnavailable(NTUPageError):
     pass
-
 
 class _Rows(HTMLParser):
     def __init__(self) -> None:
@@ -50,7 +47,6 @@ class _Rows(HTMLParser):
             self.text_parts.append(data)
             if self._cell is not None:
                 self._cell.append(data)
-
 
 class _CourseContentRows(HTMLParser):
     def __init__(self) -> None:

@@ -1,8 +1,8 @@
 from pathlib import Path
 import unittest
 
-from ntu_course_index.domain import session_signature
-from ntu_course_index.parser import (
+from ntu_stars_mcp.domain import session_signature
+from ntu_stars_mcp.parser import (
     CourseUnavailable,
     NTUPageError,
     parse_course_description,
@@ -100,6 +100,17 @@ class CoursePageTests(unittest.TestCase):
         self.assertEqual(parse_teaching_weeks("Teaching Wk2-13"), tuple(range(2, 14)))
         self.assertEqual(parse_teaching_weeks("Teaching Wk1,3,5,7,9,11,13"), (1, 3, 5, 7, 9, 11, 13))
         self.assertIsNone(parse_teaching_weeks("Teaching Wk2-13 except recess"))
+
+    def test_teaching_week_ranges_are_bounded_before_expansion(self) -> None:
+        for remark in ("Wk1-1000000000", "Wk0-13", "Wk21", "Wk13-2"):
+            with self.subTest(remark=remark):
+                self.assertIsNone(parse_teaching_weeks(remark))
+
+    def test_reversed_graduate_time_ranges_are_not_complete_schedules(self) -> None:
+        html = load_fixture("ee6102-graduate-2026-1.html").replace("9:20pm", "6:00pm")
+        course = parse_graduate_course_page(html, "EE6102")
+        self.assertFalse(course["schedule_complete"])
+        self.assertIn("6:00pm", course["class_groups"][0]["schedule_text"])
 
     def test_unknown_time_day_and_remarks_are_preserved(self) -> None:
         page = """

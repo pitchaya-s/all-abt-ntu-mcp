@@ -5,7 +5,6 @@ import re
 
 from .common import CourseUnavailable, NTUPageError
 
-
 class _GraduateRows(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -48,10 +47,8 @@ class _GraduateRows(HTMLParser):
         if self.cell is not None:
             self.cell.append(data.replace("\xa0", " "))
 
-
 def _lines(value: str) -> list[str]:
     return [line for part in value.splitlines() if (line := " ".join(part.split()))]
-
 
 def _graduate_time(hour: str, minute: str, meridiem: str) -> str | None:
     hours, minutes = int(hour), int(minute)
@@ -59,7 +56,6 @@ def _graduate_time(hour: str, minute: str, meridiem: str) -> str | None:
         return None
     hours = hours % 12 + (12 if meridiem.upper() == "PM" else 0)
     return f"{hours:02d}:{minutes:02d}"
-
 
 def _graduate_sessions(schedule_text: str) -> tuple[list[dict[str, str | None]], list[str]]:
     time_pattern = re.compile(
@@ -78,6 +74,9 @@ def _graduate_sessions(schedule_text: str) -> tuple[list[dict[str, str | None]],
                 sessions.append(current)
             start = _graduate_time(match[2], match[3], match[4])
             end = _graduate_time(match[5], match[6], match[7])
+            if start is not None and end is not None and start >= end:
+                start = end = None
+                remarks.append(line)
             current = {
                 "day": match[1][:3].upper(),
                 "start_time": start,
@@ -98,7 +97,6 @@ def _graduate_sessions(schedule_text: str) -> tuple[list[dict[str, str | None]],
     if current:
         sessions.append(current)
     return sessions, remarks
-
 
 def parse_graduate_course_page(html: str, expected_code: str) -> dict[str, object]:
     """Parse a public GSLink/PGR course timetable, which uses class groups, not indexes."""

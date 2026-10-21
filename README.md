@@ -1,54 +1,99 @@
-# NTU Course Index MCP
+# NTU STARS MCP
 
 A local, read-only MCP server for NTU Singapore course and exam schedules. It fetches undergraduate course data from NTU's public Class Schedule and General Access exam timetable, and graduate course-group schedules from NTU's GSLink/PGR timetable. It does not use third-party course databases.
 
 Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
-## Install and run
+Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
 
-Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the MCP server directly from GitHub with:
+## Chromium
+
+For personal STARS Planner and Degree Audit tools, install Chromium once:
 
 ```sh
-uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-course-index
+uvx --from 'playwright>=1.50,<2' playwright install chromium
 ```
 
-For development and offline tests from a local checkout, run:
+## Codex
+
+Add to `~/.codex/config.toml`, replacing the credentials with your NTU network account:
+
+```toml
+[mcp_servers.ntu-stars-mcp]
+command = "uvx"
+args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-stars-mcp"]
+
+[mcp_servers.ntu-stars-mcp.env]
+NTU_WISH_USERNAME = "your-network-username"
+NTU_WISH_PASSWORD = "your-network-password"
+```
+
+Omit the `env` table for public tools only. Restart Codex and check `codex mcp list`.
+
+## Claude Code
+
+Register for your user with your NTU network credentials:
 
 ```sh
+claude mcp add --scope user ntu-stars-mcp \
+  --env 'NTU_WISH_USERNAME=your-network-username' \
+  --env 'NTU_WISH_PASSWORD=your-network-password' \
+  -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-stars-mcp
+claude mcp get ntu-stars-mcp
+```
+
+Omit the `--env` options for public tools only. Check `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for details.
+
+## OpenCode
+
+Add to `~/.config/opencode/opencode.json`, replacing the credentials with your NTU network account:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ntu-stars-mcp": {
+      "type": "local",
+      "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-stars-mcp"],
+      "enabled": true,
+      "timeout": 30000,
+      "environment": {
+        "NTU_WISH_USERNAME": "your-network-username",
+        "NTU_WISH_PASSWORD": "your-network-password"
+      }
+    }
+  }
+}
+```
+
+Omit `environment` for public tools only. Check `opencode mcp list`. See [OpenCode's MCP guide](https://docs.opencode.ai/docs/mcp-servers/) for details.
+
+## Manual install
+
+Clone the repository and run the server from a local checkout:
+
+```sh
+git clone https://github.com/pitchaya-s/ntu-stars-mcp.git
+cd ntu-stars-mcp
 uv sync
+uv run ntu-stars-mcp
 ```
+
+For personal tools in a local checkout, run `uv sync --extra wish` and set `NTU_WISH_USERNAME` and `NTU_WISH_PASSWORD` in your environment.
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
-## Codex setup
+## Source layout
 
-Register the local server with the Codex CLI:
-
-```sh
-codex mcp add ntu-course-index -- uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-course-index
-codex mcp list
+```text
+src/ntu_stars_mcp/
+├── mcp_server.py  MCP tools and input/output schemas
+├── domain/        Course/session models, index comparison, and timetable matching
+├── ntu_client/    Public course, graduate, and exam requests, caching, and rate limits
+├── parser/        Course, exam, Degree Audit, and Planner calendar HTML parsers
+└── wish/          Shared browser login, personal cache, and read-only saved-plan loading
+tests/            Offline tests, sanitized fixtures, and optional live MCP smoke tests
 ```
-
-Replace the directory with the repository's absolute path on your machine. Codex stores this server in `~/.codex/config.toml`. The equivalent entry is:
-
-```toml
-[mcp_servers.ntu-course-index]
-command = "uvx"
-args = ["--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-course-index"]
-```
-
-Restart Codex after adding or changing the server.
-
-## Claude Code setup
-
-Register the server for your user so it is available across Claude Code projects:
-
-```sh
-claude mcp add --scope user ntu-course-index -- uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-course-index
-claude mcp get ntu-course-index
-```
-
-Check the connection with `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for scope and configuration details.
 
 ## Tools
 
@@ -56,15 +101,20 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 
 | Tool | Purpose |
 | --- | --- |
-| `get_course` | Course metadata and every index with all sessions |
+| `get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata |
 | `get_course_indexes` | All indexes and complete lesson schedules |
-| `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions |
-| `get_undergraduate_exam_schedule` | Undergraduate exam date, time, duration, and published-term notice |
 | `get_index_schedule` | Full schedule for one index |
 | `compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks |
 | `find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes |
+| `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions |
+| `get_undergraduate_exam_schedule` | Undergraduate exam date, time, duration, and published-term notice |
+| `ntu_auth_status` | Whether optional WISH credentials are configured and a session has been verified |
+| `get_my_stars_planner` | Your registered courses and saved Plans 1–3 with timetables (credentials required) |
+| `get_my_degree_audit` | Your AU requirements, results, and registered courses (credentials required) |
 
 Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
+
+Personal Planner results include registered courses and saved Plans 1–3 for NTU's published term. Pass `{"refresh": true}` after editing a plan to bypass the personal cache.
 
 Graduate schedules use class groups rather than undergraduate index numbers. PGR reports the currently published term and does not provide teaching weeks.
 
@@ -121,6 +171,12 @@ The undergraduate exam smoke test exercises NTU's public General Access flow thr
 
 ```sh
 uv run python tests/live_exam_smoke.py
+```
+
+With WISH credentials and Chromium configured, the personal smoke test checks saved plans, Degree Audit, caching, and refresh, printing only statuses and counts:
+
+```sh
+uv run --extra wish python tests/live_personal_smoke.py
 ```
 
 ## Verified response examples

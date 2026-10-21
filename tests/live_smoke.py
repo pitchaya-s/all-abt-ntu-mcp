@@ -14,7 +14,7 @@ async def main() -> None:
     async with Client(
         StdioServerParameters(
             command="uvx",
-            args=["--no-cache", "--from", str(ROOT), "ntu-course-index"],
+            args=["--no-cache", "--from", str(ROOT), "ntu-stars-mcp"],
             cwd=str(ROOT),
         )
     ) as client:
@@ -37,10 +37,12 @@ async def main() -> None:
             assert data["course_code"] == code
             assert data["index_count"] == expected_count, (code, data["index_count"])
             if code == "SC2001" and year == 2026 and semester == 1:
-                assert data["course_description_status"] == "available"
-                assert "algorithm design and analysis" in data["course_description"].lower()
+                metadata = await client.call_tool("get_course_metadata", {"course_code": code, "academic_year": year, "semester": semester})
+                assert not metadata.is_error
+                assert metadata.structured_content["course_description_status"] == "available"
+                assert "algorithm design and analysis" in metadata.structured_content["course_description"].lower()
             print(
-                f"Live MCP smoke passed: {data['course_code']} {data['course_name']}; "
+                f"Live MCP smoke passed: {data['course_code']}; "
                 f"{data['index_count']} indexes from AY{data['academic_year']} semester {data['semester']}."
             )
 

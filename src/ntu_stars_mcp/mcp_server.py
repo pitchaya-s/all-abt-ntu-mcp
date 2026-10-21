@@ -9,6 +9,15 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field, model_validator
 
 from .domain import Course, compare_indexes as compare, course_metadata, find_matching_indexes as find
+from .wish import (
+    AuthStatus,
+    DegreeAuditResult,
+    StarsPlannerResult,
+    get_my_degree_audit as fetch_my_degree_audit,
+    get_my_stars_planner as fetch_my_stars_planner,
+    ntu_auth_status as fetch_ntu_auth_status,
+)
+from .wish.session import wish_session
 from .ntu_client import (
     NTURequestError,
     get_course as fetch_course,
@@ -17,18 +26,15 @@ from .ntu_client import (
     validate_course_code,
 )
 
-
 Day = Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 Semester = Literal[1, 2, "S"]
 ExamSemester = Literal[1, 2]
 TimeText = Annotated[str, Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$", description="24-hour time in HH:MM format")]
 WeekNumber = Annotated[int, Field(ge=1, le=20)]
 
-
 def _time_minutes(value: str) -> int:
     hours, minutes = map(int, value.split(":"))
     return hours * 60 + minutes
-
 
 class TimeWindow(BaseModel):
     day: Day
@@ -40,7 +46,6 @@ class TimeWindow(BaseModel):
         if _time_minutes(self.end_time) <= _time_minutes(self.start_time):
             raise ValueError("end_time must be later than start_time")
         return self
-
 
 class SessionRequirement(BaseModel):
     lesson_type: str | None = Field(default=None, description="Exact NTU lesson type, such as TUT or LAB")
@@ -60,7 +65,6 @@ class SessionRequirement(BaseModel):
             raise ValueError("starts_at_or_before must not be earlier than starts_at_or_after")
         return self
 
-
 class SearchConstraints(BaseModel):
     avoid_days: list[Day] = Field(default_factory=list, description="Reject indexes with a known class on these days")
     earliest_start: TimeText | None = Field(default=None, description="Every class must start at or after this time")
@@ -74,12 +78,14 @@ class SearchConstraints(BaseModel):
         description="Evaluate only sessions meeting in these teaching weeks; unspecified week rules remain uncertain",
     )
 
-
 class TimeSlot(BaseModel):
     day: Day | None = None
     start_time: TimeText | None = None
     end_time: TimeText | None = None
-    teaching_weeks: list[WeekNumber] | None = Field(default=None, min_length=1, max_length=20)
+    teaching_weeks: list[WeekNumber] | None = Field(
+        default=None, min_length=1, max_length=20,
+        description="Known teaching weeks; omit if unknown. Overlapping times with unknown weeks remain uncertain.",
+    )
 
     @model_validator(mode="after")
     def validate_interval(self) -> TimeSlot:
@@ -89,9 +95,8 @@ class TimeSlot(BaseModel):
             raise ValueError("end_time must be later than start_time")
         return self
 
-
 mcp = MCPServer(
-    "ntu-course-index",
+    "ntu-stars-mcp",
     version="0.1.0",
     instructions=(
         "Read-only NTU timetable tools. Undergraduate tools use the official public Class Schedule; "
@@ -99,18 +104,17 @@ mcp = MCPServer(
         "not indexes. Undergraduate exam lookup uses General Access and returns published exam times, "
         "not exam-seat assignments. Academic year is the first year printed by NTU (2026 means AY2026/27); "
         "undergraduate semester is 1, 2, or S. Results are not STARS vacancy data. Unknown "
-        "undergraduate timetable details are preserved and marked uncertain."
+        "undergraduate timetable details are preserved and marked uncertain. Optional personal tools "
+        "use NTU_WISH_USERNAME and NTU_WISH_PASSWORD; personal records are cached only in memory."
     ),
 )
 _read_only = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
-
 
 def _load_course(course_code: str, academic_year: int, semester: Semester) -> Course:
     try:
         return fetch_course(course_code, academic_year, semester)
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
-
 
 def _schedule_complete(sessions: tuple[Any, ...] | list[Any]) -> bool:
     return all(
@@ -121,49 +125,30 @@ def _schedule_complete(sessions: tuple[Any, ...] | list[Any]) -> bool:
         for session in sessions
     )
 
-
 @mcp.tool(annotations=_read_only)
-def get_course(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
-    """Get course metadata and every index with its complete timetable."""
+def get_course_metadata(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
+    """Get course name, AUs, prerequisites, description, and term metadata."""
     course = _load_course(course_code, academic_year, semester)
-    result = course_metadata(course)
-    result.update(
-        {
-            "index_count": len(course.indexes),
-            "schedule_complete": bool(course.indexes) and all(_schedule_complete(sessions) for sessions in course.indexes.values()),
-            "indexes": [
-                {
-                    "index": index,
-                    "schedule_complete": _schedule_complete(sessions),
-                    "sessions": [session.to_dict() for session in sessions],
-                }
-                for index, sessions in course.indexes.items()
-            ],
-        }
-    )
-    return result
-
+    return course_metadata(course)
 
 @mcp.tool(annotations=_read_only)
 def get_course_indexes(course_code: str, academic_year: int, semester: Semester) -> dict[str, Any]:
     """List all indexes for a course, including every lecture, tutorial, lab, and other session."""
     course = _load_course(course_code, academic_year, semester)
-    result = course_metadata(course)
-    result.update(
-        {
-            "index_count": len(course.indexes),
-            "indexes": [
-                {
-                    "index": index,
-                    "schedule_complete": _schedule_complete(sessions),
-                    "sessions": [session.to_dict() for session in sessions],
-                }
-                for index, sessions in course.indexes.items()
-            ],
-        }
-    )
-    return result
-
+    return {
+        "course_code": course.course_code,
+        "academic_year": course.academic_year,
+        "semester": course.semester,
+        "index_count": len(course.indexes),
+        "indexes": [
+            {
+                "index": index,
+                "schedule_complete": _schedule_complete(sessions),
+                "sessions": [session.to_dict() for session in sessions],
+            }
+            for index, sessions in course.indexes.items()
+        ],
+    }
 
 @mcp.tool(annotations=_read_only)
 def get_graduate_course_schedule(course_code: str) -> dict[str, Any]:
@@ -172,7 +157,6 @@ def get_graduate_course_schedule(course_code: str) -> dict[str, Any]:
         return fetch_graduate_course_schedule(course_code)
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
-
 
 @mcp.tool(annotations=_read_only)
 def get_undergraduate_exam_schedule(
@@ -184,6 +168,26 @@ def get_undergraduate_exam_schedule(
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
+@mcp.tool(annotations=_read_only)
+def ntu_auth_status() -> AuthStatus:
+    """Report whether WISH credentials are configured and whether this process has verified a session."""
+    return fetch_ntu_auth_status()
+
+@mcp.tool(annotations=_read_only)
+def get_my_stars_planner(refresh: bool = False) -> StarsPlannerResult:
+    """Get registered courses, the published term, and saved Plans 1–3 with indexes and timetables. Use refresh after editing a plan."""
+    try:
+        return fetch_my_stars_planner(refresh=refresh)
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
+
+@mcp.tool(annotations=_read_only)
+def get_my_degree_audit() -> DegreeAuditResult:
+    """Get your degree requirements, examination results, and registered courses from Degree Audit."""
+    try:
+        return fetch_my_degree_audit()
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
 
 @mcp.tool(annotations=_read_only)
 def get_index_schedule(
@@ -204,12 +208,13 @@ def get_index_schedule(
             f"Index {index} is not listed for {code} in AY{academic_year}/{str(academic_year + 1)[-2:]} semester {semester}."
         )
     return {
-        **course_metadata(course),
+        "course_code": course.course_code,
+        "academic_year": course.academic_year,
+        "semester": course.semester,
         "index": index,
         "schedule_complete": _schedule_complete(sessions),
         "sessions": [session.to_dict() for session in sessions],
     }
-
 
 @mcp.tool(annotations=_read_only)
 def compare_indexes(
@@ -234,7 +239,6 @@ def compare_indexes(
     except ValueError as error:
         raise ToolError(str(error)) from error
 
-
 @mcp.tool(annotations=_read_only)
 def find_matching_indexes(
     course_code: str,
@@ -249,6 +253,8 @@ def find_matching_indexes(
     existing = [slot.model_dump(exclude_none=True) for slot in against_sessions or []]
     return find(course, rules, existing)
 
-
 def main() -> None:
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    finally:
+        wish_session.close()

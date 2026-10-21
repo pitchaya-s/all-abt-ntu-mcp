@@ -4,7 +4,6 @@ import re
 
 from .common import CourseUnavailable, NTUPageError, _Rows
 
-
 class _ExamPlans(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -33,7 +32,6 @@ class _ExamPlans(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._value is not None:
             self._label.append(data)
-
 
 def parse_undergraduate_exam_plan(
     html: str, academic_year: int | None = None, semester: str | None = None
@@ -83,7 +81,6 @@ def parse_undergraduate_exam_plan(
         "academic_session": f"Semester {selected_semester} Academic Year {year}-{year + 1}",
     }
 
-
 def _exam_date(value: str) -> str | None:
     for date_format in ("%d %B %Y", "%d %b %Y"):
         try:
@@ -91,7 +88,6 @@ def _exam_date(value: str) -> str | None:
         except ValueError:
             pass
     return None
-
 
 def _exam_time(value: str) -> str | None:
     match = re.fullmatch(r"\s*(\d{1,2})[.:](\d{2})\s*(AM|PM)\s*", value, re.IGNORECASE)
@@ -103,13 +99,11 @@ def _exam_time(value: str) -> str | None:
     hour = hour % 12 + (12 if match[3].upper() == "PM" else 0)
     return f"{hour:02d}:{minute:02d}"
 
-
 def _exam_duration(value: str) -> int | None:
     match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|min|mins|minute|minutes)\s*", value, re.I)
     if not match:
         return None
     return round(float(match[1]) * (60 if match[2].lower().startswith("h") else 1))
-
 
 def parse_undergraduate_exam_schedule(html: str, expected_code: str) -> dict[str, object]:
     """Parse NTU's public General Access exam results; do not infer exam seat details."""

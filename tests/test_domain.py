@@ -1,8 +1,8 @@
 from pathlib import Path
 import unittest
 
-from ntu_course_index.domain import Course, Session, clash_status, compare_indexes, find_matching_indexes
-from ntu_course_index.parser import parse_course_page
+from ntu_stars_mcp.domain import Course, Session, clash_status, compare_indexes, find_matching_indexes
+from ntu_stars_mcp.parser import parse_course_page
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -31,6 +31,12 @@ class ClashTests(unittest.TestCase):
         unknown = session("5", "MON", "10:00", "11:00", None)
         no_day = Session("TEST1000", "6", "TUT", None, None, None, None, None, None, "TBA", "TBA", "ARRANGED")
         self.assertIsNone(clash_status(unknown, no_day))
+
+    def test_overlapping_times_with_unknown_weeks_are_uncertain(self) -> None:
+        unknown = session("1", "MON", "10:00", "11:00", None)
+        known = session("2", "MON", "10:30", "11:30", (2, 4))
+        self.assertIsNone(clash_status(unknown, known))
+        self.assertFalse(clash_status(unknown, session("3", "MON", "11:00", "12:00", (2,))))
 
 
 class IndexLogicTests(unittest.TestCase):
@@ -73,6 +79,14 @@ class IndexLogicTests(unittest.TestCase):
         )
         result = find_matching_indexes(course, {}, [])
         self.assertEqual(result["matches"][0]["status"], "uncertain")
+
+    def test_clashes_outside_the_requested_weeks_do_not_reject_an_index(self) -> None:
+        course = Course("TEST1000", "Scoped", None, {}, {"1": (session("1", "MON", "10:00", "11:00", (1, 2)),)})
+        existing = [{"day": "MON", "start_time": "10:30", "end_time": "11:30", "teaching_weeks": [2, 3]}]
+        result = find_matching_indexes(course, {"teaching_weeks": [1, 3]}, existing)
+        self.assertEqual(result["match_count"], 1)
+        self.assertEqual(result["matches"][0]["status"], "confirmed")
+        self.assertEqual(find_matching_indexes(course, {"teaching_weeks": [2]}, existing)["match_count"], 0)
 
 
 if __name__ == "__main__":

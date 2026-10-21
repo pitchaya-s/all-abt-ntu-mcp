@@ -5,7 +5,6 @@ import re
 from ..domain import Course, Session
 from .common import CourseUnavailable, NTUPageError, _CourseContentRows, _Rows
 
-
 def parse_course_description(html: str, expected_code: str) -> str | None:
     """Extract the wide description cell from NTU's Content of Courses response."""
     parser = _CourseContentRows()
@@ -47,7 +46,6 @@ def parse_course_description(html: str, expected_code: str) -> str | None:
     description = "\n".join(descriptions).strip()
     return description or None
 
-
 def parse_teaching_weeks(remark: str) -> tuple[int, ...] | None:
     """Parse an explicit NTU week range/list; leave unfamiliar remarks untouched."""
     match = re.fullmatch(
@@ -67,19 +65,27 @@ def parse_teaching_weeks(remark: str) -> tuple[int, ...] | None:
             bounds = part.split("-")
             if len(bounds) != 2 or not all(bound.strip().isdigit() for bound in bounds):
                 return None
-            start, end = map(int, bounds)
-            if start > end:
+            try:
+                start, end = map(int, bounds)
+            except ValueError:
+                return None
+            if not 1 <= start <= end <= 20:
                 return None
             weeks.update(range(start, end + 1))
         elif part.isdigit():
-            weeks.add(int(part))
+            try:
+                week = int(part)
+            except ValueError:
+                return None
+            if not 1 <= week <= 20:
+                return None
+            weeks.add(week)
         else:
             return None
 
-    if not weeks or min(weeks) < 1 or max(weeks) > 20:
+    if not weeks:
         return None
     return tuple(sorted(weeks))
-
 
 def _parse_time(value: str) -> tuple[str | None, str | None, str | None]:
     match = re.fullmatch(r"\s*(\d{2}):?(\d{2})\s*-\s*(\d{2}):?(\d{2})\s*", value)
@@ -93,7 +99,6 @@ def _parse_time(value: str) -> tuple[str | None, str | None, str | None]:
     if start >= end:
         return None, None, value or None
     return start, end, None
-
 
 def _course_details(rows: list[list[str]]) -> dict[str, str]:
     details: dict[str, list[str]] = {}
@@ -115,7 +120,6 @@ def _course_details(rows: list[list[str]]) -> dict[str, str]:
         for label, values in details.items()
         if any(values)
     }
-
 
 def parse_course_page(html: str, expected_code: str) -> Course:
     rows_parser = _Rows()

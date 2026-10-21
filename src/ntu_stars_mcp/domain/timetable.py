@@ -1,121 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from typing import Any, Literal
+from typing import Any
 
-
-@dataclass(frozen=True)
-class Session:
-    course_code: str
-    index: str
-    lesson_type: str | None
-    group: str | None
-    day: str | None
-    start_time: str | None
-    end_time: str | None
-    venue: str | None
-    teaching_weeks: tuple[int, ...] | None
-    remarks: str | None
-    raw_time: str | None = None
-    raw_day: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "course_code": self.course_code,
-            "index": self.index,
-            "lesson_type": self.lesson_type,
-            "group": self.group,
-            "day": self.day,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
-            "venue": self.venue,
-            "teaching_weeks": list(self.teaching_weeks) if self.teaching_weeks is not None else None,
-            "remarks": self.remarks,
-            "raw_time": self.raw_time,
-            "raw_day": self.raw_day,
-        }
-
-
-@dataclass(frozen=True)
-class Course:
-    course_code: str
-    course_name: str
-    au: float | None
-    details: dict[str, str]
-    indexes: dict[str, tuple[Session, ...]]
-    academic_year: int | None = None
-    semester: str | None = None
-    retrieved_at: str | None = None
-    source_url: str | None = None
-    course_description: str | None = None
-    course_description_status: Literal["available", "not_listed", "unavailable"] = "unavailable"
-    course_description_source: str | None = None
-
-    def with_request_metadata(
-        self, *, academic_year: int, semester: str, retrieved_at: str, source_url: str
-    ) -> Course:
-        return replace(
-            self,
-            academic_year=academic_year,
-            semester=semester,
-            retrieved_at=retrieved_at,
-            source_url=source_url,
-        )
-
-    def with_course_description(
-        self,
-        *,
-        description: str | None,
-        status: Literal["available", "not_listed", "unavailable"],
-        source_url: str,
-    ) -> Course:
-        return replace(
-            self,
-            course_description=description,
-            course_description_status=status,
-            course_description_source=source_url,
-        )
-
-
-def course_metadata(course: Course) -> dict[str, Any]:
-    return {
-        "course_code": course.course_code,
-        "course_name": course.course_name,
-        "au": course.au,
-        "course_description": course.course_description,
-        "course_description_status": course.course_description_status,
-        "course_description_source": course.course_description_source,
-        "prerequisites": course.details.get("prerequisite"),
-        "course_notes": [
-            {"label": label, "text": text}
-            for label, text in course.details.items()
-            if label != "prerequisite"
-        ],
-        "academic_year": course.academic_year,
-        "semester": course.semester,
-        "retrieved_at": course.retrieved_at,
-        "official_source": course.source_url,
-    }
-
-
-def session_signature(session: Session) -> tuple[Any, ...]:
-    return (
-        session.lesson_type,
-        session.group,
-        session.day,
-        session.start_time,
-        session.end_time,
-        session.venue,
-        session.teaching_weeks,
-        session.remarks,
-        session.raw_time,
-        session.raw_day,
-    )
-
+from .models import Course, Session, course_metadata, session_signature
 
 def _value(session: Session | dict[str, Any], key: str) -> Any:
     return getattr(session, key) if isinstance(session, Session) else session.get(key)
-
 
 def _minutes(value: str | None) -> int | None:
     if value is None or len(value) != 5 or value[2] != ":":
@@ -125,7 +15,6 @@ def _minutes(value: str | None) -> int | None:
     except ValueError:
         return None
     return hours * 60 + minutes
-
 
 def clash_status(first: Session | dict[str, Any], second: Session | dict[str, Any]) -> bool | None:
     """Return True for a clash, False for a known non-clash, or None if unknown."""
@@ -146,8 +35,9 @@ def clash_status(first: Session | dict[str, Any], second: Session | dict[str, An
     second_end = _minutes(_value(second, "end_time"))
     if None in (first_start, first_end, second_start, second_end):
         return None
-    return first_start < second_end and second_start < first_end
-
+    if not (first_start < second_end and second_start < first_end):
+        return False
+    return None if first_weeks is None or second_weeks is None else True
 
 def compare_indexes(
     course: Course, indexes: list[str], against: list[dict[str, Any]] | None = None
@@ -216,7 +106,6 @@ def compare_indexes(
     else:
         result["clash_check"] = None
     return result
-
 
 def find_matching_indexes(
     course: Course,
@@ -312,6 +201,10 @@ def find_matching_indexes(
         for session in active:
             for other in against:
                 if week_scope is not None and other.get("teaching_weeks") is not None and not week_scope.intersection(other["teaching_weeks"]):
+                    continue
+                if (week_scope is not None and session.teaching_weeks is not None
+                        and other.get("teaching_weeks") is not None
+                        and not week_scope.intersection(session.teaching_weeks, other["teaching_weeks"])):
                     continue
                 status = clash_status(session, other)
                 if status is True:

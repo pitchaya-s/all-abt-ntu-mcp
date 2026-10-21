@@ -3,10 +3,10 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
-from ntu_course_index import ntu_client
-from ntu_course_index.parser.exam import parse_undergraduate_exam_plan, parse_undergraduate_exam_schedule
-from ntu_course_index.ntu_client import NTURequestError, get_undergraduate_exam_schedule
-from ntu_course_index.parser import CourseUnavailable, NTUPageError
+from ntu_stars_mcp.ntu_client import exams
+from ntu_stars_mcp.parser.exam import parse_undergraduate_exam_plan, parse_undergraduate_exam_schedule
+from ntu_stars_mcp.ntu_client import NTURequestError, get_undergraduate_exam_schedule
+from ntu_stars_mcp.parser import CourseUnavailable, NTUPageError
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "undergrad-exam-sc2001-2026-1.html"
@@ -68,12 +68,12 @@ class UndergraduateExamParserTests(unittest.TestCase):
 
 class UndergraduateExamClientTests(unittest.TestCase):
     def setUp(self) -> None:
-        with ntu_client._cache_lock:
-            ntu_client._exam_cache.clear()
+        with exams._cache_lock:
+            exams._exam_cache.clear()
 
     def test_public_general_access_flow_and_cache(self) -> None:
         with patch(
-            "ntu_course_index.ntu_client._fetch_html_request",
+            "ntu_stars_mcp.ntu_client.exams._fetch_html_request",
             side_effect=[LANDING_HTML, PLAN_HTML, FILTER_HTML, EXAM_HTML],
         ) as fetch:
             result = get_undergraduate_exam_schedule("sc2001")
@@ -83,7 +83,7 @@ class UndergraduateExamClientTests(unittest.TestCase):
         self.assertEqual(cached, result)
         self.assertEqual(fetch.call_count, 4)
         requests = [call.args[0] for call in fetch.call_args_list]
-        self.assertEqual(requests[0].full_url, ntu_client.UNDERGRAD_EXAM_FORM_URL)
+        self.assertEqual(requests[0].full_url, exams.UNDERGRAD_EXAM_FORM_URL)
         self.assertEqual(
             parse_qs(requests[1].data.decode()),
             {"p_opt": ["1"], "p_type": ["UE"], "bOption": ["Next"]},
@@ -94,7 +94,7 @@ class UndergraduateExamClientTests(unittest.TestCase):
         self.assertEqual(detail["academic_session"], ["Semester 1 Academic Year 2026-2027"])
 
     def test_validates_term_and_reports_ntus_network_errors(self) -> None:
-        with patch("ntu_course_index.ntu_client._fetch_html_request") as fetch:
+        with patch("ntu_stars_mcp.ntu_client.exams._fetch_html_request") as fetch:
             with self.assertRaisesRegex(ValueError, "both academic_year and semester"):
                 get_undergraduate_exam_schedule("SC2001", 2026)
             with self.assertRaisesRegex(ValueError, "not Special Term"):
@@ -104,7 +104,7 @@ class UndergraduateExamClientTests(unittest.TestCase):
             fetch.assert_not_called()
 
         with patch(
-            "ntu_course_index.ntu_client._fetch_html_request",
+            "ntu_stars_mcp.ntu_client.exams._fetch_html_request",
             side_effect=NTURequestError("offline"),
         ):
             with self.assertRaisesRegex(NTURequestError, "offline"):

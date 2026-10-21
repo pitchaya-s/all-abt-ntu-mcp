@@ -14,3 +14,14 @@ Source: https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE.main_display1
 Course content source: https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SUBJ_CONT.main_display1
 Graduate schedule source: https://wish.wis.ntu.edu.sg/pls/webexe/pgr$subrs_timetable.examTimetable?bOption=Next&choiceSubj=EE6102
 Undergraduate exam source: https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.Get_detail
+
+The personal STARS Planner and Degree Audit HTML fixtures are synthetic,
+sanitized examples used only to test the authenticated-page parsers. They do
+not contain real student information or represent verified live responses.
+
+personal-planner-calendar-sanitized.html is a reduced calendar and empty
+registration section from a live read-only Planner response on 2026-10-21.
+The course/index were replaced with fictional ZZ0001/00001. Account identity,
+forms, credentials, session fields, scripts, and event handlers were removed.
+Saved-plan Load form tests use synthetic fields matching the observed form;
+they never contain live tokens or student identifiers.

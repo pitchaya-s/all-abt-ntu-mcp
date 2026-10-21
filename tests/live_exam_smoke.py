@@ -14,7 +14,7 @@ async def main() -> None:
     async with Client(
         StdioServerParameters(
             command="uvx",
-            args=["--no-cache", "--from", str(ROOT), "ntu-course-index"],
+            args=["--no-cache", "--from", str(ROOT), "ntu-stars-mcp"],
             cwd=str(ROOT),
         )
     ) as client:

@@ -33,7 +33,7 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as cwd:
             async with Client(StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd, env=environment())) as client:
                 listing = await client.list_tools()
-                self.assertEqual(len(listing.tools), 12)
+                self.assertEqual(len(listing.tools), 11)
                 for tool in listing.tools:
                     self.assertIsNotNone(tool.output_schema, tool.name)
                     self.assertEqual(tool.output_schema["type"], "object", tool.name)
@@ -76,6 +76,7 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
                         ("get_index", {**ARGS, "index": "missing"}),
                         ("get_course_metadata", {**ARGS, "course_code": "ZZ9999"}),
                         ("compare_indexes", {**ARGS, "indexes": ["10143"]}),
+                        ("register_courses", {}),
                         ("unknown_tool", {}),
                     ):
                         error = await client.call_tool(name, args)
@@ -138,7 +139,7 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with raw_client(version) as request:
                 listing = await request("tools/list", {})
                 tools = listing["result"]["tools"]
-                self.assertEqual(len(tools), 12)
+                self.assertEqual(len(tools), 11)
                 self.assertEqual(tools, (await request("tools/list", {}))["result"]["tools"])
                 tool = next(tool for tool in tools if tool["name"] == "get_course_indexes")
                 self.assertIn("inputSchema", tool)

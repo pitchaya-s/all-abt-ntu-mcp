@@ -31,12 +31,10 @@ from .models import (
     NTUPersonalDataError,
     StarsPlannerResult,
     SavePlanResult,
-    RegistrationResult,
 )
 from .planner import PLANNER_VIEW_URL, read_stars_planner
-from .plan_editor import course_assignments, prepare_stars_plan, submit_stars_plan, validate_course_selection, validate_plan_request
+from .plan_editor import course_assignments, prepare_stars_plan, submit_stars_plan, validate_plan_request
 from .planner import SAVE_PLAN_URL
-from .registration import PendingRegistration, register_courses as run_registration
 
 PLANNER_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main"
 DEGREE_AUDIT_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display"
@@ -70,7 +68,6 @@ class WishSessionManager:
         self._last_browser_status: int | None = None
         self._executor: ThreadPoolExecutor | None = None
         self._closed = False
-        self._pending_registration: PendingRegistration | None = None
 
     @property
     def credentials_configured(self) -> bool:
@@ -111,7 +108,6 @@ class WishSessionManager:
         self._authenticated = False
         self._last_verified_at = None
         self._cache.clear()
-        self._pending_registration = None
 
     def _record_browser_response(self, response: object) -> None:
         request = getattr(response, "request", None)
@@ -382,15 +378,6 @@ class WishSessionManager:
         normalized = validate_plan_request(plan_number, courses, academic_year, semester)
         return self._run_browser_operation(self._save_stars_plan, plan_number, normalized, academic_year, semester)
 
-    def register_courses(
-        self, courses: list[dict[str, str]], academic_year: int, semester: int,
-        confirmation_token: str | None = None, user_confirmed: bool = False,
-    ) -> RegistrationResult:
-        normalized = validate_course_selection(courses, academic_year, semester)
-        if type(user_confirmed) is not bool or (confirmation_token is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", confirmation_token)):
-            raise ValueError("Provide a boolean user_confirmed and an unmodified confirmation token from the preview.")
-        return self._run_browser_operation(run_registration, self, normalized, academic_year, semester, confirmation_token, user_confirmed)
-
 wish_session = WishSessionManager()
 
 def ntu_auth_status() -> AuthStatus:
@@ -406,9 +393,3 @@ def save_stars_plan(
     plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
 ) -> SavePlanResult:
     return wish_session.save_stars_plan(plan_number, courses, academic_year, semester)
-
-def register_courses(
-    courses: list[dict[str, str]], academic_year: int, semester: int,
-    confirmation_token: str | None = None, user_confirmed: bool = False,
-) -> RegistrationResult:
-    return wish_session.register_courses(courses, academic_year, semester, confirmation_token, user_confirmed)

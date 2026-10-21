@@ -1,6 +1,6 @@
 # NTU STARS MCP
 
-A local MCP server for NTU Singapore course schedules, index vacancies, exam timetables, saved STARS plans, and course-registration requests. It fetches data directly from NTU's public systems without third-party course databases.
+A local MCP server for NTU Singapore course schedules, index vacancies, exam timetables, and saved STARS plans. It fetches data directly from NTU's public systems without third-party course databases.
 
 Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); vacancy and waitlist counts come from its [public vacancy form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_vacancy.check_vacancy); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
@@ -93,7 +93,7 @@ src/ntu_stars_mcp/
 ├── domain/        Course/session models, index comparison, and timetable matching
 ├── ntu_client/    Public course, vacancy, graduate, and exam requests, caching, and rate limits
 ├── parser/        Course, vacancy, exam, Degree Audit, and Planner calendar HTML parsers
-└── wish/          Shared login, personal cache, saved-plan editing, and confirmed registration requests
+└── wish/          Shared login, personal cache, and saved-plan editing
 tests/            Offline tests, sanitized fixtures, and optional live MCP smoke tests
 ```
 
@@ -113,7 +113,6 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 | `ntu_auth_status` | Whether optional WISH credentials are configured and a session has been verified | No |
 | `get_stars_planner` | Your registered courses and saved Plans 1–3 with timetables | Yes |
 | `save_stars_plan` | Replace a saved plan's course/index list and verify the saved result | Yes |
-| `register_courses` | Preview and submit a real course-registration request after fresh user confirmation | Yes |
 | `get_degree_audit` | Your AU requirements, results, and registered courses | Yes |
 
 Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
@@ -123,8 +122,6 @@ All tools publish concrete `outputSchema` definitions. Responses are compact by 
 Vacancy lookup is available **09:00–22:00 Singapore time (UTC+8)**, without login. Both index tools return `vacancies_available`, `waitlist_length`, and `vacancy_status`, with snapshot time and cache age in `vacancy_metadata`. Counts are attached only when NTU's published vacancy term matches the requested timetable. Outside those hours (`closed`), on a term mismatch (`term_mismatch`), for an unlisted index (`not_listed`), or on an NTU error (`unavailable`), counts are `null` and schedules remain available. A reported `0` is distinct from an unknown count.
 
 Personal Planner results include registered courses and saved Plans 1–3 for NTU's published term. Pass `{"refresh": true}` after editing a plan to bypass the personal cache. `save_stars_plan` replaces the chosen plan with the complete supplied list of 1–13 courses; omitted courses are removed from that plan. It verifies the saved result and does not register, drop, or swap registered courses. An uncertain save is never retried automatically; refresh the Planner before retrying.
-
-**Registration is very dangerous: it can change official enrolment.** `register_courses` first returns a preview without submitting. The agent must show the exact courses/indexes, ask **“Are you sure?”**, and wait for a new explicit affirmative reply before calling again with the same courses/term, `confirmation_token`, and `user_confirmed: true`. Tokens expire after five minutes and are single-use. The tool sends at most one registration request and checks registered courses afterward; extra NTU choices or confirmation pages require manual completion.
 
 Graduate schedules use class groups rather than undergraduate index numbers. PGR reports the currently published term and does not provide teaching weeks.
 
@@ -138,12 +135,6 @@ Save Plan 1 for the current Planner term:
 
 ```json
 {"plan_number":1,"academic_year":2026,"semester":2,"courses":[{"course_code":"SC2001","index":"10243"}]}
-```
-
-Preview a registration request without submitting:
-
-```json
-{"academic_year":2026,"semester":2,"courses":[{"course_code":"SC2001","index":"10243"}]}
 ```
 
 Graduate lookup uses only the course code and returns NTU's currently published term:
@@ -191,7 +182,7 @@ npm install --prefix "$NTU_MCP_TEST_SDK" --ignore-scripts --no-audit --no-fund @
 uv run node tests/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
 ```
 
-These interoperability checks use offline fixtures and never submit registrations or edit saved plans.
+These interoperability checks use offline fixtures and never edit saved plans.
 
 The live stdio smoke test launches through `uvx` and makes real requests to NTU for SC2001, SC2207, and MH2802 in AY2026 semester 1, plus SC2001 in AY2025 semester 2. It also checks vacancies through both index tools for SC2001 and SC2207 in AY2026 semester 2, or verifies the closed status outside service hours:
 
@@ -237,5 +228,3 @@ The public exam timetable currently lists SC2001's AY2026 Semester 1 exam on 202
 ## Limits
 
 Vacancies reflect NTU's reported snapshot for its currently published term and can change before registration. Outside 09:00–22:00 Singapore time, vacancy requests are skipped; timetable tools still work.
-
-The registration form, preview, and one explicitly confirmed submission were checked live. That submission produced no confirmed registration in NTU's refreshed records. Successful registration and subsequent NTU confirmation pages remain unverified; an `unverified` result must be checked manually before another attempt.

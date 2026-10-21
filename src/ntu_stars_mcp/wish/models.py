@@ -66,25 +66,6 @@ class SavePlanResult(TypedDict):
     verified_at: str
     source_url: str
 
-class RegistrationCourse(TypedDict):
-    course_code: str
-    index: str
-
-class RegistrationResult(TypedDict):
-    status: str
-    academic_year: int
-    semester: int
-    courses: list[RegistrationCourse]
-    warning: str
-    confirmation_question: str | None
-    confirmation_token: str | None
-    confirmation_expires_at: str | None
-    registered_courses: list[dict[str, str]]
-    registered_courses_status: str
-    message: str
-    verified_at: str | None
-    source_url: str
-
 class DegreeAuditResult(TypedDict):
     service: str
     page_title: str | None

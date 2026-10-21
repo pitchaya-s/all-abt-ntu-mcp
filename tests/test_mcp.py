@@ -29,7 +29,6 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "ntu_auth_status",
                         "get_stars_planner",
                         "save_stars_plan",
-                        "register_courses",
                         "get_degree_audit",
                         "get_index",
                         "compare_indexes",

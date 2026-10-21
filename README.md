@@ -1,6 +1,6 @@
 # NTU STARS MCP
 
-A local, read-only MCP server for NTU Singapore course schedules, index vacancies, and exam timetables. It fetches data directly from NTU's public systems without third-party course databases.
+A local MCP server for NTU Singapore course schedules, index vacancies, exam timetables, and saved STARS plans. It fetches data directly from NTU's public systems without third-party course databases.
 
 Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); vacancy and waitlist counts come from its [public vacancy form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_vacancy.check_vacancy); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
@@ -56,7 +56,7 @@ Add to `~/.config/opencode/opencode.json`, replacing the credentials with your N
       "type": "local",
       "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-stars-mcp"],
       "enabled": true,
-      "timeout": 30000,
+      "timeout": 120000,
       "environment": {
         "NTU_WISH_USERNAME": "your-network-username",
         "NTU_WISH_PASSWORD": "your-network-password"
@@ -91,7 +91,7 @@ src/ntu_stars_mcp/
 ├── domain/        Course/session models, index comparison, and timetable matching
 ├── ntu_client/    Public course, vacancy, graduate, and exam requests, caching, and rate limits
 ├── parser/        Course, vacancy, exam, Degree Audit, and Planner calendar HTML parsers
-└── wish/          Shared browser login, personal cache, and read-only saved-plan loading
+└── wish/          Shared browser login, personal cache, and saved-plan loading/editing
 tests/            Offline tests, sanitized fixtures, and optional live MCP smoke tests
 ```
 
@@ -99,24 +99,25 @@ tests/            Offline tests, sanitized fixtures, and optional live MCP smoke
 
 Class schedule tools take `academic_year` and `semester`. NTU labels academic years by their first year, so `academic_year: 2026` means AY2026/27. Semester is `1`, `2`, or `"S"` for Special Term. The exam lookup defaults to the latest published exam term; pass both `academic_year` and semester (`1` or `2`) to request a specific published term. It uses General Access, returns exam dates and times, and does not include exam-seat assignments. `get_graduate_course_schedule` returns the latest term published by GSLink/PGR.
 
-| Tool | Purpose |
-| --- | --- |
-| `get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata |
-| `get_course_indexes` | All indexes with complete schedules, vacancies, and waitlist lengths |
-| `get_index` | One index's complete schedule, vacancies, and waitlist length |
-| `compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks |
-| `find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes |
-| `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions |
-| `get_undergraduate_exam_schedule` | Undergraduate exam date, time, duration, and published-term notice |
-| `ntu_auth_status` | Whether optional WISH credentials are configured and a session has been verified |
-| `get_my_stars_planner` | Your registered courses and saved Plans 1–3 with timetables (credentials required) |
-| `get_my_degree_audit` | Your AU requirements, results, and registered courses (credentials required) |
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata | No |
+| `get_course_indexes` | All indexes with complete schedules, vacancies, and waitlist lengths | No |
+| `get_index` | One index's complete schedule, vacancies, and waitlist length | No |
+| `compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks | No |
+| `find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes | No |
+| `get_graduate_course_schedule` | Graduate course class groups and scheduled sessions | No |
+| `get_undergraduate_exam_schedule` | Undergraduate exam date, time, duration, and published-term notice | No |
+| `ntu_auth_status` | Whether optional WISH credentials are configured and a session has been verified | No |
+| `get_stars_planner` | Your registered courses and saved Plans 1–3 with timetables | Yes |
+| `save_stars_plan` | Replace a saved plan's course/index list and verify the saved result | Yes |
+| `get_degree_audit` | Your AU requirements, results, and registered courses | Yes |
 
 Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
 
 Vacancy lookup is available **09:00–22:00 Singapore time (UTC+8)**, without login. Both index tools return `vacancies_available`, `waitlist_length`, and `vacancy_status`, with snapshot time and cache age in `vacancy_metadata`. Counts are attached only when NTU's published vacancy term matches the requested timetable. Outside those hours (`closed`), on a term mismatch (`term_mismatch`), for an unlisted index (`not_listed`), or on an NTU error (`unavailable`), counts are `null` and schedules remain available. A reported `0` is distinct from an unknown count.
 
-Personal Planner results include registered courses and saved Plans 1–3 for NTU's published term. Pass `{"refresh": true}` after editing a plan to bypass the personal cache.
+Personal Planner results include registered courses and saved Plans 1–3 for NTU's published term. Pass `{"refresh": true}` after editing a plan to bypass the personal cache. `save_stars_plan` replaces the chosen plan with the complete supplied list of 1–13 courses; omitted courses are removed from that plan. It verifies the saved result and does not register, drop, or swap registered courses. An uncertain save is never retried automatically; refresh the Planner before retrying.
 
 Graduate schedules use class groups rather than undergraduate index numbers. PGR reports the currently published term and does not provide teaching weeks.
 
@@ -124,6 +125,12 @@ Example inputs:
 
 ```json
 {"course_code":"SC2001","academic_year":2026,"semester":1}
+```
+
+Save Plan 1 for the current Planner term:
+
+```json
+{"plan_number":1,"academic_year":2026,"semester":2,"courses":[{"course_code":"SC2001","index":"10243"}]}
 ```
 
 Graduate lookup uses only the course code and returns NTU's currently published term:

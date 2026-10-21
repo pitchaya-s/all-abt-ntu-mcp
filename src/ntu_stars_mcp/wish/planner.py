@@ -13,6 +13,7 @@ from .models import NTUAuthError, NTUPersonalDataError
 PLANNER_VIEW_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.planner"
 _SELECTION_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.time_table"
 _LOAD_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.load_time_table"
+SAVE_PLAN_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.save_time_table"
 
 
 def _same_endpoint(url: str, expected: str) -> bool:
@@ -23,9 +24,10 @@ def _expired(html: str) -> bool:
     return _is_login_page(html) or bool(re.search(r"session (?:has )?(?:expired|time[ -]?out)", html, re.I))
 
 
-def _post(page, url: str, fields: list[tuple[str, str]]) -> str | None:
-    if url not in {_LOAD_URL, PLANNER_VIEW_URL}:
-        raise NTUPersonalDataError("Refused a Planner request outside the two read-only display endpoints.")
+def _post(page, url: str, fields: list[tuple[str, str]], *, save: bool = False) -> str | None:
+    allowed = {SAVE_PLAN_URL} if save else {_LOAD_URL, PLANNER_VIEW_URL}
+    if url not in allowed:
+        raise NTUPersonalDataError("Refused a Planner request outside the allowed plan display/save endpoints.")
     _wait_for_request_slot()
     response = page.context.request.post(
         url, data=urlencode(fields), headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -40,7 +42,7 @@ def _post(page, url: str, fields: list[tuple[str, str]]) -> str | None:
                 return None
             raise NTUPersonalDataError("NTU redirected the Planner display unexpectedly; no redirect was followed.")
         if response.status != 200:
-            raise NTURequestError(f"NTU returned HTTP {response.status} for the read-only Planner display.")
+            raise NTURequestError(f"NTU returned HTTP {response.status} for the Planner {'save' if save else 'display'}.")
         content_type = Message()
         content_type["content-type"] = response.headers.get("content-type", "")
         if content_type.get_content_type() != "text/html":

@@ -55,8 +55,9 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "get_graduate_course_schedule",
                         "get_undergraduate_exam_schedule",
                         "ntu_auth_status",
-                        "get_my_stars_planner",
-                        "get_my_degree_audit",
+                        "get_stars_planner",
+                        "save_stars_plan",
+                        "get_degree_audit",
                         "get_index",
                         "compare_indexes",
                         "find_matching_indexes",
@@ -151,7 +152,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("credentials_configured", status.structured_content)
 
                 with patch(
-                    "ntu_stars_mcp.mcp_server.fetch_my_stars_planner",
+                    "ntu_stars_mcp.mcp_server.fetch_stars_planner",
                     return_value={
                         "service": "stars_planner",
                         "page_title": "STARS Planner",
@@ -170,12 +171,12 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "cache_age_seconds": 0,
                     },
                 ):
-                    planner = await client.call_tool("get_my_stars_planner", {})
+                    planner = await client.call_tool("get_stars_planner", {})
                 self.assertFalse(planner.is_error)
                 self.assertEqual(planner.structured_content["service"], "stars_planner")
 
                 with patch(
-                    "ntu_stars_mcp.mcp_server.fetch_my_degree_audit",
+                    "ntu_stars_mcp.mcp_server.fetch_degree_audit",
                     return_value={
                         "service": "degree_audit",
                         "page_title": "Degree Audit",
@@ -191,7 +192,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "cache_age_seconds": 0,
                     },
                 ):
-                    audit = await client.call_tool("get_my_degree_audit", {})
+                    audit = await client.call_tool("get_degree_audit", {})
                 self.assertFalse(audit.is_error)
                 self.assertEqual(audit.structured_content["service"], "degree_audit")
 

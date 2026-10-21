@@ -13,9 +13,11 @@ from .wish import (
     AuthStatus,
     DegreeAuditResult,
     StarsPlannerResult,
-    get_my_degree_audit as fetch_my_degree_audit,
-    get_my_stars_planner as fetch_my_stars_planner,
+    SavePlanResult,
+    get_degree_audit as fetch_degree_audit,
+    get_stars_planner as fetch_stars_planner,
     ntu_auth_status as fetch_ntu_auth_status,
+    save_stars_plan as persist_stars_plan,
 )
 from .wish.session import wish_session
 from .ntu_client import (
@@ -96,18 +98,24 @@ class TimeSlot(BaseModel):
             raise ValueError("end_time must be later than start_time")
         return self
 
+class PlannedIndex(BaseModel):
+    course_code: str = Field(description="NTU undergraduate course code")
+    index: str = Field(pattern=r"^[0-9]{1,12}$", description="Index number as a string")
+
 mcp = MCPServer(
     "ntu-stars-mcp",
     version="0.1.0",
     instructions=(
-        "Read-only NTU timetable tools. Undergraduate tools use the official public Class Schedule; "
+        "NTU timetable tools. Undergraduate tools use the official public Class Schedule; "
         "graduate lookup uses GSLink/PGR and reports the currently published term as class groups, "
         "not indexes. Undergraduate exam lookup uses General Access and returns published exam times, "
         "not exam-seat assignments. Academic year is the first year printed by NTU (2026 means AY2026/27); "
         "undergraduate semester is 1, 2, or S. get_course_indexes and get_index include public "
         "STARS vacancy snapshots only when the published vacancy term matches the requested term. Unknown "
         "undergraduate timetable details are preserved and marked uncertain. Optional personal tools "
-        "use NTU_WISH_USERNAME and NTU_WISH_PASSWORD; personal records are cached only in memory."
+        "use NTU_WISH_USERNAME and NTU_WISH_PASSWORD; personal records are cached only in memory. "
+        "save_stars_plan replaces a saved plan's entire course/index list and verifies it by reloading; "
+        "it does not register, drop, or swap registered courses."
     ),
 )
 _read_only = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
@@ -196,18 +204,31 @@ def ntu_auth_status() -> AuthStatus:
     return fetch_ntu_auth_status()
 
 @mcp.tool(annotations=_read_only)
-def get_my_stars_planner(refresh: bool = False) -> StarsPlannerResult:
+def get_stars_planner(refresh: bool = False) -> StarsPlannerResult:
     """Get registered courses, the published term, and saved Plans 1–3 with indexes and timetables. Use refresh after editing a plan."""
     try:
-        return fetch_my_stars_planner(refresh=refresh)
+        return fetch_stars_planner(refresh=refresh)
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True))
+def save_stars_plan(
+    plan_number: Literal[1, 2, 3],
+    courses: Annotated[list[PlannedIndex], Field(min_length=1, max_length=13)],
+    academic_year: int,
+    semester: Literal[1, 2],
+) -> SavePlanResult:
+    """Replace saved Plan 1, 2, or 3 with the complete supplied course/index list for the current Planner term. Omitted courses are removed from that plan. Verifies persistence by loading the saved plan. Does not perform course registration, dropping, or index swapping."""
+    try:
+        return persist_stars_plan(plan_number, [course.model_dump() for course in courses], academic_year, semester)
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
 @mcp.tool(annotations=_read_only)
-def get_my_degree_audit() -> DegreeAuditResult:
+def get_degree_audit() -> DegreeAuditResult:
     """Get your degree requirements, examination results, and registered courses from Degree Audit."""
     try:
-        return fetch_my_degree_audit()
+        return fetch_degree_audit()
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 

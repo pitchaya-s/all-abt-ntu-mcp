@@ -1,11 +1,13 @@
-from .models import AuthStatus, DegreeAuditResult, StarsPlannerResult
-from .session import get_my_degree_audit, get_my_stars_planner, ntu_auth_status
+from .models import AuthStatus, DegreeAuditResult, SavePlanResult, StarsPlannerResult
+from .session import get_degree_audit, get_stars_planner, ntu_auth_status, save_stars_plan
 
 __all__ = [
     "AuthStatus",
     "DegreeAuditResult",
     "StarsPlannerResult",
-    "get_my_degree_audit",
-    "get_my_stars_planner",
+    "SavePlanResult",
+    "get_degree_audit",
+    "get_stars_planner",
     "ntu_auth_status",
+    "save_stars_plan",
 ]

@@ -30,8 +30,11 @@ from .models import (
     NTUAuthError,
     NTUPersonalDataError,
     StarsPlannerResult,
+    SavePlanResult,
 )
 from .planner import PLANNER_VIEW_URL, read_stars_planner
+from .plan_editor import course_assignments, prepare_stars_plan, submit_stars_plan, validate_plan_request
+from .planner import SAVE_PLAN_URL
 
 PLANNER_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main"
 DEGREE_AUDIT_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display"
@@ -47,7 +50,7 @@ if not 0 <= PERSONAL_CACHE_TTL_SECONDS <= 86_400:
     raise RuntimeError("NTU_PERSONAL_CACHE_TTL_SECONDS must be between 0 and 86400 seconds.")
 
 class WishSessionManager:
-    """One in-memory WISH cookie session shared by the read-only personal tools."""
+    """One in-memory WISH cookie session shared by the personal tools."""
 
     def __init__(self) -> None:
         username = os.environ.get("NTU_WISH_USERNAME", "").strip()
@@ -319,13 +322,77 @@ class WishSessionManager:
     def get_degree_audit(self) -> DegreeAuditResult:
         return cast(DegreeAuditResult, self._run_personal_data("degree_audit", DEGREE_AUDIT_URL))
 
+    def _save_stars_plan(
+        self, plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
+    ) -> SavePlanResult:
+        with self._lock:
+            before = self._get_personal_data("stars_planner", PLANNER_URL, refresh=True)
+            if (before["academic_year"], before["semester"]) != (academic_year, semester):
+                raise NTUPersonalDataError("The requested term differs from NTU's current Planner term; no plan was saved.")
+            selected = next(plan for plan in before["saved_plans"] if plan["plan_number"] == plan_number)
+            if selected["status"] not in {"loaded", "not_saved"}:
+                raise NTUPersonalDataError("The existing plan could not be read safely; no plan was saved.")
+            status = "unchanged"
+            if course_assignments(selected["courses"]) != course_assignments(courses):
+                try:
+                    fields = prepare_stars_plan(self._page, courses, academic_year, semester)
+                except NTUPageError as error:
+                    raise NTUPersonalDataError(str(error)) from error
+                # Invalidate before submitting: a lost save response must not leave stale plans cached.
+                self._cache.pop("stars_planner", None)
+                submit_stars_plan(self._page, fields, plan_number)
+                try:
+                    after = self._get_personal_data("stars_planner", PLANNER_URL, refresh=True)
+                except Exception as error:
+                    raise NTUPersonalDataError("The save was submitted but read-back verification failed. Refresh the Planner before retrying; no automatic save retry was attempted.") from error
+                if (after["academic_year"], after["semester"]) != (academic_year, semester):
+                    self._cache.pop("stars_planner", None)
+                    raise NTUPersonalDataError("The Planner term changed during save verification; refresh the Planner before retrying.")
+                selected = next(plan for plan in after["saved_plans"] if plan["plan_number"] == plan_number)
+                if selected["status"] != "loaded" or course_assignments(selected["courses"]) != course_assignments(courses):
+                    self._cache.pop("stars_planner", None)
+                    raise NTUPersonalDataError("NTU's saved plan did not match the requested courses/indexes. Refresh the Planner before retrying; the save was not repeated.")
+                status = "saved"
+            return {
+                "status": status,
+                "academic_year": academic_year,
+                "semester": semester,
+                "saved_plan": selected,
+                "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "source_url": SAVE_PLAN_URL,
+            }
+
+    def save_stars_plan(
+        self, plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
+    ) -> SavePlanResult:
+        normalized = validate_plan_request(plan_number, courses, academic_year, semester)
+        with self._lock:
+            if self._closed:
+                raise NTUAuthError("The WISH session manager is closed; restart the MCP server.")
+            if self._executor is None:
+                self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ntu-wish")
+            future = self._executor.submit(self._save_stars_plan, plan_number, normalized, academic_year, semester)
+        try:
+            return future.result()
+        except NTURequestError:
+            raise
+        except Exception as error:
+            raise NTUPersonalDataError(
+                f"Could not complete the Planner operation ({type(error).__name__}). Refresh the Planner before retrying."
+            ) from None
+
 wish_session = WishSessionManager()
 
 def ntu_auth_status() -> AuthStatus:
     return wish_session.status()
 
-def get_my_stars_planner(refresh: bool = False) -> StarsPlannerResult:
+def get_stars_planner(refresh: bool = False) -> StarsPlannerResult:
     return wish_session.get_stars_planner(refresh=refresh)
 
-def get_my_degree_audit() -> DegreeAuditResult:
+def get_degree_audit() -> DegreeAuditResult:
     return wish_session.get_degree_audit()
+
+def save_stars_plan(
+    plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
+) -> SavePlanResult:
+    return wish_session.save_stars_plan(plan_number, courses, academic_year, semester)

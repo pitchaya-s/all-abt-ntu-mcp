@@ -58,6 +58,14 @@ class StarsPlannerResult(TypedDict):
     from_cache: bool
     cache_age_seconds: int
 
+class SavePlanResult(TypedDict):
+    status: str
+    academic_year: int
+    semester: int
+    saved_plan: SavedPlan
+    verified_at: str
+    source_url: str
+
 class DegreeAuditResult(TypedDict):
     service: str
     page_title: str | None

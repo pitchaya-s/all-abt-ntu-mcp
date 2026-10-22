@@ -11,7 +11,7 @@ from threading import RLock
 import time
 from urllib.parse import urljoin, urlsplit
 
-from shared.credentials import read_credentials
+from shared.credentials import CredentialError, credential_status, read_credentials
 
 from ..models import AuthStatus, Download, LearnError
 
@@ -31,9 +31,7 @@ _CHALLENGE = re.compile(r"captcha|approve (?:the )?sign.in|verify your identity|
 
 class Session:
     def __init__(self):
-        credentials = read_credentials()
-        self._username = credentials.email
-        self._password = credentials.password
+        self._credential_revision = None
         try:
             self.ttl = int(os.environ.get("NTULEARN_CACHE_TTL_SECONDS", "300"))
         except ValueError as error:
@@ -56,9 +54,23 @@ class Session:
 
     def status(self):
         with self._lock:
-            return AuthStatus(credentials_configured=bool(self._username and self._password),
-                              session_verified=self._verified, last_verified_at=self._last_verified,
+            credentials = credential_status()
+            return AuthStatus(**credentials,
+                              session_verified=self._verified and credentials["credentials_configured"], last_verified_at=self._last_verified,
                               cache_ttl_seconds=self.ttl)
+
+    def _check_credentials(self):
+        try:
+            credentials = read_credentials()
+            credentials.require_login()
+        except CredentialError as error:
+            self._dispose()
+            raise LearnError(str(error)) from None
+        if self._credential_revision is not None and self._credential_revision != credentials.revision:
+            self._dispose()
+            self._login_not_before = 0
+        self._credential_revision = credentials.revision
+        return credentials
 
     def run(self, function, *args, **kwargs):
         with self._lock:
@@ -87,8 +99,7 @@ class Session:
             raise LearnError("Could not start Chromium. Run `uvx --from 'playwright>=1.50,<2' playwright install chromium`.") from None
 
     def _login(self):
-        if not self._username or not self._password:
-            raise LearnError("Set NTU_USERNAME and NTU_PASSWORD in the MCP server environment.")
+        credentials = self._check_credentials()
         if time.monotonic() < self._login_not_before:
             raise LearnError("A recent login did not complete. Wait one minute before retrying to avoid repeated login attempts.")
         self._login_not_before = time.monotonic() + 60
@@ -134,14 +145,14 @@ class Session:
                 email = page.locator('input[name="loginfmt"]:visible')
                 password = page.locator('input[type="password"]:visible')
                 if email.count() and not username_sent:
-                    email.first.fill(self._username)
+                    email.first.fill(credentials.email)
                     username_sent = True
                     page.get_by_role("button", name="Next", exact=True).click()
                 elif password.count() and not password_sent:
                     # Microsoft briefly exposes this input before replacing it during the Next transition.
                     submit = page.get_by_role("button", name="Sign in", exact=True)
                     submit.wait_for(state="visible", timeout=TIMEOUT_MS)
-                    password.first.fill(self._password)
+                    password.first.fill(credentials.password)
                     password_sent = True
                     submit.click()
                 elif "Stay signed in?" in body and page.locator("#idBtn_Back:visible").count():
@@ -176,6 +187,7 @@ class Session:
     def _get(self, path, params, refresh):
         if not _READ_PATH.fullmatch(path) or path.endswith("/download"):
             raise LearnError("This NTULearn endpoint is not an academic JSON read endpoint.")
+        self._check_credentials()
         key = (path, tuple(sorted(params.items())))
         cached = self._cache.get(key)
         if not refresh and self.ttl and cached and time.monotonic() - cached[0] < self.ttl:

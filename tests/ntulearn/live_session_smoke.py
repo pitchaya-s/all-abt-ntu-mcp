@@ -1,4 +1,4 @@
-"""Opt-in NTULearn live reads. Set NTU_USERNAME/NTU_PASSWORD; prints only counts/statuses."""
+"""Opt-in NTULearn live reads. Save credentials locally with auth save; prints only counts/statuses."""
 
 import asyncio
 from pathlib import Path

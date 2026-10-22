@@ -1,4 +1,5 @@
-import os
+from shared.credentials import delete_credentials
+from tests.credential_fixtures import stored_credentials
 from threading import get_ident
 import unittest
 from unittest.mock import Mock, patch
@@ -151,8 +152,8 @@ class PlanEditorTests(unittest.TestCase):
 
 class PlanSessionTests(unittest.TestCase):
     def setUp(self):
-        with patch.dict(os.environ, {"NTU_USERNAME": "test-user", "NTU_PASSWORD": "test-secret"}):
-            self.manager = WishSessionManager()
+        self.enterContext(stored_credentials())
+        self.manager = WishSessionManager()
         self.addCleanup(self.manager.close)
         self.manager._page = Mock()
 
@@ -207,7 +208,7 @@ class PlanSessionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.save_stars_plan(1, [], 2026, 2)
         self.assertIsNone(self.manager._executor)
-        self.manager.username = ""
+        delete_credentials()
         with self.assertRaises(NTUAuthError):
             self.manager.save_stars_plan(1, COURSES, 2026, 2)
         self.manager.close()

@@ -7,16 +7,16 @@ license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=2,<3",
-    "python-dotenv>=1,<2",
     "typing-extensions>=4.12,<5",
     "pypdf>=6,<7",
+    "keyring>=25.6,<27",
 ]
 
 [project.optional-dependencies]
 personal = ["playwright>=1.50,<2"]
 
 [project.scripts]
-all-abt-ntu-mcp = "shared.server:main"
+all-abt-ntu-mcp = "shared.cli:main"
 
 [tool.uv.build-backend]
 module-name = ["ntu_stars_mcp", "ntulearn_mcp", "shared"]

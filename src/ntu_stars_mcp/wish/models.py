@@ -1,6 +1,7 @@
 from typing_extensions import NotRequired, TypedDict
 
 from ..ntu_client.http import NTURequestError
+from shared.credentials import CredentialStatus
 
 class PersonalTable(TypedDict):
     section: str | None
@@ -8,8 +9,7 @@ class PersonalTable(TypedDict):
     rows: NotRequired[list[list[str]]]
     records: list[dict[str, str]]
 
-class AuthStatus(TypedDict):
-    credentials_configured: bool
+class AuthStatus(CredentialStatus):
     session_verified: bool
     last_verified_at: str | None
     session_storage: str

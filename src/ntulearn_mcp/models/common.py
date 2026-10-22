@@ -14,6 +14,8 @@ class Model(BaseModel):
 
 class AuthStatus(Model):
     credentials_configured: bool
+    credential_storage: Literal["os_keyring"] = "os_keyring"
+    credential_error: str | None = None
     session_verified: bool
     last_verified_at: datetime | None
     session_storage: Literal["in_memory_only"] = "in_memory_only"

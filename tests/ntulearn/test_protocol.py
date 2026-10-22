@@ -23,7 +23,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_stdio_discovery_schemas_calls_and_errors(self):
         with tempfile.TemporaryDirectory() as cwd:
             params = StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd,
-                                           env={"PYTHONPATH": str(ROOT / "src"), "NTU_USERNAME": "", "NTU_PASSWORD": ""})
+                                           env={"PYTHONPATH": str(ROOT / "src"), "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"})
             async with Client(params) as client:
                 listing = await client.list_tools()
                 self.assertEqual(len(listing.tools), 32)

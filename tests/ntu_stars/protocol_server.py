@@ -33,5 +33,6 @@ if __name__ == "__main__":
         stack.enter_context(patch("ntu_stars_mcp.mcp_server.fetch_undergraduate_exam_schedule", return_value=EXAM_COURSE))
         for target in ("persist_stars_plan", "fetch_stars_planner", "fetch_degree_audit"):
             stack.enter_context(patch(f"ntu_stars_mcp.mcp_server.{target}", side_effect=NTURequestError("Personal actions are disabled in protocol fixtures.")))
+        stack.enter_context(patch("shared.credentials.keyring.get_keyring", side_effect=RuntimeError("Offline test has no keyring")))
         stack.enter_context(patch("ntu_stars_mcp.ntu_client.http.urlopen", side_effect=AssertionError("Offline test attempted HTTP")))
         main()

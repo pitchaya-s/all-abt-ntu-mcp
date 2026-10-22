@@ -1,6 +1,7 @@
+from shared.credentials import delete_credentials
+from tests.credential_fixtures import stored_credentials
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-import os
 from threading import Barrier, get_ident
 import unittest
 from unittest.mock import patch
@@ -151,8 +152,10 @@ class _FakePage:
 
 class WishSessionTests(unittest.TestCase):
     def _manager(self, page: _FakePage | None = None) -> WishSessionManager:
-        with patch.dict(os.environ, {"NTU_USERNAME": "test-user", "NTU_PASSWORD": "test-secret"}):
-            manager = WishSessionManager()
+        credentials = stored_credentials()
+        credentials.__enter__()
+        self.addCleanup(credentials.__exit__, None, None, None)
+        manager = WishSessionManager()
         self.addCleanup(manager.close)
         if page is not None:
             page.on("response", manager._record_browser_response)
@@ -269,9 +272,10 @@ class WishSessionTests(unittest.TestCase):
         with self.assertRaisesRegex(NTURequestError, "HTTP 503"):
             manager._fetch_authenticated(PLANNER_URL, "planner")
 
-        with patch.dict(os.environ, {"NTU_USERNAME": "", "NTU_PASSWORD": ""}):
-            empty = WishSessionManager()
-        with self.assertRaisesRegex(NTUAuthError, "NTU_USERNAME"):
+        delete_credentials()
+        empty = WishSessionManager()
+        self.addCleanup(empty.close)
+        with self.assertRaisesRegex(NTUAuthError, "auth save"):
             empty.get_degree_audit()
 
 if __name__ == "__main__":

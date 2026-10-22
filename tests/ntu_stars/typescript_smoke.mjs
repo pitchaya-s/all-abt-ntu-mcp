@@ -16,7 +16,7 @@ const cwd = await mkdtemp(join(tmpdir(), "ntu-mcp-client-"));
 const transport = new StdioClientTransport({
   command: "python",
   args: [join(tests, "protocol_server.py")], cwd,
-  env: { PYTHONPATH: join(tests, "..", "..", "src"), NTU_USERNAME: "", NTU_PASSWORD: "" },
+  env: { PYTHONPATH: join(tests, "..", "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
 });
 const client = new Client({ name: "ntu-typescript-test", version: "1.0" });
 try {
@@ -58,7 +58,7 @@ const learn = new Client({ name: "ntu-learn-typescript-test", version: "1.0" });
 try {
   await learn.connect(new StdioClientTransport({
     command: "python", args: [join(tests, "..", "ntulearn", "protocol_server.py")], cwd: learnCwd,
-    env: { PYTHONPATH: join(tests, "..", "..", "src"), NTU_USERNAME: "", NTU_PASSWORD: "" },
+    env: { PYTHONPATH: join(tests, "..", "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
   }));
   assert.equal((await learn.listTools()).tools.length, 32);
   for (const [name, parameters] of [

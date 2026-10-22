@@ -10,7 +10,7 @@ import time
 from typing import cast
 from urllib.parse import urlencode, urljoin, urlsplit
 
-from shared.credentials import read_credentials
+from shared.credentials import CredentialError, credential_status, read_credentials
 from .forms import (
     _CHALLENGE_MESSAGE,
     _Forms,
@@ -50,9 +50,7 @@ class WishSessionManager:
     """One in-memory WISH cookie session shared by the personal tools."""
 
     def __init__(self) -> None:
-        credentials = read_credentials()
-        self.username = credentials.username
-        self.password = credentials.password
+        self._credential_revision: str | None = None
         self._lock = RLock()
         self._authenticated = False
         self._last_verified_at: str | None = None
@@ -65,19 +63,28 @@ class WishSessionManager:
         self._executor: ThreadPoolExecutor | None = None
         self._closed = False
 
-    @property
-    def credentials_configured(self) -> bool:
-        return bool(self.username and self.password)
-
     def status(self) -> AuthStatus:
         with self._lock:
+            credentials = credential_status()
             return {
-                "credentials_configured": self.credentials_configured,
-                "session_verified": self._authenticated,
+                **credentials,
+                "session_verified": self._authenticated and credentials["credentials_configured"],
                 "last_verified_at": self._last_verified_at,
                 "session_storage": "in_memory_only",
                 "personal_cache_ttl_seconds": PERSONAL_CACHE_TTL_SECONDS,
             }
+
+    def _check_credentials(self):
+        try:
+            credentials = read_credentials()
+            credentials.require_login()
+        except CredentialError as error:
+            self._close_browser()
+            raise NTUAuthError(str(error)) from None
+        if self._credential_revision is not None and self._credential_revision != credentials.revision:
+            self._close_browser()
+        self._credential_revision = credentials.revision
+        return credentials
 
     def close(self) -> None:
         with self._lock:
@@ -160,6 +167,7 @@ class WishSessionManager:
         )
 
     def _login(self, page, destination: str, description: str) -> None:
+        credentials = self._check_credentials()
         username_sent = False
         password_sent = False
         html = page.content()
@@ -171,7 +179,7 @@ class WishSessionManager:
             if (username_sent or password_sent) and _is_login_page(html) and re.search(
                 r"invalid|incorrect|failed|wrong password", html, re.I
             ):
-                raise NTUAuthError("NTU rejected the credentials. Check NTU_USERNAME and NTU_PASSWORD.")
+                raise NTUAuthError("NTU rejected the credentials. Update them locally with `all-abt-ntu-mcp auth save`.")
             forms = _Forms()
             forms.feed(html)
             matching = next(
@@ -193,11 +201,11 @@ class WishSessionManager:
             sent_field = False
             if user_field is not None and not username_sent:
                 selector = f"#{user_field.field_id}" if user_field.field_id else f'[name="{user_field.name}"]'
-                page.locator(selector).first.fill(self.username)
+                page.locator(selector).first.fill(credentials.username)
                 username_sent = sent_field = True
             if password_field is not None and not password_sent:
                 selector = f"#{password_field.field_id}" if password_field.field_id else f'[name="{password_field.name}"]'
-                page.locator(selector).first.fill(self.password)
+                page.locator(selector).first.fill(credentials.password)
                 password_sent = sent_field = True
             if not sent_field:
                 raise NTUAuthError("NTU's login form did not expose a supported username or password field.")
@@ -217,12 +225,13 @@ class WishSessionManager:
             if password_sent:
                 if _is_login_page(html):
                     if re.search(r"invalid|incorrect|failed|wrong password", html, re.I):
-                        raise NTUAuthError("NTU rejected the credentials. Check NTU_USERNAME and NTU_PASSWORD.")
+                        raise NTUAuthError("NTU rejected the credentials. Update them locally with `all-abt-ntu-mcp auth save`.")
                     raise NTUAuthError("NTU did not accept the login; check credentials or account access.")
                 return
         raise NTUAuthError("NTU's login flow did not complete a supported password login.")
 
     def _fetch_authenticated(self, url: str, description: str) -> str:
+        self._check_credentials()
         try:
             page = self._browser_page()
             login_url = f"{LOGIN_URL}?{urlencode({'w_url': url})}"
@@ -257,14 +266,11 @@ class WishSessionManager:
         except Exception as error:
             raise NTURequestError(
                 f"Could not retrieve {description} through NTU's browser login ({type(error).__name__})."
-            ) from error
+            ) from None
 
     def _get_personal_data(self, service: str, url: str, *, refresh: bool = False) -> dict[str, object]:
         with self._lock:
-            if not self.credentials_configured:
-                raise NTUAuthError(
-                    "Set NTU_USERNAME and NTU_PASSWORD in your MCP server's environment to use authenticated NTU tools."
-                )
+            self._check_credentials()
             now = time.monotonic()
             cached = self._cache.get(service)
             if not refresh and PERSONAL_CACHE_TTL_SECONDS and cached and now - cached[0] < PERSONAL_CACHE_TTL_SECONDS:

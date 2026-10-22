@@ -5,51 +5,43 @@ from unittest.mock import patch
 from shared.credentials import read_credentials
 from ntulearn_mcp.ntu_client.session import Session
 from ntu_stars_mcp.wish.session import WishSessionManager
+from tests.credential_fixtures import MemoryKeyring, stored_credentials
 
 
 class CredentialTests(unittest.TestCase):
     def test_network_username_derives_student_email(self):
-        with patch.dict(os.environ, {"NTU_USERNAME": " student001 ", "NTU_PASSWORD": "shared-test-secret"}, clear=True):
+        with stored_credentials("student001", "shared-test-secret"):
             credentials = read_credentials()
             self.assertEqual(credentials.username, "student001")
             self.assertEqual(credentials.email, "student001@e.ntu.edu.sg")
             self.assertEqual(credentials.password, "shared-test-secret")
             self.assertNotIn(credentials.password, repr(credentials))
+            self.assertNotIn(credentials.username, repr(credentials))
 
     def test_full_email_preserves_domain_and_normalizes_wish_username(self):
         for email in ["student001@e.ntu.edu.sg", "staff001@ntu.edu.sg"]:
-            with patch.dict(os.environ, {"NTU_USERNAME": email, "NTU_PASSWORD": "shared-test-secret"}, clear=True):
+            with stored_credentials(email, "shared-test-secret"):
                 credentials = read_credentials()
                 self.assertEqual(credentials.username, email.split("@")[0])
                 self.assertEqual(credentials.email, email)
 
-    def test_only_shared_credential_variables_are_used(self):
-        with patch.dict(os.environ, {"NTU_WISH_USERNAME": "student001", "NTU_WISH_PASSWORD": "old-secret"}, clear=True):
-            self.assertEqual(read_credentials().username, "")
-            self.assertEqual(read_credentials().email, "")
-            self.assertEqual(read_credentials().password, "")
-            os.environ.update(NTU_USERNAME="new001", NTU_PASSWORD="new-secret")
-            self.assertEqual(read_credentials().username, "new001")
-            self.assertEqual(read_credentials().password, "new-secret")
-            os.environ.update(NTU_USERNAME="", NTU_PASSWORD="")
-            self.assertEqual(read_credentials().username, "")
-            self.assertEqual(read_credentials().email, "")
-            self.assertEqual(read_credentials().password, "")
+    def test_plaintext_environment_is_never_a_credential_source(self):
+        with patch.dict(os.environ, {"NTU_USERNAME": "student001", "NTU_PASSWORD": "ignored-secret"}), patch("shared.credentials._backend", return_value=MemoryKeyring()):
+            credentials = read_credentials()
+            self.assertFalse(credentials.username or credentials.email or credentials.password)
 
-    def test_both_services_use_one_configuration_without_login(self):
-        with patch.dict(os.environ, {"NTU_USERNAME": "student001", "NTU_PASSWORD": "shared-test-secret"}, clear=True):
+    def test_both_services_share_opt_in_keyring_without_login(self):
+        with stored_credentials():
             wish, learn = WishSessionManager(), Session()
-        try:
-            self.assertEqual(wish.username, "student001")
-            self.assertEqual(learn._username, "student001@e.ntu.edu.sg")
-            self.assertEqual(wish.password, learn._password)
-            self.assertTrue(wish.status()["credentials_configured"])
-            self.assertTrue(learn.status().credentials_configured)
-            self.assertFalse(wish.status()["session_verified"])
-            self.assertFalse(learn.status().session_verified)
-        finally:
-            wish.close()
-            learn.close()
+            try:
+                self.assertTrue(wish.status()["credentials_configured"])
+                self.assertTrue(learn.status().credentials_configured)
+                self.assertFalse(wish.status()["session_verified"])
+                self.assertFalse(learn.status().session_verified)
+                self.assertNotIn("test-secret", str(wish.status()) + learn.status().model_dump_json())
+            finally:
+                wish.close()
+                learn.close()
 
     def test_server_closes_both_sessions_even_if_one_cleanup_fails(self):
         from shared import server

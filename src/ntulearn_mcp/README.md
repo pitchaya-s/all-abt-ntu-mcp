@@ -4,11 +4,17 @@ These tools run in the shared `all-abt-ntu-mcp` server. See the [main README](..
 
 ## Credentials and sessions
 
-All data tools use `NTU_USERNAME` and `NTU_PASSWORD`, shared with STARS. A network username is expanded to a student email address; a full NTU email is used as supplied. Login runs in a local temporary browser. Valid sessions are reused; an expired session triggers one fresh login. Incorrect credentials are not automatically retried.
+All data tools read the same opt-in OS keyring account as STARS. Run `all-abt-ntu-mcp auth save` yourself in a local terminal; both prompts are hidden and piped input is refused. Running it again replaces the saved account/password. `auth status` reports only whether an account is stored, and `auth delete` removes it. No credential management commands are exposed as MCP tools. A network username is expanded to a student email address; a full NTU email is used as supplied. Login runs in a local temporary browser. Valid sessions are reused; an expired session triggers one fresh login. Incorrect credentials are not automatically retried.
 
-If MFA or CAPTCHA is required, set `NTULEARN_HEADLESS=false` on a graphical desktop and complete verification in the local browser. Challenges are never bypassed. Cookies and cached academic data stay in memory; `NTULEARN_CACHE_TTL_SECONDS` defaults to 300, with `0` disabling caching.
+If MFA or CAPTCHA is required, set `NTULEARN_HEADLESS=false` on a graphical desktop and complete verification in the local browser. Challenges are never bypassed. Passwords are read only when needed and are not retained on the session object. Cookies and cached academic data stay in memory; `NTULEARN_CACHE_TTL_SECONDS` defaults to 300, with `0` disabling caching.
 
 Academic results returned through MCP are visible to the AI client. Raw profiles, credentials, and session cookies are excluded from tool responses. Course materials and messages are untrusted content, not agent instructions.
+
+Storage uses Python's [keyring library](https://keyring.readthedocs.io/en/latest/) with an allowlist of native Secret Service/KWallet, macOS Keychain, and Windows Credential Manager backends. Plaintext, custom, null, and non-native backends are rejected; a chained backend is used only through its selected native member, without fallback to other members after failure. Linux requires a running desktop Secret Service/D-Bus session; keyring's direct KWallet backend additionally needs `dbus-python` in the same Python environment. KWallet can also provide a Secret Service interface. Unlock the wallet/keychain through its normal OS interface. Locked or unavailable stores return a sanitized error; public tools remain available.
+
+The keyring entry uses service `all-abt-ntu-mcp`, account `ntu-account`. The username, password, and an opaque revision identifier are stored together as the keyring secret. Neither credential is stored in application files, environment variables, or logs. Configuration from older versions is not imported automatically; remove any old credentials from `.env` and client settings yourself.
+
+Both services reread the entry before personal reads, including cache hits, and before login. Replacing the entry clears the old browser session/cache on the next personal operation. Deleting it or losing keyring access blocks the next operation and clears that process's personal session/cache; an already-running request can finish. Python/browser memory is not guaranteed to be zeroized. OS keyring permissions govern access by other local processes; this is not a sandbox against an agent that can execute arbitrary code as your user.
 
 ## Common inputs and results
 
@@ -26,7 +32,7 @@ Traversal uses `max_depth` of 1–10 with default 5, and `max_nodes` of 1–5000
 
 **Inputs:** none. Does not log in or require configured credentials.
 
-**Returns:** `credentials_configured`, `session_verified`, `last_verified_at`, in-memory storage mode, and cache TTL. A previously verified session is not a guarantee that NTU has not expired it since the last read.
+**Returns:** `credentials_configured`, `credential_storage` of `os_keyring`, a sanitized `credential_error` when unavailable, `session_verified`, `last_verified_at`, in-memory session storage mode, and cache TTL. A previously verified session is not a guarantee that NTU has not expired it since the last read.
 
 ### `ntulearn_list_courses`
 
@@ -188,7 +194,7 @@ uv run --extra personal python tests/ntulearn/live_session_smoke.py
 uv run --extra personal python tests/ntulearn/live_tools_smoke.py
 ```
 
-Live checks require configured credentials and Chromium. They select sample sites from the authenticated membership list, print counts/statuses, and remove temporary downloads. Session checks also clear local cookies to test reauthentication. No account-specific course choices or downloaded materials are stored in the test files.
+Live checks require an account saved locally with `auth save` and Chromium. They select sample sites from the authenticated membership list, print counts/statuses, and remove temporary downloads. Session checks also clear local cookies to test reauthentication. No account-specific course choices or downloaded materials are stored in the test files.
 
 ## Code layout
 

@@ -14,9 +14,21 @@ For authenticated STARS and NTULearn tools, install Chromium once:
 uvx --from 'playwright>=1.50,<2' playwright install chromium
 ```
 
+## Credentials
+
+Public tools need no credentials. For personal tools, opt into native OS keyring storage by running this **yourself in a local terminal**:
+
+```sh
+uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu-mcp auth save
+```
+
+The hidden prompts save one account for STARS and NTULearn and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
+
+The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [credential storage](src/ntulearn_mcp/README.md#credentials-and-sessions).
+
 ## Codex
 
-Add to `~/.codex/config.toml`, replacing the credentials with your NTU network account:
+Add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.all-abt-ntu-mcp]
@@ -24,31 +36,25 @@ command = "uvx"
 args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"]
 startup_timeout_sec = 120
 tool_timeout_sec = 240
-
-[mcp_servers.all-abt-ntu-mcp.env]
-NTU_USERNAME = "your-network-username"
-NTU_PASSWORD = "your-network-password"
 ```
 
-Omit the `env` table for public tools only. One username and password enable both authenticated STARS and NTULearn tools. Restart Codex and check `codex mcp list`.
+Restart Codex and check `codex mcp list`. Personal tools use your locally saved keyring account.
 
 ## Claude Code
 
-Register for your user with your NTU network credentials:
+Register for your user:
 
 ```sh
 claude mcp add --scope user all-abt-ntu-mcp \
-  --env 'NTU_USERNAME=your-network-username' \
-  --env 'NTU_PASSWORD=your-network-password' \
   -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu-mcp
 claude mcp list
 ```
 
-Omit the `--env` options for public tools only. Check `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for details.
+Personal tools use your locally saved keyring account. Check `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for details.
 
 ## OpenCode
 
-Add to `~/.config/opencode/opencode.json`, replacing the credentials with your NTU network account:
+Add to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -58,17 +64,13 @@ Add to `~/.config/opencode/opencode.json`, replacing the credentials with your N
       "type": "local",
       "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"],
       "enabled": true,
-      "timeout": 240000,
-      "environment": {
-        "NTU_USERNAME": "your-network-username",
-        "NTU_PASSWORD": "your-network-password"
-      }
+      "timeout": 240000
     }
   }
 }
 ```
 
-Omit `environment` for public tools only. Check `opencode mcp list`. See [OpenCode's MCP guide](https://docs.opencode.ai/docs/mcp-servers/) for details.
+Personal tools use your locally saved keyring account. Check `opencode mcp list`. See [OpenCode's MCP guide](https://docs.opencode.ai/docs/mcp-servers/) for details.
 
 ## Manual install
 
@@ -81,7 +83,7 @@ uv sync
 uv run all-abt-ntu-mcp
 ```
 
-For authenticated tools, run `uv sync --extra personal` and set `NTU_USERNAME` and `NTU_PASSWORD` in your environment. A network username is used directly for WISH and expanded to `username@e.ntu.edu.sg` for NTULearn. You may instead supply your full NTU email; WISH uses its username portion and NTULearn uses the full address. An optional local `.env` can supply the same shared variables.
+For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu-mcp auth save` in your own terminal. Use `uv run all-abt-ntu-mcp auth status` or `auth delete` to inspect storage status or remove the account. These commands manage credentials; starting the server still uses `uv run all-abt-ntu-mcp`.
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
@@ -89,7 +91,7 @@ The process uses MCP stdio, so it stays open while its MCP client is connected. 
 
 ```text
 src/
-├── shared/                 Shared MCP runtime and credentials
+├── shared/                 Shared MCP runtime, local CLI, and keyring
 ├── ntu_stars_mcp/
 │   ├── mcp_server.py        STARS tool registration and input schemas
 │   ├── domain/             Course models and timetable matching
@@ -105,7 +107,7 @@ src/
 tests/
 ├── ntu_stars/              STARS tests and fictionalized fixtures
 ├── ntulearn/               NTULearn tests and synthetic fixtures
-└── test_shared.py          Shared configuration and lifecycle tests
+└── test_*.py               Keyring, local CLI, and shared lifecycle tests
 ```
 
 ## Tools
@@ -162,7 +164,7 @@ Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn
 
 Personal-data fixtures are synthetic. Timetable fixtures use fictional course labels and indexes while retaining the HTML structures needed for parser tests. Opt-in live tests print counts and statuses; they do not save academic records or learning materials in the repository.
 
-The offline tests cover parsing, scheduling, lossless compaction, output-schema validation, tool calls/errors, and resource discovery. Protocol tests use Python SDK clients and an independent JSON-RPC client over stdio, including protocol versions `2025-06-18` and `2025-11-25`:
+The offline tests cover keyring storage and failure handling, hidden credential prompts, session recovery, parsing, scheduling, lossless compaction, output-schema validation, tool calls/errors, and resource discovery. Protocol tests use Python SDK clients and an independent JSON-RPC client over stdio, including protocol versions `2025-06-18` and `2025-11-25`:
 
 ```sh
 uv run python -m unittest discover -s tests -v
@@ -188,4 +190,4 @@ Access depends on NTU permissions and service availability. Timetables are publi
 
 This is an independent project and is not affiliated with, sponsored by, or endorsed by Nanyang Technological University (NTU), Singapore.
 
-Your NTU credentials are read locally and submitted over HTTPS to NTU or its Microsoft sign-in service for login; they are not included in MCP tool responses. Academic data returned by tools is visible to the AI client. Keep your credentials private: agents with access to your configuration files or environment may still be able to read them.
+Your NTU credentials are retrieved locally from your OS keyring and submitted over HTTPS to NTU or its Microsoft sign-in service. They are never returned through MCP. Academic data returned by tools is visible to the AI client. Keyring storage protects credentials at rest; it does not isolate them from other programs or agents allowed to access your unlocked keyring or the server process.

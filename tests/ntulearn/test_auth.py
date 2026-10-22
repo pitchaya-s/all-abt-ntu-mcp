@@ -1,3 +1,5 @@
+from shared.credentials import delete_credentials, save_credentials
+from tests.credential_fixtures import stored_credentials
 from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
@@ -30,8 +32,10 @@ class Response:
 
 class AuthTests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict("os.environ", {"NTU_USERNAME": "student@example.invalid", "NTU_PASSWORD": SECRET,
-                                            "NTULEARN_HEADLESS": "true", "NTULEARN_CACHE_TTL_SECONDS": "300"})
+        credentials = stored_credentials("student001", SECRET)
+        credentials.__enter__()
+        self.addCleanup(credentials.__exit__, None, None, None)
+        self.env = patch.dict("os.environ", {"NTULEARN_HEADLESS": "true", "NTULEARN_CACHE_TTL_SECONDS": "300"})
         self.env.start()
         self.session = Session()
         self.session._verified = True
@@ -130,10 +134,10 @@ class AuthTests(unittest.TestCase):
 
     def test_missing_credentials_and_cooldown_never_open_browser(self):
         with patch.object(self.session, "_open") as opened:
-            self.session._username = ""
-            with self.assertRaisesRegex(LearnError, "Set NTU_USERNAME"):
+            delete_credentials()
+            with self.assertRaisesRegex(LearnError, "auth save"):
                 self.session.run(self.session._login)
-            self.session._username = "student@example.invalid"
+            save_credentials("student001", SECRET)
             self.session._login_not_before = float("inf")
             with self.assertRaisesRegex(LearnError, "one minute"):
                 self.session.run(self.session._login)
@@ -246,8 +250,13 @@ class Page:
 
 
 class LoginFlowTests(unittest.TestCase):
+    def setUp(self):
+        credentials = stored_credentials("example@e.ntu.edu.sg", SECRET)
+        credentials.__enter__()
+        self.addCleanup(credentials.__exit__, None, None, None)
+
     def test_reauthentication_replaces_stale_context_without_restarting_browser(self):
-        with patch.dict("os.environ", {"NTU_USERNAME": "example", "NTU_PASSWORD": SECRET}):
+        with stored_credentials("example", SECRET):
             session = Session()
         old_context, browser = Mock(), Mock()
         session._browser = browser
@@ -265,7 +274,7 @@ class LoginFlowTests(unittest.TestCase):
             session.close()
 
     def test_password_waits_for_ready_form_and_no_persistent_signin(self):
-        with patch.dict("os.environ", {"NTU_USERNAME": "example@e.ntu.edu.sg", "NTU_PASSWORD": SECRET}):
+        with stored_credentials("example@e.ntu.edu.sg", SECRET):
             session = Session()
         page = Page()
         session._page = page
@@ -280,7 +289,7 @@ class LoginFlowTests(unittest.TestCase):
 
     def test_mfa_and_wrong_password_stop_without_retry(self):
         for stage, expected in [("mfa", "MFA or CAPTCHA"), ("rejected", "rejected the login")]:
-            with patch.dict("os.environ", {"NTU_USERNAME": "example@e.ntu.edu.sg", "NTU_PASSWORD": SECRET, "NTULEARN_HEADLESS": "true"}):
+            with stored_credentials("example@e.ntu.edu.sg", SECRET), patch.dict("os.environ", {"NTULEARN_HEADLESS": "true"}):
                 session = Session()
             page = Page(after_password=stage)
             session._page = page

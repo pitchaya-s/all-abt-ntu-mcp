@@ -19,7 +19,7 @@ ARGS = {"course_code": "ZZ0001", "academic_year": 2026, "semester": 1}
 
 
 def environment():
-    return {"PYTHONPATH": str(ROOT / "src"), "NTU_USERNAME": "", "NTU_PASSWORD": ""}
+    return {"PYTHONPATH": str(ROOT / "src"), "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"}
 
 
 def validate_result(tools, name, result):

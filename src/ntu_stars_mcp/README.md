@@ -97,7 +97,7 @@ Required-session rules accept `lesson_type`, `day`, `starts_at_or_after`, and `s
 
 **Inputs:** none. Does not log in.
 
-**Returns:** whether shared credentials are configured, whether this process has verified a WISH session, its last verification time, and personal-cache settings. No credential or cookie values are returned.
+**Returns:** whether a shared keyring account is stored, `credential_storage` of `os_keyring`, a sanitized `credential_error` when unavailable, whether this process has verified a WISH session, its last verification time, and personal-cache settings. No credential or cookie values are returned.
 
 ### `stars_get_stars_planner`
 
@@ -141,7 +141,7 @@ Only NTU endpoints supply timetable and academic records. Forms are followed wit
 | STARS Planner | [Authenticated entry](https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main), [selection](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.time_table), [Planner view](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.planner), [load plan](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.load_time_table), [save plan](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.save_time_table) | Registered courses and saved plans; saving is limited to the chosen saved plan |
 | Degree Audit | [Authenticated audit](https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display) | The student's published degree requirements and academic tables |
 
-WISH authentication follows NTU's [login workflow](https://wish.wis.ntu.edu.sg/pls/webexe/ldap_login.login). Credentials come from the shared `NTU_USERNAME` and `NTU_PASSWORD`; access restrictions and challenges are respected.
+WISH authentication follows NTU's [login workflow](https://wish.wis.ntu.edu.sg/pls/webexe/ldap_login.login). Credentials come from the same opt-in native OS keyring entry as NTULearn; access restrictions and challenges are respected. Manage it locally with `all-abt-ntu-mcp auth save`, `auth status`, and `auth delete`. See [credential storage and session behavior](../ntulearn_mcp/README.md#credentials-and-sessions). Passwords are never accepted as MCP arguments or read from environment variables/config files.
 
 ## Tests
 

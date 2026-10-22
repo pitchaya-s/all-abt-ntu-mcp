@@ -242,10 +242,10 @@ class PlanMCPTests(unittest.IsolatedAsyncioTestCase):
                  "verified_at": "2026-10-21T00:00:00+00:00", "source_url": SAVE_PLAN_URL}
         with patch("ntu_stars_mcp.mcp_server.persist_stars_plan", return_value=reply) as save:
             async with Client(mcp) as client:
-                tool = next(t for t in (await client.list_tools()).tools if t.name == "save_stars_plan")
+                tool = next(t for t in (await client.list_tools()).tools if t.name == "stars_save_stars_plan")
                 self.assertFalse(tool.annotations.read_only_hint)
                 self.assertTrue(tool.annotations.destructive_hint)
-                result = await client.call_tool("save_stars_plan", {"plan_number": 1, "courses": COURSES, "academic_year": 2026, "semester": 2})
+                result = await client.call_tool("stars_save_stars_plan", {"plan_number": 1, "courses": COURSES, "academic_year": 2026, "semester": 2})
                 self.assertFalse(result.is_error)
                 self.assertEqual(result.structured_content["saved_plan"]["courses"][0]["index"], "00001")
                 save.assert_called_once_with(1, COURSES, 2026, 2)

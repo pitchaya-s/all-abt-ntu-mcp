@@ -22,50 +22,53 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     names,
                     {
-                        "search_courses",
-                        "ntulearn_auth_status", "list_courses", "get_course_contents", "get_announcements",
-                        "get_calendar", "get_gradebook", "get_content_attachments", "download_file",
-                        "get_course_metadata",
-                        "get_course_indexes",
-                        "get_graduate_course_schedule",
-                        "get_undergraduate_exam_schedule",
-                        "ntu_auth_status",
-                        "get_stars_planner",
-                        "save_stars_plan",
-                        "get_degree_audit",
-                        "get_index",
-                        "compare_indexes",
-                        "find_matching_indexes",
+                        "stars_search_courses",
+                        "ntulearn_auth_status", "ntulearn_list_courses", "ntulearn_get_course_contents", "ntulearn_get_announcements",
+                        "ntulearn_get_calendar", "ntulearn_get_gradebook", "ntulearn_get_content_attachments", "ntulearn_download_file",
+                        "ntulearn_get_upcoming", "ntulearn_read_file_content", "ntulearn_list_messages", "ntulearn_read_message", "ntulearn_list_course_users",
+                        "ntulearn_list_course_groups", "ntulearn_get_group_members", "ntulearn_search_course_content",
+                        "ntulearn_search_all_courses", "ntulearn_get_content_tree", "ntulearn_download_course", "ntulearn_whats_new",
+                        "stars_get_course_metadata",
+                        "stars_get_course_indexes",
+                        "stars_get_graduate_course_schedule",
+                        "stars_get_undergraduate_exam_schedule",
+                        "stars_auth_status",
+                        "stars_get_stars_planner",
+                        "stars_save_stars_plan",
+                        "stars_get_degree_audit",
+                        "stars_get_index",
+                        "stars_compare_indexes",
+                        "stars_find_matching_indexes",
                     },
                 )
                 result = await client.call_tool(
-                    "get_index",
-                    {"course_code": "SC2001", "index": "10143", "academic_year": 2026, "semester": 1},
+                    "stars_get_index",
+                    {"course_code": "ZZ0001", "index": "00001", "academic_year": 2026, "semester": 1},
                 )
                 self.assertFalse(result.is_error)
-                self.assertEqual(result.structured_content["course_code"], "SC2001")
-                self.assertEqual(result.structured_content["index"], "10143")
+                self.assertEqual(result.structured_content["course_code"], "ZZ0001")
+                self.assertEqual(result.structured_content["index"], "00001")
                 self.assertNotIn("course_name", result.structured_content)
                 self.assertEqual(len(result.structured_content["sessions"]), 4)
                 self.assertEqual(result.structured_content["vacancy_status"], "term_mismatch")
                 self.assertIsNone(result.structured_content["vacancies_available"])
 
                 metadata_result = await client.call_tool(
-                    "get_course_metadata",
-                    {"course_code": "SC2001", "academic_year": 2026, "semester": 1},
+                    "stars_get_course_metadata",
+                    {"course_code": "ZZ0001", "academic_year": 2026, "semester": 1},
                 )
                 self.assertFalse(metadata_result.is_error)
                 self.assertEqual(metadata_result.structured_content["course_description_status"], "available")
-                self.assertIn("algorithm design and analysis", metadata_result.structured_content["course_description"])
+                self.assertIn("example course one", metadata_result.structured_content["course_description"])
                 self.assertNotIn("indexes", metadata_result.structured_content)
 
                 indexes_result = await client.call_tool(
-                    "get_course_indexes",
-                    {"course_code": "SC2001", "academic_year": 2026, "semester": 1},
+                    "stars_get_course_indexes",
+                    {"course_code": "ZZ0001", "academic_year": 2026, "semester": 1},
                 )
                 self.assertFalse(indexes_result.is_error)
                 self.assertEqual(indexes_result.structured_content["index_count"], 36)
-                self.assertEqual(indexes_result.structured_content["indexes"][0]["index"], "10143")
+                self.assertEqual(indexes_result.structured_content["indexes"][0]["index"], "00001")
                 self.assertNotIn("course_description", indexes_result.structured_content)
                 self.assertIsNone(indexes_result.structured_content["indexes"][0]["waitlist_length"])
 
@@ -74,7 +77,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     return_value=GRADUATE_COURSE,
                 ):
                     graduate_result = await client.call_tool(
-                        "get_graduate_course_schedule", {"course_code": "EE6102"}
+                        "stars_get_graduate_course_schedule", {"course_code": "EE6102"}
                     )
                 self.assertFalse(graduate_result.is_error)
                 self.assertEqual(graduate_result.structured_content["academic_year"], 2026)
@@ -88,17 +91,17 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     return_value=EXAM_COURSE,
                 ):
                     exam_result = await client.call_tool(
-                        "get_undergraduate_exam_schedule", {"course_code": "SC2001"}
+                        "stars_get_undergraduate_exam_schedule", {"course_code": "ZZ0001"}
                     )
                 self.assertFalse(exam_result.is_error)
                 self.assertEqual(exam_result.structured_content["exams"][0]["date"], "2026-11-23")
                 self.assertEqual(exam_result.structured_content["exams"][0]["start_time"], "13:00")
 
                 comparison = await client.call_tool(
-                    "compare_indexes",
+                    "stars_compare_indexes",
                     {
-                        "course_code": "SC2001",
-                        "indexes": ["10143", "10144"],
+                        "course_code": "ZZ0001",
+                        "indexes": ["00001", "00002"],
                         "academic_year": 2026,
                         "semester": 1,
                         "against_sessions": [
@@ -108,12 +111,12 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertFalse(comparison.is_error)
                 self.assertEqual(len(comparison.structured_content["common_sessions"]), 2)
-                self.assertGreater(len(comparison.structured_content["clash_check"]["clashes_by_index"]["10143"]), 0)
+                self.assertGreater(len(comparison.structured_content["clash_check"]["clashes_by_index"]["00001"]), 0)
 
                 filtered = await client.call_tool(
-                    "find_matching_indexes",
+                    "stars_find_matching_indexes",
                     {
-                        "course_code": "SC2001",
+                        "course_code": "ZZ0001",
                         "academic_year": 2026,
                         "semester": 1,
                         "constraints": {"avoid_days": ["FRI"]},
@@ -122,7 +125,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(filtered.is_error)
                 self.assertGreater(filtered.structured_content["match_count"], 0)
 
-                status = await client.call_tool("ntu_auth_status", {})
+                status = await client.call_tool("stars_auth_status", {})
                 self.assertFalse(status.is_error)
                 self.assertIn("credentials_configured", status.structured_content)
 
@@ -146,7 +149,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "cache_age_seconds": 0,
                     },
                 ):
-                    planner = await client.call_tool("get_stars_planner", {})
+                    planner = await client.call_tool("stars_get_stars_planner", {})
                 self.assertFalse(planner.is_error)
                 self.assertEqual(planner.structured_content["service"], "stars_planner")
 
@@ -167,14 +170,14 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "cache_age_seconds": 0,
                     },
                 ):
-                    audit = await client.call_tool("get_degree_audit", {})
+                    audit = await client.call_tool("stars_get_degree_audit", {})
                 self.assertFalse(audit.is_error)
                 self.assertEqual(audit.structured_content["service"], "degree_audit")
 
                 fetch.reset_mock()
                 invalid = await client.call_tool(
-                    "compare_indexes",
-                    {"course_code": "SC2001", "indexes": ["10143"], "academic_year": 2026, "semester": 1},
+                    "stars_compare_indexes",
+                    {"course_code": "ZZ0001", "indexes": ["00001"], "academic_year": 2026, "semester": 1},
                 )
                 self.assertTrue(invalid.is_error)
                 fetch.assert_not_called()

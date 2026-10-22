@@ -3,12 +3,12 @@
 from datetime import datetime, timedelta, timezone
 import re
 
-from .auth import ID, Session
-from .models import (
+from .session import ID, Session
+from ..models import (
     Announcement, Announcements, Attachment, Attachments, Calendar, CalendarItem,
     Content, Contents, Course, Courses, Grade, Gradebook, GradeColumn, LearnError,
 )
-from .normalize import records, required, text
+from ..parser.response import records, required, text
 
 
 PREFIX = "/learn/api/public/v1"
@@ -106,7 +106,8 @@ class LearnClient:
                          possible_score=mapping(row, "score").get("possible"), due=mapping(row, "grading").get("due"),
                          available=mapping(row, "availability").get("available"), content_id=row.get("contentId")) for row in columns]
         grades = [model(Grade, column_id=required(row, "columnId"), score=row.get("score"), text=row.get("text"),
-                        status=row.get("status") or row.get("gradingStatus"), exempt=row.get("exempt"), feedback=text(row.get("feedback"))) for row in grades]
+                        status=row.get("status") or row.get("gradingStatus"), exempt=row.get("exempt"), feedback=text(row.get("feedback")),
+                        modified=row.get("modified") or row.get("lastGraded")) for row in grades]
         freshness = {"retrieved_at": min(freshness["retrieved_at"], grade_freshness["retrieved_at"]),
                      "from_cache": freshness["from_cache"] and grade_freshness["from_cache"],
                      "cache_age_seconds": max(freshness["cache_age_seconds"], grade_freshness["cache_age_seconds"])}
@@ -120,6 +121,6 @@ class LearnClient:
         return model(Attachments, course_id=course_id, content_id=content_id, attachments=attachments,
                      offset=offset, next_offset=next_offset, **freshness)
 
-    def download_file(self, course_id, content_id, attachment_id, destination):
+    def download_file(self, course_id, content_id, attachment_id, destination, max_bytes=20_000_000):
         path = f"{PREFIX}/courses/{identifier(course_id)}/contents/{identifier(content_id)}/attachments/{identifier(attachment_id)}/download"
-        return self.session.download(path, destination)
+        return self.session.download(path, destination, max_bytes=max_bytes)

@@ -13,7 +13,7 @@ from ntu_stars_mcp.ntu_client.validation import _academic_term
 def course_fixture(course_code, academic_year, semester):
     code = validate_course_code(course_code)
     year, term, _ = _academic_term(academic_year, semester)
-    if (code, year, term) != ("SC2001", 2026, "1"):
+    if (code, year, term) != ("ZZ0001", 2026, "1"):
         raise NTURequestError("Course is unavailable in the offline protocol fixture.")
     return COURSE
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     with ExitStack() as stack:
         stack.enter_context(patch("ntu_stars_mcp.mcp_server.fetch_course", side_effect=course_fixture))
         stack.enter_context(patch("ntu_stars_mcp.ntu_client.search._fetch_html", return_value=(
-            (Path(__file__).parent / "fixtures" / "search-sc20-2026-1.html").read_text(),
+            (Path(__file__).parent / "fixtures" / "search-zz00-2026-1.html").read_text(),
             "https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE_NEW.main_display1",
         )))
         stack.enter_context(patch("ntu_stars_mcp.mcp_server.fetch_course_vacancies", return_value={

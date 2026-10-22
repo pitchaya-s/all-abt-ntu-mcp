@@ -2,9 +2,9 @@ from datetime import datetime, timedelta
 import unittest
 from unittest.mock import Mock, patch
 
-from ntulearn_mcp.client import LearnClient
+from ntulearn_mcp.ntu_client.client import LearnClient
 from ntulearn_mcp.models import LearnError
-from ntulearn_mcp.normalize import records, text
+from ntulearn_mcp.parser.response import records, text
 from .fixtures import COURSE, CONTENT, FixtureSession, NOW, PREFIX, SECRET, USER
 
 

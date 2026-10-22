@@ -15,7 +15,7 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = Path(__file__).with_name("protocol_server.py")
-ARGS = {"course_code": "SC2001", "academic_year": 2026, "semester": 1}
+ARGS = {"course_code": "ZZ0001", "academic_year": 2026, "semester": 1}
 
 
 def environment():
@@ -33,22 +33,22 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as cwd:
             async with Client(StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd, env=environment())) as client:
                 listing = await client.list_tools()
-                self.assertEqual(len(listing.tools), 20)
+                self.assertEqual(len(listing.tools), 32)
                 for tool in listing.tools:
                     self.assertIsNotNone(tool.output_schema, tool.name)
                     self.assertEqual(tool.output_schema["type"], "object", tool.name)
                     self.assertTrue(tool.output_schema.get("properties"), tool.name)
                     Draft202012Validator.check_schema(tool.output_schema)
                 calls = [
-                    ("search_courses", {"query": "SC20", "academic_year": 2026, "semester": 1, "limit": 2}),
-                    ("get_course_metadata", ARGS), ("get_course_indexes", ARGS),
-                    ("get_index", {**ARGS, "index": "10143"}),
-                    ("compare_indexes", {**ARGS, "indexes": ["10143", "10144"], "against_sessions": [
+                    ("stars_search_courses", {"query": "ZZ00", "academic_year": 2026, "semester": 1, "limit": 2}),
+                    ("stars_get_course_metadata", ARGS), ("stars_get_course_indexes", ARGS),
+                    ("stars_get_index", {**ARGS, "index": "00001"}),
+                    ("stars_compare_indexes", {**ARGS, "indexes": ["00001", "00002"], "against_sessions": [
                         {"day": "TUE", "start_time": "16:30", "end_time": "17:20", "teaching_weeks": [2]}
                     ]}),
-                    ("find_matching_indexes", {**ARGS, "constraints": {"avoid_days": ["FRI"]}}),
-                    ("get_graduate_course_schedule", {"course_code": "EE6102"}),
-                    ("get_undergraduate_exam_schedule", {"course_code": "SC2001"}), ("ntu_auth_status", {}),
+                    ("stars_find_matching_indexes", {**ARGS, "constraints": {"avoid_days": ["FRI"]}}),
+                    ("stars_get_graduate_course_schedule", {"course_code": "EE6102"}),
+                    ("stars_get_undergraduate_exam_schedule", {"course_code": "ZZ0001"}), ("stars_auth_status", {}),
                 ]
                 for name, arguments in calls:
                     result = await client.call_tool(name, arguments)
@@ -66,18 +66,18 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
                     initialized = await client.initialize()
                     self.assertEqual(initialized.server_info.name, "all-abt-ntu-mcp")
                     tools = (await client.list_tools()).tools
-                    result = await client.call_tool("get_index", {**ARGS, "index": "10143"})
+                    result = await client.call_tool("stars_get_index", {**ARGS, "index": "00001"})
                     self.assertFalse(result.is_error)
-                    validate_result(tools, "get_index", result)
+                    validate_result(tools, "stars_get_index", result)
                     invalid = CallToolResult(content=[], structured_content={**result.structured_content, "sessions": "not-a-list"})
                     with self.assertRaisesRegex(RuntimeError, "Invalid structured content"):
-                        await client.validate_tool_result("get_index", invalid)
+                        await client.validate_tool_result("stars_get_index", invalid)
                     for name, args in (
-                        ("search_courses", {"query": "%", "academic_year": 2026, "semester": 1}),
-                        ("get_course_indexes", {**ARGS, "semester": 3}),
-                        ("get_index", {**ARGS, "index": "missing"}),
-                        ("get_course_metadata", {**ARGS, "course_code": "ZZ9999"}),
-                        ("compare_indexes", {**ARGS, "indexes": ["10143"]}),
+                        ("stars_search_courses", {"query": "%", "academic_year": 2026, "semester": 1}),
+                        ("stars_get_course_indexes", {**ARGS, "semester": 3}),
+                        ("stars_get_index", {**ARGS, "index": "missing"}),
+                        ("stars_get_course_metadata", {**ARGS, "course_code": "ZZ9999"}),
+                        ("stars_compare_indexes", {**ARGS, "indexes": ["00001"]}),
                         ("register_courses", {}),
                         ("unknown_tool", {}),
                     ):
@@ -141,26 +141,26 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with raw_client(version) as request:
                 listing = await request("tools/list", {})
                 tools = listing["result"]["tools"]
-                self.assertEqual(len(tools), 20)
+                self.assertEqual(len(tools), 32)
                 self.assertEqual(tools, (await request("tools/list", {}))["result"]["tools"])
-                tool = next(tool for tool in tools if tool["name"] == "get_course_indexes")
+                tool = next(tool for tool in tools if tool["name"] == "stars_get_course_indexes")
                 self.assertIn("inputSchema", tool)
                 self.assertIn("outputSchema", tool)
                 self.assertNotIn("output_schema", tool)
-                result = await request("tools/call", {"name": "get_course_indexes", "arguments": ARGS})
+                result = await request("tools/call", {"name": "stars_get_course_indexes", "arguments": ARGS})
                 self.assertNotIn("error", result)
                 payload = result["result"]
                 self.assertFalse(payload.get("isError", False))
                 self.assertEqual(payload["structuredContent"]["index_count"], 36)
                 self.assertEqual(json.loads(payload["content"][0]["text"]), payload["structuredContent"])
                 Draft202012Validator(tool["outputSchema"]).validate(payload["structuredContent"])
-                search_tool = next(tool for tool in tools if tool["name"] == "search_courses")
-                search = await request("tools/call", {"name": "search_courses", "arguments": {
-                    "query": "SC20", "academic_year": 2026, "semester": 1, "limit": 2, "offset": 2,
+                search_tool = next(tool for tool in tools if tool["name"] == "stars_search_courses")
+                search = await request("tools/call", {"name": "stars_search_courses", "arguments": {
+                    "query": "ZZ00", "academic_year": 2026, "semester": 1, "limit": 2, "offset": 2,
                 }})
                 found = search["result"]["structuredContent"]
                 self.assertEqual(found["total_count"], 6)
-                self.assertEqual(found["courses"][0]["course_code"], "SC2002")
+                self.assertEqual(found["courses"][0]["course_code"], "ZZ0002")
                 self.assertTrue(found["has_more"])
                 Draft202012Validator(search_tool["outputSchema"]).validate(found)
                 self.assertEqual((await request("resources/list", {}))["result"]["resources"], [])
@@ -168,7 +168,7 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_protocol_errors_are_distinct_from_tool_failures(self):
         async with raw_client("2025-11-25") as request:
-            error = await request("tools/call", {"name": "get_course_indexes", "arguments": {**ARGS, "semester": 3}})
+            error = await request("tools/call", {"name": "stars_get_course_indexes", "arguments": {**ARGS, "semester": 3}})
             self.assertNotIn("error", error)
             self.assertTrue(error["result"]["isError"])
             self.assertNotIn("structuredContent", error["result"])

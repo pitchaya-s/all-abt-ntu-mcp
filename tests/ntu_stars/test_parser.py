@@ -45,25 +45,25 @@ class CoursePageTests(unittest.TestCase):
             parse_graduate_course_page("<html><body>maintenance</body></html>", "EE6102")
 
     def test_official_course_description(self) -> None:
-        description = parse_course_description(load_fixture("sc2001-content-2026-1.html"), "SC2001")
+        description = parse_course_description(load_fixture("zz0001-content-2026-1.html"), "ZZ0001")
         self.assertIsNotNone(description)
-        self.assertIn("algorithm design and analysis", description)
+        self.assertIn("example course one", description)
 
     def test_course_description_missing_result_and_unrecognized_page(self) -> None:
-        content = load_fixture("sc2001-content-2026-1.html")
+        content = load_fixture("zz0001-content-2026-1.html")
         self.assertIsNone(parse_course_description(content, "ZZ9999"))
         with self.assertRaises(NTUPageError):
-            parse_course_description("<html><body>maintenance</body></html>", "SC2001")
+            parse_course_description("<html><body>maintenance</body></html>", "ZZ0001")
 
-    def test_sc2001_2026_semester_one(self) -> None:
-        course = parse_course_page(load_fixture("sc2001-2026-1.html"), "SC2001")
-        self.assertEqual(course.course_name, "ALGORITHM DESIGN & ANALYSIS~")
+    def test_zz0001_2026_semester_one(self) -> None:
+        course = parse_course_page(load_fixture("zz0001-2026-1.html"), "ZZ0001")
+        self.assertEqual(course.course_name, "EXAMPLE COURSE ONE~")
         self.assertEqual(course.au, 3.0)
         self.assertEqual(course.details["prerequisite"], "MH1812 & SC1007 OR SC1007 & SC1124")
         self.assertEqual(len(course.indexes), 36)
-        self.assertEqual((next(iter(course.indexes)), list(course.indexes)[-1]), ("10143", "10183"))
+        self.assertEqual((next(iter(course.indexes)), list(course.indexes)[-1]), ("00001", "00036"))
 
-        sessions = course.indexes["10143"]
+        sessions = course.indexes["00001"]
         tutorial = next(session for session in sessions if session.lesson_type == "TUT")
         lab = next(session for session in sessions if session.lesson_type == "LAB")
         self.assertEqual((tutorial.group, tutorial.day, tutorial.start_time, tutorial.end_time), ("SCEA", "TUE", "16:30", "17:20"))
@@ -71,30 +71,30 @@ class CoursePageTests(unittest.TestCase):
         self.assertEqual(lab.teaching_weeks, (1, 3, 5, 7, 9, 11, 13))
         self.assertEqual(lab.venue, "HWLAB2")
 
-    def test_sc2207_has_shared_lectures_and_labs(self) -> None:
-        course = parse_course_page(load_fixture("sc2207-2026-1.html"), "SC2207")
+    def test_zy0001_has_shared_lectures_and_labs(self) -> None:
+        course = parse_course_page(load_fixture("zy0001-2026-1.html"), "ZY0001")
         self.assertEqual(len(course.indexes), 13)
-        self.assertEqual(len(course.indexes["10308"]), 4)
-        first_lecture = course.indexes["10308"][0]
-        second_lecture = course.indexes["10309"][0]
+        self.assertEqual(len(course.indexes["00050"]), 4)
+        first_lecture = course.indexes["00050"][0]
+        second_lecture = course.indexes["00051"][0]
         self.assertEqual(first_lecture.lesson_type, "LEC/STUDIO")
         self.assertEqual(first_lecture.day, "THU")
         self.assertEqual(session_signature(first_lecture), session_signature(second_lecture))
-        lab = next(session for session in course.indexes["10308"] if session.lesson_type == "LAB")
+        lab = next(session for session in course.indexes["00050"] if session.lesson_type == "LAB")
         self.assertEqual(lab.teaching_weeks, (2, 4, 6, 8, 10, 12))
 
-    def test_mh2802_remark_is_not_misreported_as_prerequisite(self) -> None:
-        course = parse_course_page(load_fixture("mh2802-2026-1.html"), "MH2802")
+    def test_zx0001_remark_is_not_misreported_as_prerequisite(self) -> None:
+        course = parse_course_page(load_fixture("zx0001-2026-1.html"), "ZX0001")
         self.assertEqual(len(course.indexes), 12)
         self.assertIsNone(course.details.get("prerequisite"))
         self.assertEqual(course.details.get("remark"), "H2 Maths or equivalent")
         self.assertTrue(all(session.lesson_type in {"LEC/STUDIO", "TUT"} for rows in course.indexes.values() for session in rows))
 
     def test_a_second_semester_response(self) -> None:
-        course = parse_course_page(load_fixture("sc2001-2025-2.html"), "SC2001")
-        self.assertEqual(course.course_name, "ALGORITHM DESIGN & ANALYSIS~")
-        self.assertIn("10253", course.indexes)
-        self.assertEqual(course.indexes["10253"][0].day, "TUE")
+        course = parse_course_page(load_fixture("zz0001-2025-2.html"), "ZZ0001")
+        self.assertEqual(course.course_name, "EXAMPLE COURSE ONE~")
+        self.assertIn("00044", course.indexes)
+        self.assertEqual(course.indexes["00044"][0].day, "TUE")
 
     def test_explicit_weeks_and_unrecognized_remarks(self) -> None:
         self.assertEqual(parse_teaching_weeks("Teaching Wk2-13"), tuple(range(2, 14)))
@@ -136,7 +136,7 @@ class CoursePageTests(unittest.TestCase):
         with self.assertRaises(CourseUnavailable):
             parse_course_page(missing, "ZZ9999")
         with self.assertRaises(NTUPageError):
-            parse_course_page("<html><body>maintenance</body></html>", "SC2001")
+            parse_course_page("<html><body>maintenance</body></html>", "ZZ0001")
 
 
 if __name__ == "__main__":

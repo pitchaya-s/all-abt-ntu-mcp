@@ -29,9 +29,9 @@ class PersonalParserTests(unittest.TestCase):
     def test_stars_planner_extracts_registered_courses_and_timetable_tables(self) -> None:
         result = parse_stars_planner_page(PLANNER_HTML)
         self.assertEqual(result["service"], "stars_planner")
-        self.assertEqual(result["registered_courses"][0]["course_code"], "SC2001")
+        self.assertEqual(result["registered_courses"][0]["course_code"], "ZZ0001")
         self.assertEqual(result["registered_courses_status"], "parsed")
-        self.assertEqual(result["registered_courses"][0]["Index No"], "10143")
+        self.assertEqual(result["registered_courses"][0]["Index No"], "00001")
         self.assertEqual(len(result["timetable_tables"]), 1)
         self.assertEqual(result["timetable_tables"][0]["records"][0]["Day"], "TUE")
 
@@ -40,7 +40,7 @@ class PersonalParserTests(unittest.TestCase):
         self.assertEqual(result["requirements"][0]["records"][0]["Balance AU"], "15")
         self.assertEqual(result["requirements_status"], "parsed")
         self.assertEqual(result["examination_results"][0]["records"][0]["Grade"], "A")
-        self.assertEqual(result["courses_registered"][0]["records"][0]["Index No"], "10144")
+        self.assertEqual(result["courses_registered"][0]["records"][0]["Index No"], "00002")
         self.assertEqual(len(result["requirements"]), 1)
         self.assertEqual(len(result["examination_results"]), 1)
         self.assertEqual(len(result["courses_registered"]), 1)

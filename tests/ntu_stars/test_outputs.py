@@ -17,7 +17,7 @@ from ntu_stars_mcp.parser import parse_course_page
 class CompactOutputTests(unittest.TestCase):
     def test_all_timetable_information_can_be_reconstructed(self):
         fixtures = Path(__file__).parent / "fixtures"
-        for code in ("SC2001", "SC2207", "MH2802"):
+        for code in ("ZZ0001", "ZY0001", "ZX0001"):
             course = parse_course_page((fixtures / f"{code.lower()}-2026-1.html").read_bytes().decode("windows-1252"), code)
             course = replace(course, academic_year=2026, semester="1")
             with patch("ntu_stars_mcp.mcp_server.fetch_course", return_value=course), patch(
@@ -31,7 +31,7 @@ class CompactOutputTests(unittest.TestCase):
                         self.assertEqual({"course_code": code, "index": index["index"], "raw_day": None, "raw_time": None, **reduced}, raw.to_dict())
 
     def test_unknown_values_remain_explicit_and_course_index_result_is_smaller(self):
-        raw = COURSE.indexes["10143"][0].to_dict()
+        raw = COURSE.indexes["00001"][0].to_dict()
         unknown = {**raw, "day": None, "start_time": None, "end_time": None, "raw_day": "ARRANGED", "raw_time": "TBA", "remarks": "Consult school"}
         reduced = compact.session_fields(unknown)
         self.assertEqual(reduced["raw_day"], "ARRANGED")
@@ -90,14 +90,14 @@ class OutputSchemaTests(unittest.IsolatedAsyncioTestCase):
             "status": "closed", "retrieved_at": None, "indexes": {},
         }):
             async with Client(mcp) as client:
-                args = {"course_code": "SC2001", "academic_year": 2026, "semester": 1}
-                result = await client.call_tool("compare_indexes", {**args, "indexes": ["10143", "10144"]})
+                args = {"course_code": "ZZ0001", "academic_year": 2026, "semester": 1}
+                result = await client.call_tool("stars_compare_indexes", {**args, "indexes": ["00001", "00002"]})
                 self.assertFalse(result.is_error)
                 data = result.structured_content
                 self.assertEqual(len(data["common_sessions"]), 2)
                 self.assertNotIn("shared_by", data["common_sessions"][0])
                 self.assertNotIn("course_description", data)
-                result = await client.call_tool("find_matching_indexes", args)
+                result = await client.call_tool("stars_find_matching_indexes", args)
                 self.assertEqual(result.structured_content["constraints"], {})
                 self.assertNotIn("raw_time", result.structured_content["matches"][0]["sessions"][0])
 
@@ -106,6 +106,6 @@ class OutputSchemaTests(unittest.IsolatedAsyncioTestCase):
         with patch("ntu_stars_mcp.mcp_server.fetch_graduate_course_schedule", return_value=broken):
             async with Client(mcp) as client:
                 with self.assertLogs("mcp.server", level="ERROR"):
-                    result = await client.call_tool("get_graduate_course_schedule", {"course_code": "EE6102"})
+                    result = await client.call_tool("stars_get_graduate_course_schedule", {"course_code": "EE6102"})
                 self.assertTrue(result.is_error)
                 self.assertIsNone(result.structured_content)

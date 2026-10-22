@@ -6,10 +6,10 @@ from threading import get_ident
 import unittest
 from unittest.mock import Mock, patch
 
-from ntulearn_mcp.auth import BASE, Session
+from ntulearn_mcp.ntu_client.session import BASE, Session, _READ_PATH
 from ntulearn_mcp.models import LearnError
 
-from .fixtures import PREFIX, SECRET
+from .fixtures import COURSE, PREFIX, SECRET
 
 
 class Response:
@@ -77,7 +77,7 @@ class AuthTests(unittest.TestCase):
                 with self.assertRaisesRegex(LearnError, f"HTTP {status}"):
                     self.session.get(PREFIX + "/users/me/courses", refresh=True)
                 login.assert_not_called()
-        with patch("ntulearn_mcp.auth.time.sleep"), patch.object(self.session, "_request", side_effect=[Response(503), Response(429), Response(data={"results": []})]) as request:
+        with patch("ntulearn_mcp.ntu_client.session.time.sleep"), patch.object(self.session, "_request", side_effect=[Response(503), Response(429), Response(data={"results": []})]) as request:
             self.session.get(PREFIX + "/users/me/courses", refresh=True)
             self.assertEqual(request.call_count, 3)
 
@@ -146,7 +146,7 @@ class AuthTests(unittest.TestCase):
             context = Mock()
             self.session._context = context
             context.request.get.side_effect = [Response(302, location="/bbcswebdav/example.pdf"), Response(content_type="application/pdf", body=b'%PDF-example')]
-            with patch.object(self.session, "_get"), patch("ntulearn_mcp.auth.time.sleep"):
+            with patch.object(self.session, "_get"), patch("ntulearn_mcp.ntu_client.session.time.sleep"):
                 result = self.session.download(path, str(target))
                 self.assertEqual(result.bytes_written, len(b'%PDF-example'))
                 self.assertEqual(target.read_bytes(), b'%PDF-example')
@@ -172,7 +172,7 @@ class AuthTests(unittest.TestCase):
         self.session._playwright = Mock()
         remote = self.session._playwright.request.new_context.return_value
         remote.get.return_value = Response(content_type="application/pdf", body=b'%PDF-example')
-        with tempfile.TemporaryDirectory() as directory, patch.object(self.session, "_get"), patch("ntulearn_mcp.auth.time.sleep"):
+        with tempfile.TemporaryDirectory() as directory, patch.object(self.session, "_get"), patch("ntulearn_mcp.ntu_client.session.time.sleep"):
             target = Path(directory) / "example.pdf"
             self.session.download(path, str(target))
             self.session._playwright.request.new_context.assert_called_once_with()
@@ -291,3 +291,13 @@ class LoginFlowTests(unittest.TestCase):
                 self.assertFalse(session.status().session_verified)
             finally:
                 session.close()
+
+
+class ReadPathTests(unittest.TestCase):
+    def test_allowlist_has_only_required_read_endpoints(self):
+        for path in (f'{PREFIX}/courses/{COURSE}/users', f'/learn/api/v1/courses/{COURSE}/memberships',
+                     '/learn/api/v1/messages/summary', f'/learn/api/v1/courses/{COURSE}/conversations/_800_1'):
+            self.assertIsNotNone(_READ_PATH.fullmatch(path))
+        for path in ('/learn/api/v1/users/_other_1', '/learn/api/v1/messages/send',
+                     f'/learn/api/v1/courses/{COURSE}/conversations/../../users'):
+            self.assertIsNone(_READ_PATH.fullmatch(path))

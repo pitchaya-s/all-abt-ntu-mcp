@@ -13,7 +13,7 @@ from urllib.parse import urljoin, urlsplit
 
 from shared.credentials import read_credentials
 
-from .models import AuthStatus, Download, LearnError
+from ..models import AuthStatus, Download, LearnError
 
 
 BASE = "https://ntulearn.ntu.edu.sg"
@@ -21,8 +21,10 @@ TIMEOUT_MS = 30_000
 MAX_BYTES = 5_000_000
 ID = r"[A-Za-z0-9_-]{1,80}"
 _READ_PATH = re.compile(
-    rf"/learn/api/public/v1/(?:users/me(?:/courses)?|calendars/items|courses/{ID}"
-    rf"(?:/announcements|/gradebook/(?:columns|users/{ID})|/contents(?:/{ID}(?:/children|/attachments(?:/{ID}/download)?)?)?)?)"
+    rf"(?:/learn/api/public/v1/(?:users/me(?:/courses)?|calendars/items|courses/{ID}"
+    rf"(?:/announcements|/users|/groups|/gradebook/(?:columns|users/{ID})"
+    rf"|/contents(?:/{ID}(?:/children|/attachments(?:/{ID}/download)?)?)?)?)"
+    rf"|/learn/api/v1/(?:messages/summary|courses/{ID}/(?:conversations(?:/{ID})?|memberships)))"
 )
 _CHALLENGE = re.compile(r"captcha|approve (?:the )?sign.in|verify your identity|verification code|authenticator|multi.factor|security info", re.I)
 
@@ -226,7 +228,9 @@ class Session:
     def get(self, path, params=None, refresh=False):
         return self.run(self._get, path, params or {}, refresh)
 
-    def _download(self, path, destination):
+    def _download(self, path, destination, max_bytes=20_000_000):
+        if type(max_bytes) is not int or not 1 <= max_bytes <= 20_000_000:
+            raise LearnError('The remaining per-file byte limit must be between 1 and 20000000.')
         if not _READ_PATH.fullmatch(path) or not path.endswith("/download"):
             raise LearnError("Use a Blackboard attachment download endpoint.")
         target = Path(destination).expanduser().absolute()
@@ -265,8 +269,8 @@ class Session:
                     if "text/html" in response.headers.get("content-type", "") or "application/json" in response.headers.get("content-type", ""):
                         raise LearnError("NTULearn returned a login/error page or unsupported HTML/JSON attachment; no file was saved.")
                     body = response.body()
-                    if len(body) > 20_000_000:
-                        raise LearnError("This attachment exceeds the 20 MB download limit; download it manually.")
+                    if len(body) > min(20_000_000, max_bytes):
+                        raise LearnError("This attachment exceeds the 20 MB file limit or remaining batch byte limit; no file was saved.")
                     break
                 finally:
                     response.dispose()
@@ -286,8 +290,8 @@ class Session:
             raise LearnError("Could not save the download. Check the destination and available space; existing files were not overwritten.") from None
         return Download(path=str(target), bytes_written=len(body), downloaded_at=datetime.now(timezone.utc))
 
-    def download(self, path, destination):
-        return self.run(self._download, path, destination)
+    def download(self, path, destination, max_bytes=20_000_000):
+        return self.run(self._download, path, destination, max_bytes)
 
     def _dispose(self):
         for resource in (self._context, self._browser):

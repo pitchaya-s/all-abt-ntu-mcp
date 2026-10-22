@@ -3,7 +3,7 @@
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlsplit
 
-from .models import LearnError
+from ..models import LearnError
 
 
 class _Text(HTMLParser):

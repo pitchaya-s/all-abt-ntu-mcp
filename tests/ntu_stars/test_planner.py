@@ -91,7 +91,7 @@ class _Page:
 
 
 class PlannerParserTests(unittest.TestCase):
-    def test_live_empty_registration_is_distinct_from_a_saved_calendar(self):
+    def test_synthetic_empty_registration_is_distinct_from_a_saved_calendar(self):
         result = parse_stars_planner_page(CALENDAR)
         self.assertEqual((result["academic_year"], result["semester"]), (2026, 2))
         self.assertEqual(result["registered_courses_status"], "empty")
@@ -107,18 +107,18 @@ class PlannerParserTests(unittest.TestCase):
         sessions = {s["day"]: s for s in result["sessions"]}
         self.assertEqual(set(sessions), {"MON", "TUE", "WED", "THU"})
         self.assertEqual(sessions["TUE"]["lesson_type"], "LAB")
-        self.assertEqual(sessions["TUE"]["end_time"], "16:20")
-        self.assertEqual(sessions["TUE"]["teaching_weeks"], [1, 3, 5, 7, 9, 11, 13])
-        self.assertEqual(sessions["THU"]["start_time"], "15:30")
-        self.assertEqual(sessions["WED"]["start_time"], "16:30")
-        self.assertNotIn(10, sessions["WED"]["teaching_weeks"])
+        self.assertEqual(sessions["TUE"]["end_time"], "13:20")
+        self.assertEqual(sessions["TUE"]["teaching_weeks"], [2, 4, 6, 8, 10, 12])
+        self.assertEqual(sessions["THU"]["start_time"], "10:30")
+        self.assertEqual(sessions["WED"]["start_time"], "13:30")
+        self.assertNotIn(5, sessions["WED"]["teaching_weeks"])
         self.assertEqual(sessions["WED"]["index"], "00001")
 
     def test_unusual_schedule_content_is_preserved(self):
-        result = parse_saved_plan_timetable(CALENDAR.replace("1430to1520", "TBA"), COURSES)
+        result = parse_saved_plan_timetable(CALENDAR.replace("0930to1020", "TBA"), COURSES)
         self.assertEqual(result["timetable_status"], "unparsed")
         self.assertTrue(any("TBA" in row["text"] for row in result["unparsed_sessions"]))
-        unknown_weeks = parse_saved_plan_timetable(CALENDAR.replace("Wk1-9,11-13", "By arrangement"), COURSES)
+        unknown_weeks = parse_saved_plan_timetable(CALENDAR.replace("Wk1-6,8-13", "By arrangement"), COURSES)
         lecture = next(s for s in unknown_weeks["sessions"] if s["day"] == "MON")
         self.assertIsNone(lecture["teaching_weeks"])
         self.assertEqual(lecture["remarks"], "By arrangement")

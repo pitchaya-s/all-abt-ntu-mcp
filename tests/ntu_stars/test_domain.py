@@ -8,9 +8,9 @@ from ntu_stars_mcp.parser import parse_course_page
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def sc2001() -> Course:
-    html = (FIXTURES / "sc2001-2026-1.html").read_bytes().decode("windows-1252")
-    return parse_course_page(html, "SC2001")
+def zz0001() -> Course:
+    html = (FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252")
+    return parse_course_page(html, "ZZ0001")
 
 
 def session(index: str, day: str, start: str, end: str, weeks: tuple[int, ...] | None) -> Session:
@@ -41,14 +41,14 @@ class ClashTests(unittest.TestCase):
 
 class IndexLogicTests(unittest.TestCase):
     def test_comparison_separates_common_and_index_specific_sessions(self) -> None:
-        result = compare_indexes(sc2001(), ["10143", "10144"])
+        result = compare_indexes(zz0001(), ["00001", "00002"])
         self.assertEqual({item["lesson_type"] for item in result["common_sessions"]}, {"LEC/STUDIO"})
-        self.assertEqual(result["common_sessions"][0]["shared_by"], ["10143", "10144"])
-        self.assertEqual({item["lesson_type"] for item in result["unique_sessions_by_index"]["10143"]}, {"TUT", "LAB"})
+        self.assertEqual(result["common_sessions"][0]["shared_by"], ["00001", "00002"])
+        self.assertEqual({item["lesson_type"] for item in result["unique_sessions_by_index"]["00001"]}, {"TUT", "LAB"})
 
     def test_filter_rules_and_week_scoped_clashes(self) -> None:
         result = find_matching_indexes(
-            sc2001(),
+            zz0001(),
             {
                 "avoid_days": ["FRI"],
                 "require_sessions": [
@@ -57,7 +57,7 @@ class IndexLogicTests(unittest.TestCase):
             },
             [],
         )
-        self.assertIn("10143", {item["index"] for item in result["matches"]})
+        self.assertIn("00001", {item["index"] for item in result["matches"]})
         self.assertTrue(all(item["status"] == "confirmed" for item in result["matches"]))
         self.assertTrue(
             all(session["day"] != "FRI" for item in result["matches"] for session in item["sessions"])
@@ -65,9 +65,9 @@ class IndexLogicTests(unittest.TestCase):
 
         existing = [{"day": "TUE", "start_time": "16:30", "end_time": "17:20", "teaching_weeks": [3]}]
         scoped = find_matching_indexes(
-            sc2001(), {"teaching_weeks": [2]}, existing
+            zz0001(), {"teaching_weeks": [2]}, existing
         )
-        self.assertIn("10143", {item["index"] for item in scoped["matches"]})
+        self.assertIn("00001", {item["index"] for item in scoped["matches"]})
 
     def test_unknown_sessions_are_marked_uncertain(self) -> None:
         course = Course(

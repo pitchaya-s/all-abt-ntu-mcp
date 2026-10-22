@@ -2,8 +2,9 @@
 
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 
-from ntulearn_mcp.models import AuthStatus
+from ntulearn_mcp.models import AuthStatus, Download
 
 PREFIX = "/learn/api/public/v1"
 COURSE = "_100_1"
@@ -44,7 +45,30 @@ RESPONSES = {
     f"{PREFIX}/courses/{COURSE}/contents/_202_1/attachments": {"results": [
         {"id": "_500_1", "fileName": "example.pdf", "mimeType": "application/pdf"},
     ]},
+    f"{PREFIX}/courses/{COURSE}/contents/_201_1/attachments": {"results": []},
+    f"{PREFIX}/courses/{COURSE}/users": {"results": [
+        {"userId": USER, "courseRoleId": "Student", "user": {"id": USER, "name": {"given": "Example", "family": "Student"}, "password": SECRET}},
+        {"userId": "_901_1", "courseRoleId": "Instructor", "user": {"id": "_901_1", "name": {"given": "Example", "family": "Teacher"}}},
+    ]},
+    f"{PREFIX}/courses/{COURSE}/groups": {"results": [
+        {"id": "_600_1", "name": "Example group", "description": "<p>Example tutorial</p>"},
+    ]},
+    f"/learn/api/v1/courses/{COURSE}/memberships": {"results": [
+        {"userId": USER, "courseRole": {"roleId": "Student"}, "user": {"id": USER, "givenName": "Example", "familyName": "Student"}},
+    ]},
+    '/learn/api/v1/messages/summary': {"results": [{"courseId": COURSE, "isCourseMessagesEnabled": True}]},
+    f'/learn/api/v1/courses/{COURSE}/conversations': {"results": [{
+        "id": "_800_1", "courseId": COURSE, "totalCount": 2,
+        "participantIds": [USER, "_901_1"], "participantsNotInACategory": [], "recipientCategory": ["Instructor"],
+        "includesAllMembers": False, "messages": [
+            {"id": "_801_1", "senderId": "_901_1", "sender": {"id": "_901_1", "givenName": "Example", "familyName": "Teacher"},
+             "isRead": False, "postDate": NOW.isoformat(), "body": {"rawText": "<p>Full example message</p>"}},
+            {"id": "_802_1", "senderId": USER, "sender": {"id": USER}, "postDate": NOW.isoformat(), "body": {"rawText": "<p>Example reply</p>"}},
+        ],
+    }]},
 }
+RESPONSES[f'/learn/api/v1/courses/{COURSE}/conversations/_800_1'] = deepcopy(
+    RESPONSES[f'/learn/api/v1/courses/{COURSE}/conversations']['results'][0])
 
 
 class FixtureSession:
@@ -61,6 +85,11 @@ class FixtureSession:
 
     def status(self):
         return AuthStatus(credentials_configured=True, session_verified=True, last_verified_at=NOW, cache_ttl_seconds=300)
+
+    def download(self, path, destination, max_bytes=20_000_000):
+        with Path(destination).open('xb') as output:
+            output.write(b'Example attachment')
+        return Download(path=destination, bytes_written=18, downloaded_at=NOW)
 
     def close(self):
         pass

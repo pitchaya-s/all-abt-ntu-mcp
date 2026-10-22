@@ -1,11 +1,12 @@
 """Synthetic NTULearn stdio server; no network or account credentials."""
-from fixtures import FixtureSession
-from ntulearn_mcp.client import LearnClient
-from ntulearn_mcp import tools
+from fixtures import COURSE, PREFIX, RESPONSES, FixtureSession
+from ntulearn_mcp.ntu_client.client import LearnClient
+from ntulearn_mcp import mcp_server
 from shared.server import main
 
 if __name__ == "__main__":
-    tools.session.close()
-    tools.session = FixtureSession()
-    tools.client = LearnClient(tools.session)
+    RESPONSES[f'{PREFIX}/courses/{COURSE}/contents/_202_1/attachments']['results'][0].update(fileName='example.txt', mimeType='text/plain')
+    mcp_server.session.close()
+    mcp_server.session = FixtureSession()
+    mcp_server.client = LearnClient(mcp_server.session)
     main()

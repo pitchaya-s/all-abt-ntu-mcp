@@ -40,7 +40,6 @@ from .ntu_client import (
 )
 
 from shared.server import mcp
-from ntulearn_mcp import tools
 
 Day = Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 Semester = Literal[1, 2, "S"]
@@ -149,7 +148,7 @@ def _index_vacancies(index: str, metadata: dict[str, Any], indexes: dict[str, An
         "waitlist_length": counts["waitlist_length"] if counts is not None else None,
     }
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_search_courses", annotations=_read_only)
 def search_courses(
     query: Annotated[str, Field(min_length=2, max_length=80, description="Partial course code or title words, such as SC20 or DATA STRUCTURES; no wildcards")],
     academic_year: int,
@@ -158,19 +157,19 @@ def search_courses(
     limit: Annotated[int, Field(ge=1, le=100)] = 20,
     offset: Annotated[int, Field(ge=0)] = 0,
 ) -> SearchCoursesResult:
-    """Search NTU's public undergraduate Class Schedule by partial code or title keywords. Returns course codes, names and AUs for the requested term and study mode. Use offset/limit to page through matches, then get_course_metadata or get_course_indexes for details. This is not a graduate or all-catalogue search."""
+    """Search NTU's public undergraduate Class Schedule by partial code or title keywords. Returns course codes, names and AUs for the requested term and study mode. Use offset/limit to page through matches, then stars_get_course_metadata or stars_get_course_indexes for details. This is not a graduate or all-catalogue search."""
     try:
         return fetch_course_search(query, academic_year, semester, study_mode, limit, offset)
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_course_metadata", annotations=_read_only)
 def get_course_metadata(course_code: str, academic_year: int, semester: Semester) -> CourseMetadataResult:
     """Get course name, AUs, prerequisites, description, and term metadata."""
     course = _load_course(course_code, academic_year, semester)
     return cast(CourseMetadataResult, course_metadata(course))
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_course_indexes", annotations=_read_only)
 def get_course_indexes(course_code: str, academic_year: int, semester: Semester) -> CourseIndexesResult:
     """List all indexes with complete timetable details and matching-term vacancies/waitlists. Sessions inherit course_code and index from their enclosing result; null raw_day/raw_time are omitted."""
     course = _load_course(course_code, academic_year, semester)
@@ -192,7 +191,7 @@ def get_course_indexes(course_code: str, academic_year: int, semester: Semester)
         ],
     }
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_graduate_course_schedule", annotations=_read_only)
 def get_graduate_course_schedule(course_code: str) -> GraduateCourseResult:
     """Get a graduate course's class groups for NTU's currently published academic term."""
     try:
@@ -200,7 +199,7 @@ def get_graduate_course_schedule(course_code: str) -> GraduateCourseResult:
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_undergraduate_exam_schedule", annotations=_read_only)
 def get_undergraduate_exam_schedule(
     course_code: str, academic_year: int | None = None, semester: ExamSemester | None = None
 ) -> UndergraduateExamResult:
@@ -210,12 +209,12 @@ def get_undergraduate_exam_schedule(
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_auth_status", annotations=_read_only)
 def ntu_auth_status() -> AuthStatus:
     """Report whether WISH credentials are configured and whether this process has verified a session."""
     return fetch_ntu_auth_status()
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_stars_planner", annotations=_read_only)
 def get_stars_planner(refresh: bool = False) -> StarsPlannerResult:
     """Get registered courses, the published term, and saved Plans 1–3 with indexes and timetables. Use refresh after editing a plan."""
     try:
@@ -223,7 +222,7 @@ def get_stars_planner(refresh: bool = False) -> StarsPlannerResult:
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True))
+@mcp.tool(name="stars_save_stars_plan", annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True))
 def save_stars_plan(
     plan_number: Literal[1, 2, 3],
     courses: Annotated[list[PlannedIndex], Field(min_length=1, max_length=13)],
@@ -237,7 +236,7 @@ def save_stars_plan(
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_degree_audit", annotations=_read_only)
 def get_degree_audit() -> DegreeAuditResult:
     """Get your degree requirements, examination results, and registered courses from Degree Audit."""
     try:
@@ -245,7 +244,7 @@ def get_degree_audit() -> DegreeAuditResult:
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_get_index", annotations=_read_only)
 def get_index(
     course_code: str, index: str, academic_year: int, semester: Semester
 ) -> IndexResult:
@@ -275,7 +274,7 @@ def get_index(
         "sessions": [session_fields(session.to_dict()) for session in sessions],
     }
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_compare_indexes", annotations=_read_only)
 def compare_indexes(
     course_code: str,
     indexes: list[str],
@@ -311,7 +310,7 @@ def compare_indexes(
     except ValueError as error:
         raise ToolError(str(error)) from error
 
-@mcp.tool(annotations=_read_only)
+@mcp.tool(name="stars_find_matching_indexes", annotations=_read_only)
 def find_matching_indexes(
     course_code: str,
     academic_year: int,
@@ -330,6 +329,3 @@ def find_matching_indexes(
         "matches": [{**match, "sessions": [session_fields(session) for session in match["sessions"]]}
                     for match in result["matches"]],
     }
-
-
-tools.register_tools(mcp)

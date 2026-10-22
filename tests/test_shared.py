@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from shared.credentials import read_credentials
-from ntulearn_mcp.auth import Session
+from ntulearn_mcp.ntu_client.session import Session
 from ntu_stars_mcp.wish.session import WishSessionManager
 
 
@@ -54,7 +54,7 @@ class CredentialTests(unittest.TestCase):
     def test_server_closes_both_sessions_even_if_one_cleanup_fails(self):
         from shared import server
         from ntu_stars_mcp.wish.session import wish_session
-        with patch.object(server.mcp, "run"), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.tools.session, "close") as learn:
+        with patch.object(server.mcp, "run"), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.mcp_server.session, "close") as learn:
             with self.assertRaisesRegex(RuntimeError, "test cleanup"):
                 server.main()
             wish.assert_called_once()

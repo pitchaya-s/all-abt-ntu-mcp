@@ -12,18 +12,18 @@ from ntu_stars_mcp.parser import NTUPageError, parse_course_search
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
-HTML = (FIXTURES / "search-sc20-2026-1.html").read_text()
+HTML = (FIXTURES / "search-zz00-2026-1.html").read_text()
 TITLE_HTML = (FIXTURES / "search-data-structures-2026-1.html").read_text()
 EMPTY_HTML = (FIXTURES / "search-empty-2026-1.html").read_text()
-PART_TIME_HTML = (FIXTURES / "search-sc20-part-time-2026-1.html").read_text()
+PART_TIME_HTML = (FIXTURES / "search-zz00-part-time-2026-1.html").read_text()
 SOURCE = "https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE_NEW.main_display1"
 
 
 class SearchParserTests(unittest.TestCase):
     def test_official_partial_code_and_title_results(self):
         courses = parse_course_search(HTML, 2026, "1")
-        self.assertEqual([course["course_code"] for course in courses], ["SC2000", "SC2001", "SC2002", "SC2005", "SC2006", "SC2008"])
-        self.assertEqual(courses[1], {"course_code": "SC2001", "course_name": "ALGORITHM DESIGN & ANALYSIS~", "au": 3.0})
+        self.assertEqual([course["course_code"] for course in courses], ["ZZ0000", "ZZ0001", "ZZ0002", "ZZ0005", "ZZ0006", "ZZ0008"])
+        self.assertEqual(courses[1], {"course_code": "ZZ0001", "course_name": "EXAMPLE COURSE ONE~", "au": 3.0})
         titles = parse_course_search(TITLE_HTML, 2026, "1")
         self.assertEqual([course["course_code"] for course in titles], ["IE2108", "SC1007", "SC1303"])
         self.assertEqual(titles[2]["au"], 4.0)
@@ -67,23 +67,23 @@ class SearchClientTests(unittest.TestCase):
 
     def test_pages_share_cache_and_mutations_do_not_corrupt_it(self):
         with patch.object(search, "_fetch_html", return_value=(HTML, SOURCE)) as fetch:
-            first = search_courses(" sc20 ", 2026, 1, limit=2)
-            second = search_courses("SC20", 2026, 1, limit=2, offset=2)
-            self.assertEqual(first["query"], "SC20")
+            first = search_courses(" zz00 ", 2026, 1, limit=2)
+            second = search_courses("ZZ00", 2026, 1, limit=2, offset=2)
+            self.assertEqual(first["query"], "ZZ00")
             self.assertEqual(first["total_count"], 6)
             self.assertTrue(first["has_more"])
-            self.assertEqual(second["courses"][0]["course_code"], "SC2002")
+            self.assertEqual(second["courses"][0]["course_code"], "ZZ0002")
             self.assertEqual(first["retrieved_at"], second["retrieved_at"])
             first["courses"][0]["course_name"] = "modified"
-            self.assertNotEqual(search_courses("SC20", 2026, 1)["courses"][0]["course_name"], "modified")
-            self.assertFalse(search_courses("SC20", 2026, 1, offset=5)["has_more"])
-            self.assertEqual(search_courses("SC20", 2026, 1, offset=99)["courses"], [])
-        fetch.assert_called_once_with("2026;1", "SC20", study_mode="F")
+            self.assertNotEqual(search_courses("ZZ00", 2026, 1)["courses"][0]["course_name"], "modified")
+            self.assertFalse(search_courses("ZZ00", 2026, 1, offset=5)["has_more"])
+            self.assertEqual(search_courses("ZZ00", 2026, 1, offset=99)["courses"], [])
+        fetch.assert_called_once_with("2026;1", "ZZ00", study_mode="F")
 
     def test_part_time_uses_a_separate_cache_key(self):
         with patch.object(search, "_fetch_html", side_effect=[(HTML, SOURCE), (PART_TIME_HTML, SOURCE)]) as fetch:
-            self.assertEqual(search_courses("SC20", 2026, 1)["total_count"], 6)
-            self.assertEqual(search_courses("SC20", 2026, 1, "part_time")["total_count"], 4)
+            self.assertEqual(search_courses("ZZ00", 2026, 1)["total_count"], 6)
+            self.assertEqual(search_courses("ZZ00", 2026, 1, "part_time")["total_count"], 4)
             self.assertEqual(fetch.call_args.kwargs, {"study_mode": "P"})
         self.assertEqual(fetch.call_count, 2)
 
@@ -94,10 +94,10 @@ class SearchClientTests(unittest.TestCase):
                     search_courses(query, 2026, 1)
             for kwargs in [dict(study_mode="unknown"), dict(limit=0), dict(limit=101), dict(offset=-1), dict(limit=True), dict(offset=False)]:
                 with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
-                    search_courses("SC20", 2026, 1, **kwargs)
+                    search_courses("ZZ00", 2026, 1, **kwargs)
             for year, semester in [(True, 1), (1999, 1), (2026, 3)]:
                 with self.assertRaises(ValueError):
-                    search_courses("SC20", year, semester)
+                    search_courses("ZZ00", year, semester)
             fetch.assert_not_called()
 
     def test_errors_are_not_cached_and_empty_results_are_cached(self):
@@ -112,20 +112,20 @@ class SearchClientTests(unittest.TestCase):
 
     def test_cache_expiry_disabled_cache_and_eviction(self):
         with patch.object(search, "_fetch_html", return_value=(HTML, SOURCE)) as fetch:
-            search_courses("SC20", 2026, 1)
+            search_courses("ZZ00", 2026, 1)
             with search._cache_lock:
                 key = next(iter(search._cache))
                 search._cache[key] = (0, search._cache[key][1])
-            search_courses("SC20", 2026, 1)
+            search_courses("ZZ00", 2026, 1)
             self.assertEqual(fetch.call_count, 2)
             with patch.object(search, "CACHE_TTL_SECONDS", 0):
-                search_courses("SC20", 2026, 1)
-                search_courses("SC20", 2026, 1)
+                search_courses("ZZ00", 2026, 1)
+                search_courses("ZZ00", 2026, 1)
             self.assertEqual(fetch.call_count, 4)
             with patch.object(search, "MAX_CACHE_ENTRIES", 1):
-                search_courses("SC2001", 2026, 1)
+                search_courses("ZZ0001", 2026, 1)
                 self.assertEqual(len(search._cache), 1)
-                self.assertEqual(next(iter(search._cache))[2], "SC2001")
+                self.assertEqual(next(iter(search._cache))[2], "ZZ0001")
 
 
 class SearchMCPTests(unittest.IsolatedAsyncioTestCase):
@@ -133,13 +133,13 @@ class SearchMCPTests(unittest.IsolatedAsyncioTestCase):
         with patch("ntu_stars_mcp.mcp_server.fetch_course_search", wraps=search_courses), patch.object(search, "_fetch_html", return_value=(TITLE_HTML, SOURCE)):
             async with Client(mcp) as client:
                 args = {"query": "DATA STRUCTURES", "academic_year": 2026, "semester": 1}
-                reply = await client.call_tool("search_courses", args)
+                reply = await client.call_tool("stars_search_courses", args)
                 self.assertFalse(reply.is_error)
                 self.assertEqual(reply.structured_content["total_count"], 3)
                 for changes in [{"query": "%"}, {"study_mode": "graduate"}, {"limit": 0}, {"semester": 3}]:
-                    error = await client.call_tool("search_courses", {**args, **changes})
+                    error = await client.call_tool("stars_search_courses", {**args, **changes})
                     self.assertTrue(error.is_error)
                 with patch("ntu_stars_mcp.mcp_server.fetch_course_search", side_effect=NTURequestError("NTU unavailable")):
-                    error = await client.call_tool("search_courses", args)
+                    error = await client.call_tool("stars_search_courses", args)
                     self.assertTrue(error.is_error)
                     self.assertIn("NTU unavailable", error.content[0].text)

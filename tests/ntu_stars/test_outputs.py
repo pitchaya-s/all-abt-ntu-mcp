@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from mcp import Client
 
-from mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
+from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 from ntu_stars_mcp import compact
 from ntu_stars_mcp.mcp_server import get_course_indexes, get_index, mcp
 from ntu_stars_mcp.ntu_client import NTURequestError

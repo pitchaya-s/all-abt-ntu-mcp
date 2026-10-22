@@ -4,7 +4,7 @@ from unittest.mock import patch
 from mcp import Client
 
 from ntu_stars_mcp.mcp_server import mcp
-from mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
+from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 
 
 class MCPClientTests(unittest.IsolatedAsyncioTestCase):
@@ -23,6 +23,8 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     names,
                     {
                         "search_courses",
+                        "ntulearn_auth_status", "list_courses", "get_course_contents", "get_announcements",
+                        "get_calendar", "get_gradebook", "get_content_attachments", "download_file",
                         "get_course_metadata",
                         "get_course_indexes",
                         "get_graduate_course_schedule",

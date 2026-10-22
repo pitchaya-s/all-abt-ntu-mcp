@@ -1,6 +1,6 @@
-# NTU STARS MCP
+# all-abt-ntu-mcp
 
-A local MCP server for NTU Singapore course schedules, index vacancies, exam timetables, and saved STARS plans. It fetches data directly from NTU's public systems without third-party course databases.
+A local MCP server for NTU Singapore STARS and NTULearn: course schedules, vacancies, exam timetables, saved plans, learning materials, announcements, calendar entries, and grades. Data comes directly from NTU's systems.
 
 Undergraduate indexes, sessions, and prerequisites come from NTU's [current Class Schedule form](https://wish.wis.ntu.edu.sg/webexe/owa/AUS_schedule_NEW.class); vacancy and waitlist counts come from its [public vacancy form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_vacancy.check_vacancy); descriptions come from its [Content of Courses form](https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main); exam dates come from the [undergraduate Exam Timetable General Access form](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main). Graduate groups come from the [public GSLink/PGR timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu).
 
@@ -8,7 +8,7 @@ Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
 
 ## Chromium
 
-For personal STARS Planner and Degree Audit tools, install Chromium once:
+For authenticated STARS and NTULearn tools, install Chromium once:
 
 ```sh
 uvx --from 'playwright>=1.50,<2' playwright install chromium
@@ -19,27 +19,29 @@ uvx --from 'playwright>=1.50,<2' playwright install chromium
 Add to `~/.codex/config.toml`, replacing the credentials with your NTU network account:
 
 ```toml
-[mcp_servers.ntu-stars-mcp]
+[mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
-args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-stars-mcp"]
+args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"]
+startup_timeout_sec = 120
+tool_timeout_sec = 240
 
-[mcp_servers.ntu-stars-mcp.env]
-NTU_WISH_USERNAME = "your-network-username"
-NTU_WISH_PASSWORD = "your-network-password"
+[mcp_servers.all-abt-ntu-mcp.env]
+NTU_USERNAME = "your-network-username"
+NTU_PASSWORD = "your-network-password"
 ```
 
-Omit the `env` table for public tools only. Restart Codex and check `codex mcp list`.
+Omit the `env` table for public tools only. One username and password enable both authenticated STARS and NTULearn tools. Restart Codex and check `codex mcp list`.
 
 ## Claude Code
 
 Register for your user with your NTU network credentials:
 
 ```sh
-claude mcp add --scope user ntu-stars-mcp \
-  --env 'NTU_WISH_USERNAME=your-network-username' \
-  --env 'NTU_WISH_PASSWORD=your-network-password' \
-  -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git ntu-stars-mcp
-claude mcp get ntu-stars-mcp
+claude mcp add --scope user all-abt-ntu-mcp \
+  --env 'NTU_USERNAME=your-network-username' \
+  --env 'NTU_PASSWORD=your-network-password' \
+  -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu-mcp
+claude mcp list
 ```
 
 Omit the `--env` options for public tools only. Check `claude mcp list` or `/mcp` inside Claude Code. See [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp) for details.
@@ -52,14 +54,14 @@ Add to `~/.config/opencode/opencode.json`, replacing the credentials with your N
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "ntu-stars-mcp": {
+    "all-abt-ntu-mcp": {
       "type": "local",
-      "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git", "ntu-stars-mcp"],
+      "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"],
       "enabled": true,
-      "timeout": 120000,
+      "timeout": 240000,
       "environment": {
-        "NTU_WISH_USERNAME": "your-network-username",
-        "NTU_WISH_PASSWORD": "your-network-password"
+        "NTU_USERNAME": "your-network-username",
+        "NTU_PASSWORD": "your-network-password"
       }
     }
   }
@@ -73,31 +75,44 @@ Omit `environment` for public tools only. Check `opencode mcp list`. See [OpenCo
 Clone the repository and run the server from a local checkout:
 
 ```sh
-git clone https://github.com/pitchaya-s/ntu-stars-mcp.git
-cd ntu-stars-mcp
+git clone --branch all-abt https://github.com/pitchaya-s/ntu-stars-mcp.git all-abt-ntu-mcp
+cd all-abt-ntu-mcp
 uv sync
-uv run ntu-stars-mcp
+uv run all-abt-ntu-mcp
 ```
 
-For personal tools in a local checkout, run `uv sync --extra wish` and set `NTU_WISH_USERNAME` and `NTU_WISH_PASSWORD` in your environment.
+For authenticated tools, run `uv sync --extra personal` and set `NTU_USERNAME` and `NTU_PASSWORD` in your environment. A network username is used directly for WISH and expanded to `username@e.ntu.edu.sg` for NTULearn. You may instead supply your full NTU email; WISH uses its username portion and NTULearn uses the full address. An optional local `.env` can supply the same shared variables.
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
 ## Source layout
 
 ```text
-src/ntu_stars_mcp/
-├── mcp_server.py  MCP tools and input schemas
-├── schemas.py     Typed public results and generated output schemas
-├── compact.py     Remove redundant output fields
-├── domain/        Course/session models, index comparison, and timetable matching
-├── ntu_client/    Public course, vacancy, graduate, and exam requests, caching, and rate limits
-├── parser/        Course, vacancy, exam, Degree Audit, and Planner calendar HTML parsers
-└── wish/          Shared login, personal cache, and saved-plan editing
-tests/            Offline tests, sanitized fixtures, and optional live MCP smoke tests
+src/
+├── shared/           MCP runtime, credentials, and username/email normalization
+├── ntu_stars_mcp/
+│   ├── mcp_server.py  STARS tools and NTULearn tool registration
+│   ├── schemas.py     Typed public results
+│   ├── compact.py     Remove redundant output fields
+│   ├── domain/        Course/session models and timetable matching
+│   ├── ntu_client/    Official public requests, caching, and rate limits
+│   ├── parser/        Course, vacancy, exam, Degree Audit, and Planner parsers
+│   └── wish/          Login, personal cache, and saved-plan editing
+└── ntulearn_mcp/
+    ├── tools.py       NTULearn tools registered on the shared server
+    ├── models.py      Typed academic results
+    ├── normalize.py   Academic-field extraction and pagination validation
+    ├── auth.py        Microsoft login, session reuse, and HTTP reads
+    └── client.py      Courses, content, announcements, calendar, grades, and files
+tests/
+├── ntu_stars/         STARS tests, fixtures, and live smoke tests
+├── ntulearn/          NTULearn tests, synthetic responses, and live smoke test
+└── test_shared.py     Shared credential configuration and server lifecycle tests
 ```
 
 ## Tools
+
+### STARS
 
 Class schedule tools take `academic_year` and `semester`. NTU labels academic years by their first year, so `academic_year: 2026` means AY2026/27. Semester is `1`, `2`, or `"S"` for Special Term. The exam lookup defaults to the latest published exam term; pass both `academic_year` and semester (`1` or `2`) to request a specific published term. It uses General Access, returns exam dates and times, and does not include exam-seat assignments. `get_graduate_course_schedule` returns the latest term published by GSLink/PGR.
 
@@ -181,6 +196,35 @@ Pass a schedule from the same academic year and semester to `against_sessions` a
 
 Unrecognized NTU day or time values are retained in `raw_day` or `raw_time`. Matching results with incomplete schedule information are marked `status: "uncertain"` rather than reported as confirmed matches.
 
+### NTULearn
+
+NTULearn tools are available through the same `all-abt-ntu-mcp` server and shared credentials as STARS. NTULearn authenticates through a local temporary browser, then uses Blackboard's authenticated REST endpoints. All NTULearn requests are reads.
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `ntulearn_auth_status` | Credential configuration and last verified session | No |
+| `list_courses` | Your enrolled courses and organizations, with availability and IDs | Yes |
+| `get_course_contents` | One level of course content, with `parent_id` to open a folder | Yes |
+| `get_announcements` | Published announcements for one course | Yes |
+| `get_calendar` | Calendar entries and published deadlines | Yes |
+| `get_gradebook` | Gradebook columns and your own visible scores and status | Yes |
+| `get_content_attachments` | Attached files for a leaf content item | Yes |
+| `download_file` | Save an attachment to a new, explicit local file path | Yes |
+
+Start with `list_courses` and use the returned IDs. List tools accept `limit` (default 50, maximum 100), `offset`, and `refresh`. Continue with `next_offset` when present. Gradebook columns and grades paginate independently using `offset` and `grades_offset`. Missing scores remain unknown rather than becoming zero.
+
+```json
+{"course_id":"_100_1","parent_id":"_200_1"}
+```
+
+Calendar defaults to the next 14 days. Explicit windows must include timezones and be no longer than 112 days:
+
+```json
+{"since":"2026-10-22T00:00:00+08:00","until":"2026-11-05T00:00:00+08:00"}
+```
+
+Sessions and cached academic data stay in memory. Valid sessions are reused, and expired sessions trigger one fresh login. `NTULEARN_CACHE_TTL_SECONDS` defaults to 300; `0` disables caching. Responses include retrieval time and cache freshness. Incorrect credentials are not automatically retried. If Microsoft requires MFA or CAPTCHA, headless login stops; on a graphical desktop, set `NTULEARN_HEADLESS=false` and complete verification in the local browser. No security checks are bypassed.
+
 ## Verify
 
 The offline tests cover parsing, scheduling, lossless compaction, output-schema validation, tool calls/errors, and resource discovery. Protocol tests use Python SDK clients and an independent JSON-RPC client over stdio, including protocol versions `2025-06-18` and `2025-11-25`:
@@ -194,7 +238,7 @@ An optional check uses the official TypeScript SDK. Node dependencies stay in a 
 ```sh
 NTU_MCP_TEST_SDK="$(mktemp -d)"
 npm install --prefix "$NTU_MCP_TEST_SDK" --ignore-scripts --no-audit --no-fund @modelcontextprotocol/sdk@1.32.1
-uv run node tests/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
+uv run node tests/ntu_stars/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
 ```
 
 These interoperability checks use offline fixtures and never edit saved plans.
@@ -202,28 +246,36 @@ These interoperability checks use offline fixtures and never edit saved plans.
 The live stdio smoke test launches through `uvx` and makes real requests to NTU for SC2001, SC2207, and MH2802 in AY2026 semester 1, plus SC2001 in AY2025 semester 2. It also checks vacancies through both index tools for SC2001 and SC2207 in AY2026 semester 2, or verifies the closed status outside service hours:
 
 ```sh
-uv run python tests/live_smoke.py
+uv run python tests/ntu_stars/live_smoke.py
 ```
 
 The course search smoke test checks partial codes, title keywords, full-time and part-time offerings, pagination, empty results, and two published semesters:
 
 ```sh
-uv run python tests/live_search_smoke.py
+uv run python tests/ntu_stars/live_search_smoke.py
 ```
 
 The undergraduate exam smoke test exercises NTU's public General Access flow through MCP:
 
 ```sh
-uv run python tests/live_exam_smoke.py
+uv run python tests/ntu_stars/live_exam_smoke.py
 ```
 
 With WISH credentials and Chromium configured, the personal smoke test checks saved plans, Degree Audit, caching, and refresh, printing only statuses and counts:
 
 ```sh
-uv run --extra wish python tests/live_personal_smoke.py
+uv run --extra personal python tests/ntu_stars/live_personal_smoke.py
+```
+
+With NTULearn credentials configured, its opt-in live test reads academic data, downloads a sample attachment to a temporary directory when available, and clears local cookies to test reauthentication. It prints only counts and statuses:
+
+```sh
+uv run --extra personal python tests/ntulearn/live_smoke.py
 ```
 
 ## Verified response examples
+
+### STARS
 
 Live official pages fetched on 2026-10-21 returned 36 indexes for SC2001, 13 for SC2207, and 12 for MH2802 in AY2026 semester 1. For SC2001 index `10143`, the endpoint lists two shared `LEC/STUDIO` sessions, a Tuesday `TUT` from 16:30 to 17:20 in `TR+7` during weeks 2–13, and a Monday `LAB` from 10:30 to 12:20 in `HWLAB2` during odd weeks 1–13.
 
@@ -246,12 +298,18 @@ Live official pages fetched on 2026-10-21 returned 36 indexes for SC2001, 13 for
 
 The public exam timetable currently lists SC2001's AY2026 Semester 1 exam on 2026-11-23 at 13:00 for 120 minutes. The response carries NTU's notice that the timetable may change; exam-seat assignments are published separately.
 
+### NTULearn
+
+Live authenticated reads on 2026-10-22 verified course and organization listing, course folders and content, announcements, calendar entries, gradebook columns and personal grades, attachment listing, and a temporary file download. Clearing local session cookies triggered a successful automatic fresh login. No student records or downloaded learning materials are included in this repository.
+
 ## Limits
 
 Vacancies reflect NTU's reported snapshot for its currently published term and can change before registration. Outside 09:00–22:00 Singapore time, vacancy requests are skipped; timetable tools still work.
+
+NTULearn access follows your student permissions and published availability. Folders and external/LTI tools may not expose attachment files. Downloads are limited to 20 MB, never overwrite files, and use only NTU or Blackboard file-delivery hosts. HTML/JSON attachments are not supported. University session cookies are not forwarded to delivery hosts. Messaging, rosters, groups, submission attempts, recursive search, bulk downloads, and document text extraction are not implemented.
 
 ## Disclaimer
 
 This is an independent project and is not affiliated with, sponsored by, or endorsed by Nanyang Technological University (NTU), Singapore.
 
-Your NTU credentials are read locally and submitted to NTU over HTTPS for login; they are not included in MCP tool responses. Keep them private: agents with access to your configuration files or environment may still be able to read them.
+Your NTU credentials are read locally and submitted over HTTPS to NTU or its Microsoft sign-in service for login; they are not included in MCP tool responses. Academic data returned by tools is visible to the AI client. Keep your credentials private: agents with access to your configuration files or environment may still be able to read them.

@@ -10,6 +10,30 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "all-abt-ntu-mcp"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "mcp" },
+    { name = "python-dotenv" },
+    { name = "typing-extensions" },
+]
+
+[package.optional-dependencies]
+personal = [
+    { name = "playwright" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", specifier = ">=2,<3" },
+    { name = "playwright", marker = "extra == 'personal'", specifier = ">=1.50,<2" },
+    { name = "python-dotenv", specifier = ">=1,<2" },
+    { name = "typing-extensions", specifier = ">=4.12,<5" },
+]
+provides-extras = ["personal"]
+
+[[package]]
 name = "annotated-types"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -498,30 +522,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/9e/2d/7c251e34207f6c510
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/48/32583066b155bb5d4507e7887dc88ee23118cc4de8e2a12870c49719e2a8/mcp_types-2.3.0-py3-none-any.whl", hash = "sha256:968efdbdaedfab06adae40d378a34395f1090c5921d4be3c9cde283aaf76d91d", size = 69108, upload-time = "2026-10-02T22:06:54.099Z" },
 ]
-
-[[package]]
-name = "ntu-stars-mcp"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "mcp" },
-    { name = "python-dotenv" },
-    { name = "typing-extensions" },
-]
-
-[package.optional-dependencies]
-wish = [
-    { name = "playwright" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", specifier = ">=2,<3" },
-    { name = "playwright", marker = "extra == 'wish'", specifier = ">=1.50,<2" },
-    { name = "python-dotenv", specifier = ">=1,<2" },
-    { name = "typing-extensions", specifier = ">=4.12,<5" },
-]
-provides-extras = ["wish"]
 
 [[package]]
 name = "opentelemetry-api"

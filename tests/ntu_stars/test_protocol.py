@@ -13,13 +13,13 @@ from mcp.types import CallToolResult
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SERVER = Path(__file__).with_name("protocol_server.py")
 ARGS = {"course_code": "SC2001", "academic_year": 2026, "semester": 1}
 
 
 def environment():
-    return {"PYTHONPATH": str(ROOT / "src"), "NTU_WISH_USERNAME": "", "NTU_WISH_PASSWORD": ""}
+    return {"PYTHONPATH": str(ROOT / "src"), "NTU_USERNAME": "", "NTU_PASSWORD": ""}
 
 
 def validate_result(tools, name, result):
@@ -33,7 +33,7 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as cwd:
             async with Client(StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd, env=environment())) as client:
                 listing = await client.list_tools()
-                self.assertEqual(len(listing.tools), 12)
+                self.assertEqual(len(listing.tools), 20)
                 for tool in listing.tools:
                     self.assertIsNotNone(tool.output_schema, tool.name)
                     self.assertEqual(tool.output_schema["type"], "object", tool.name)
@@ -64,7 +64,7 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with stdio_client(StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd, env=environment())) as (reader, writer):
                 async with ClientSession(reader, writer) as client:
                     initialized = await client.initialize()
-                    self.assertEqual(initialized.server_info.name, "ntu-stars-mcp")
+                    self.assertEqual(initialized.server_info.name, "all-abt-ntu-mcp")
                     tools = (await client.list_tools()).tools
                     result = await client.call_tool("get_index", {**ARGS, "index": "10143"})
                     self.assertFalse(result.is_error)
@@ -141,7 +141,7 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with raw_client(version) as request:
                 listing = await request("tools/list", {})
                 tools = listing["result"]["tools"]
-                self.assertEqual(len(tools), 12)
+                self.assertEqual(len(tools), 20)
                 self.assertEqual(tools, (await request("tools/list", {}))["result"]["tools"])
                 tool = next(tool for tool in tools if tool["name"] == "get_course_indexes")
                 self.assertIn("inputSchema", tool)

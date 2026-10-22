@@ -7,20 +7,20 @@ from pathlib import Path
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 async def main() -> None:
     async with Client(StdioServerParameters(
         command="uvx",
-        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "ntu-stars-mcp"],
-        env={key: os.environ[key] for key in ("NTU_WISH_USERNAME", "NTU_WISH_PASSWORD", "NTU_PERSONAL_CACHE_TTL_SECONDS") if key in os.environ},
+        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "all-abt-ntu-mcp"],
+        env={key: os.environ[key] for key in ("NTU_USERNAME", "NTU_PASSWORD", "NTU_PERSONAL_CACHE_TTL_SECONDS") if key in os.environ},
         cwd=str(ROOT),
     )) as client:
         listing = await client.list_tools()
         assert {"ntu_auth_status", "get_stars_planner", "get_degree_audit"} <= {t.name for t in listing.tools}
         status = await client.call_tool("ntu_auth_status", {})
-        assert not status.is_error and status.structured_content["credentials_configured"], "Configure the WISH environment variables first."
+        assert not status.is_error and status.structured_content["credentials_configured"], "Configure NTU_USERNAME and NTU_PASSWORD first."
         planner, audit = await asyncio.gather(
             client.call_tool("get_stars_planner", {"refresh": True}),
             client.call_tool("get_degree_audit", {}),

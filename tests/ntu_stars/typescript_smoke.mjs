@@ -16,13 +16,13 @@ const cwd = await mkdtemp(join(tmpdir(), "ntu-mcp-client-"));
 const transport = new StdioClientTransport({
   command: "python",
   args: [join(tests, "protocol_server.py")], cwd,
-  env: { PYTHONPATH: join(tests, "..", "src"), NTU_WISH_USERNAME: "", NTU_WISH_PASSWORD: "" },
+  env: { PYTHONPATH: join(tests, "..", "..", "src"), NTU_USERNAME: "", NTU_PASSWORD: "" },
 });
 const client = new Client({ name: "ntu-typescript-test", version: "1.0" });
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 12);
+  assert.equal(tools.length, 20);
   for (const tool of tools) {
     assert.equal(tool.outputSchema.type, "object");
     assert(Object.keys(tool.outputSchema.properties).length > 0);

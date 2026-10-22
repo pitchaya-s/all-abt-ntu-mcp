@@ -151,7 +151,7 @@ class PlanEditorTests(unittest.TestCase):
 
 class PlanSessionTests(unittest.TestCase):
     def setUp(self):
-        with patch.dict(os.environ, {"NTU_WISH_USERNAME": "test-user", "NTU_WISH_PASSWORD": "test-secret"}):
+        with patch.dict(os.environ, {"NTU_USERNAME": "test-user", "NTU_PASSWORD": "test-secret"}):
             self.manager = WishSessionManager()
         self.addCleanup(self.manager.close)
         self.manager._page = Mock()

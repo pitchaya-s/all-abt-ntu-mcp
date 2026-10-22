@@ -151,7 +151,7 @@ class _FakePage:
 
 class WishSessionTests(unittest.TestCase):
     def _manager(self, page: _FakePage | None = None) -> WishSessionManager:
-        with patch.dict(os.environ, {"NTU_WISH_USERNAME": "test-user", "NTU_WISH_PASSWORD": "test-secret"}):
+        with patch.dict(os.environ, {"NTU_USERNAME": "test-user", "NTU_PASSWORD": "test-secret"}):
             manager = WishSessionManager()
         self.addCleanup(manager.close)
         if page is not None:
@@ -269,9 +269,9 @@ class WishSessionTests(unittest.TestCase):
         with self.assertRaisesRegex(NTURequestError, "HTTP 503"):
             manager._fetch_authenticated(PLANNER_URL, "planner")
 
-        with patch.dict(os.environ, {"NTU_WISH_USERNAME": "", "NTU_WISH_PASSWORD": ""}):
+        with patch.dict(os.environ, {"NTU_USERNAME": "", "NTU_PASSWORD": ""}):
             empty = WishSessionManager()
-        with self.assertRaisesRegex(NTUAuthError, "NTU_WISH_USERNAME"):
+        with self.assertRaisesRegex(NTUAuthError, "NTU_USERNAME"):
             empty.get_degree_audit()
 
 if __name__ == "__main__":

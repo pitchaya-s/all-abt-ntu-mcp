@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
-from ntu_stars_mcp.mcp_server import main
+from shared.server import main
 from ntu_stars_mcp.ntu_client import NTURequestError, validate_course_code
 from ntu_stars_mcp.ntu_client.validation import _academic_term
 

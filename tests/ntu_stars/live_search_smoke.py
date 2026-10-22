@@ -1,4 +1,4 @@
-"""Read-only course search integration; run with uv run python tests/live_search_smoke.py."""
+"""Read-only course search integration; run with uv run python tests/ntu_stars/live_search_smoke.py."""
 
 import asyncio
 from pathlib import Path
@@ -7,12 +7,12 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 async def main():
     async with Client(StdioServerParameters(
-        command="uvx", args=["--no-cache", "--from", str(ROOT), "ntu-stars-mcp"], cwd=str(ROOT),
+        command="uvx", args=["--no-cache", "--from", str(ROOT), "all-abt-ntu-mcp"], cwd=str(ROOT),
     )) as client:
         for query, year, mode, expected in [
             ("SC20", 2026, "full_time", 6),

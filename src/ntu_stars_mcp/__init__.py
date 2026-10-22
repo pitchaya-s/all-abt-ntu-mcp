@@ -1,3 +1,1 @@
-from .mcp_server import main
-
-__all__ = ["main"]
+"""NTU STARS timetable, planner, and degree audit tools."""

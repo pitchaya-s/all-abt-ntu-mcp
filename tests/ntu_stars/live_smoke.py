@@ -1,4 +1,4 @@
-"""Live official-source and stdio MCP client smoke test; run with `uv run python tests/live_smoke.py`."""
+"""Live official-source and stdio MCP client smoke test; run with `uv run python tests/ntu_stars/live_smoke.py`."""
 
 import asyncio
 from pathlib import Path
@@ -7,14 +7,14 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 async def main() -> None:
     async with Client(
         StdioServerParameters(
             command="uvx",
-            args=["--no-cache", "--from", str(ROOT), "ntu-stars-mcp"],
+            args=["--no-cache", "--from", str(ROOT), "all-abt-ntu-mcp"],
             cwd=str(ROOT),
         )
     ) as client:

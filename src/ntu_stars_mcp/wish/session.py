@@ -4,15 +4,13 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 import os
-from pathlib import Path
 import re
 from threading import RLock
 import time
 from typing import cast
 from urllib.parse import urlencode, urljoin, urlsplit
 
-from dotenv import load_dotenv
-
+from shared.credentials import read_credentials
 from .forms import (
     _CHALLENGE_MESSAGE,
     _Forms,
@@ -41,7 +39,6 @@ DEGREE_AUDIT_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_d
 LOGIN_URL = "https://wish.wis.ntu.edu.sg/pls/webexe/ldap_login.login"
 MAX_PERSONAL_CACHE_ENTRIES = 4
 
-load_dotenv(Path.cwd() / ".env", override=False)
 try:
     PERSONAL_CACHE_TTL_SECONDS = int(os.environ.get("NTU_PERSONAL_CACHE_TTL_SECONDS", "300"))
 except ValueError as error:
@@ -53,10 +50,9 @@ class WishSessionManager:
     """One in-memory WISH cookie session shared by the personal tools."""
 
     def __init__(self) -> None:
-        username = os.environ.get("NTU_WISH_USERNAME", "").strip()
-        password = os.environ.get("NTU_WISH_PASSWORD", "")
-        self.username = username
-        self.password = password
+        credentials = read_credentials()
+        self.username = credentials.username
+        self.password = credentials.password
         self._lock = RLock()
         self._authenticated = False
         self._last_verified_at: str | None = None
@@ -121,7 +117,7 @@ class WishSessionManager:
             from playwright.sync_api import sync_playwright
         except ImportError as error:
             raise NTUAuthError(
-                "Authenticated WISH tools require Playwright. Add `--with 'playwright>=1.50,<2'` to your uvx command or run `uv sync --extra wish` locally."
+                "Authenticated WISH tools require Playwright. Add `--with 'playwright>=1.50,<2'` to your uvx command or run `uv sync --extra personal` locally."
             ) from error
         try:
             self._playwright = sync_playwright().start()
@@ -175,7 +171,7 @@ class WishSessionManager:
             if (username_sent or password_sent) and _is_login_page(html) and re.search(
                 r"invalid|incorrect|failed|wrong password", html, re.I
             ):
-                raise NTUAuthError("NTU rejected the credentials. Check NTU_WISH_USERNAME and NTU_WISH_PASSWORD.")
+                raise NTUAuthError("NTU rejected the credentials. Check NTU_USERNAME and NTU_PASSWORD.")
             forms = _Forms()
             forms.feed(html)
             matching = next(
@@ -221,7 +217,7 @@ class WishSessionManager:
             if password_sent:
                 if _is_login_page(html):
                     if re.search(r"invalid|incorrect|failed|wrong password", html, re.I):
-                        raise NTUAuthError("NTU rejected the credentials. Check NTU_WISH_USERNAME and NTU_WISH_PASSWORD.")
+                        raise NTUAuthError("NTU rejected the credentials. Check NTU_USERNAME and NTU_PASSWORD.")
                     raise NTUAuthError("NTU did not accept the login; check credentials or account access.")
                 return
         raise NTUAuthError("NTU's login flow did not complete a supported password login.")
@@ -267,7 +263,7 @@ class WishSessionManager:
         with self._lock:
             if not self.credentials_configured:
                 raise NTUAuthError(
-                    "Set NTU_WISH_USERNAME and NTU_WISH_PASSWORD in your MCP server's environment to use authenticated NTU tools."
+                    "Set NTU_USERNAME and NTU_PASSWORD in your MCP server's environment to use authenticated NTU tools."
                 )
             now = time.monotonic()
             cached = self._cache.get(service)

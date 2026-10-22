@@ -8,7 +8,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.request import OpenerDirector, Request, urlopen
 
-USER_AGENT = "ntu-stars-mcp/0.1 (NTU timetable lookup)"
+USER_AGENT = "all-abt-ntu-mcp/0.1 (NTU timetable lookup)"
 
 REQUEST_TIMEOUT_SECONDS = 20
 

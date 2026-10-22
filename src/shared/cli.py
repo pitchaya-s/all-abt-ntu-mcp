@@ -1,9 +1,7 @@
 """Local credential commands; no secret inputs are exposed through MCP."""
 
 import argparse
-from getpass import GetPassWarning, getpass
 import sys
-import warnings
 
 from .credentials import CredentialError, credential_status, delete_credentials, save_credentials
 
@@ -11,7 +9,7 @@ from .credentials import CredentialError, credential_status, delete_credentials,
 class LocalParser(argparse.ArgumentParser):
     def error(self, message):
         self.print_usage(sys.stderr)
-        self.exit(2, "Invalid command. Use --help; enter credentials only at the local hidden prompts.\n")
+        self.exit(2, "Invalid command. Use --help; enter credentials only at the local prompts.\n")
 
 
 def main() -> None:
@@ -29,10 +27,8 @@ def main() -> None:
             if not sys.stdin.isatty() or not sys.stderr.isatty():
                 raise CredentialError("Credential setup requires your own interactive terminal; piped input is refused.")
             print("Save/update your NTU account in the native OS keyring and enable automatic login for STARS and NTULearn.")
-            with warnings.catch_warnings():
-                warnings.simplefilter("error", GetPassWarning)
-                username = getpass("NTU network username or email (hidden): ")
-                password = getpass("NTU password (hidden): ")
+            username = input("NTU network username or email: ")
+            password = input("NTU password: ")
             save_credentials(username, password)
             print("Credentials saved in the OS keyring. Automatic login enabled.")
         elif args.action == "status":
@@ -43,9 +39,8 @@ def main() -> None:
         elif args.action == "delete":
             delete_credentials()
             print("Stored credentials deleted. Automatic login disabled.")
-    except (CredentialError, GetPassWarning) as error:
-        message = str(error) if isinstance(error, CredentialError) else "Secure hidden input is unavailable; credentials were not saved."
-        print(message, file=sys.stderr)
+    except CredentialError as error:
+        print(str(error), file=sys.stderr)
         raise SystemExit(1) from None
     except (EOFError, KeyboardInterrupt):
         print("Credential setup cancelled; no credentials were saved.", file=sys.stderr)

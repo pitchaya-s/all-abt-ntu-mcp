@@ -33,13 +33,14 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as cwd:
             async with Client(StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd, env=environment())) as client:
                 listing = await client.list_tools()
-                self.assertEqual(len(listing.tools), 11)
+                self.assertEqual(len(listing.tools), 12)
                 for tool in listing.tools:
                     self.assertIsNotNone(tool.output_schema, tool.name)
                     self.assertEqual(tool.output_schema["type"], "object", tool.name)
                     self.assertTrue(tool.output_schema.get("properties"), tool.name)
                     Draft202012Validator.check_schema(tool.output_schema)
                 calls = [
+                    ("search_courses", {"query": "SC20", "academic_year": 2026, "semester": 1, "limit": 2}),
                     ("get_course_metadata", ARGS), ("get_course_indexes", ARGS),
                     ("get_index", {**ARGS, "index": "10143"}),
                     ("compare_indexes", {**ARGS, "indexes": ["10143", "10144"], "against_sessions": [
@@ -72,6 +73,7 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertRaisesRegex(RuntimeError, "Invalid structured content"):
                         await client.validate_tool_result("get_index", invalid)
                     for name, args in (
+                        ("search_courses", {"query": "%", "academic_year": 2026, "semester": 1}),
                         ("get_course_indexes", {**ARGS, "semester": 3}),
                         ("get_index", {**ARGS, "index": "missing"}),
                         ("get_course_metadata", {**ARGS, "course_code": "ZZ9999"}),
@@ -139,7 +141,7 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with raw_client(version) as request:
                 listing = await request("tools/list", {})
                 tools = listing["result"]["tools"]
-                self.assertEqual(len(tools), 11)
+                self.assertEqual(len(tools), 12)
                 self.assertEqual(tools, (await request("tools/list", {}))["result"]["tools"])
                 tool = next(tool for tool in tools if tool["name"] == "get_course_indexes")
                 self.assertIn("inputSchema", tool)
@@ -152,6 +154,15 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(payload["structuredContent"]["index_count"], 36)
                 self.assertEqual(json.loads(payload["content"][0]["text"]), payload["structuredContent"])
                 Draft202012Validator(tool["outputSchema"]).validate(payload["structuredContent"])
+                search_tool = next(tool for tool in tools if tool["name"] == "search_courses")
+                search = await request("tools/call", {"name": "search_courses", "arguments": {
+                    "query": "SC20", "academic_year": 2026, "semester": 1, "limit": 2, "offset": 2,
+                }})
+                found = search["result"]["structuredContent"]
+                self.assertEqual(found["total_count"], 6)
+                self.assertEqual(found["courses"][0]["course_code"], "SC2002")
+                self.assertTrue(found["has_more"])
+                Draft202012Validator(search_tool["outputSchema"]).validate(found)
                 self.assertEqual((await request("resources/list", {}))["result"]["resources"], [])
                 self.assertEqual((await request("resources/templates/list", {}))["result"]["resourceTemplates"], [])
 

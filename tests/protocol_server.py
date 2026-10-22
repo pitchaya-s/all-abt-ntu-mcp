@@ -1,6 +1,7 @@
 """Offline stdio server for client interoperability tests; never contacts NTU."""
 
 from contextlib import ExitStack
+from pathlib import Path
 from unittest.mock import patch
 
 from mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
@@ -20,6 +21,10 @@ def course_fixture(course_code, academic_year, semester):
 if __name__ == "__main__":
     with ExitStack() as stack:
         stack.enter_context(patch("ntu_stars_mcp.mcp_server.fetch_course", side_effect=course_fixture))
+        stack.enter_context(patch("ntu_stars_mcp.ntu_client.search._fetch_html", return_value=(
+            (Path(__file__).parent / "fixtures" / "search-sc20-2026-1.html").read_text(),
+            "https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SCHEDULE_NEW.main_display1",
+        )))
         stack.enter_context(patch("ntu_stars_mcp.mcp_server.fetch_course_vacancies", return_value={
             "status": "term_mismatch", "academic_year": 2026, "semester": "2", "indexes": {},
             "retrieved_at": "2026-10-21T00:00:00+00:00",

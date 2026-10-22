@@ -22,13 +22,14 @@ const client = new Client({ name: "ntu-typescript-test", version: "1.0" });
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 11);
+  assert.equal(tools.length, 12);
   for (const tool of tools) {
     assert.equal(tool.outputSchema.type, "object");
     assert(Object.keys(tool.outputSchema.properties).length > 0);
   }
   const args = { course_code: "SC2001", academic_year: 2026, semester: 1 };
   for (const [name, parameters] of [
+    ["search_courses", { query: "SC20", academic_year: 2026, semester: 1, limit: 2 }],
     ["get_course_metadata", args], ["get_course_indexes", args],
     ["get_index", { ...args, index: "10143" }],
     ["compare_indexes", { ...args, indexes: ["10143", "10144"] }],

@@ -25,3 +25,8 @@ The course/index were replaced with fictional ZZ0001/00001. Account identity,
 forms, credentials, session fields, scripts, and event handlers were removed.
 Saved-plan Load form tests use synthetic fields matching the observed form;
 they never contain live tokens or student identifiers.
+
+The four search-* fixtures are public Class Schedule search responses fetched
+on 2026-10-22 for AY2026 Semester 1: SC20 full-time and part-time, DATA
+STRUCTURES title keywords, and an unmatched code. Search uses the same schedule
+source above; r_search_type is F for full-time or P for part-time.

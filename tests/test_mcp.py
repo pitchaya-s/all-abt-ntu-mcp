@@ -22,6 +22,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(
                     names,
                     {
+                        "search_courses",
                         "get_course_metadata",
                         "get_course_indexes",
                         "get_graduate_course_schedule",

@@ -17,6 +17,7 @@ from .schemas import (
     GraduateCourseResult,
     IndexResult,
     MatchingIndexesResult,
+    SearchCoursesResult,
     UndergraduateExamResult,
 )
 from .wish import (
@@ -36,6 +37,7 @@ from .ntu_client import (
     get_course_vacancies as fetch_course_vacancies,
     get_graduate_course_schedule as fetch_graduate_course_schedule,
     get_undergraduate_exam_schedule as fetch_undergraduate_exam_schedule,
+    search_courses as fetch_course_search,
     validate_course_code,
 )
 
@@ -117,6 +119,7 @@ mcp = MCPServer(
     version="0.1.0",
     instructions=(
         "NTU timetable tools. Undergraduate tools use the official public Class Schedule; "
+        "search_courses finds undergraduate courses by partial code or title in a published term. "
         "graduate lookup uses GSLink/PGR and reports the currently published term as class groups, "
         "not indexes. Undergraduate exam lookup uses General Access and returns published exam times, "
         "not exam-seat assignments. Academic year is the first year printed by NTU (2026 means AY2026/27); "
@@ -164,6 +167,21 @@ def _index_vacancies(index: str, metadata: dict[str, Any], indexes: dict[str, An
         "vacancies_available": counts["vacancies_available"] if counts is not None else None,
         "waitlist_length": counts["waitlist_length"] if counts is not None else None,
     }
+
+@mcp.tool(annotations=_read_only)
+def search_courses(
+    query: Annotated[str, Field(min_length=2, max_length=80, description="Partial course code or title words, such as SC20 or DATA STRUCTURES; no wildcards")],
+    academic_year: int,
+    semester: Semester,
+    study_mode: Literal["full_time", "part_time"] = "full_time",
+    limit: Annotated[int, Field(ge=1, le=100)] = 20,
+    offset: Annotated[int, Field(ge=0)] = 0,
+) -> SearchCoursesResult:
+    """Search NTU's public undergraduate Class Schedule by partial code or title keywords. Returns course codes, names and AUs for the requested term and study mode. Use offset/limit to page through matches, then get_course_metadata or get_course_indexes for details. This is not a graduate or all-catalogue search."""
+    try:
+        return fetch_course_search(query, academic_year, semester, study_mode, limit, offset)
+    except (NTURequestError, ValueError) as error:
+        raise ToolError(str(error)) from error
 
 @mcp.tool(annotations=_read_only)
 def get_course_metadata(course_code: str, academic_year: int, semester: Semester) -> CourseMetadataResult:

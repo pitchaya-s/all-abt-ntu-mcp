@@ -23,13 +23,13 @@ COURSE_CONTENT_URL = "https://wish.wis.ntu.edu.sg/webexe/owa/AUS_SUBJ_CONT.main_
 
 COURSE_CONTENT_FORM_URL = "https://wish.wis.ntu.edu.sg/webexe/owa/aus_subj_cont.main"
 
-def _fetch_html(acadsem: str, course_code: str) -> tuple[str, str]:
+def _fetch_html(acadsem: str, course_code: str, *, study_mode: str = "F") -> tuple[str, str]:
     form = urlencode(
         {
             "acadsem": acadsem,
             "r_course_yr": "",
             "r_subj_code": course_code,
-            "r_search_type": "F",
+            "r_search_type": study_mode,
             "boption": "Search",
             # This is the hidden value in NTU's public form; no credentials are sent.
             "staff_access": "true",

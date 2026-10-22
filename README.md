@@ -103,6 +103,7 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 
 | Tool | Purpose | Credentials |
 | --- | --- | --- |
+| `search_courses` | Find undergraduate courses by partial code or title keywords in a published term | No |
 | `get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata | No |
 | `get_course_indexes` | All indexes with complete schedules, vacancies, and waitlist lengths | No |
 | `get_index` | One index's complete schedule, vacancies, and waitlist length | No |
@@ -117,6 +118,8 @@ Class schedule tools take `academic_year` and `semester`. NTU labels academic ye
 
 Course metadata includes NTU's course description when the official Content of Courses page provides one. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`.
 
+`search_courses` uses the same official Class Schedule endpoint. It returns codes, names, and AUs for the requested term, with `study_mode` defaulting to `"full_time"` or optionally `"part_time"`. Results use `limit` (default 20, maximum 100) and `offset`, with `total_count` and `has_more`; pages share the cached search response. It searches scheduled undergraduate offerings, not the complete course catalogue or graduate courses.
+
 All tools publish concrete `outputSchema` definitions. Responses are compact by default, with no detail-level setting: sessions inherit course/index identifiers from their enclosing result, and empty raw fields are omitted. Comparison/search results keep timetable provenance rather than repeating course descriptions. Teaching weeks, venues, groups, remarks, unknown raw values, and safety warnings are retained. Personal tables omit `rows` only when `headers` and `records` reconstruct them exactly; saved-plan sessions inherit their index from the plan's course list. Raw graduate schedules and exam duration text remain when they contain information not represented by parsed fields.
 
 Vacancy lookup is available **09:00–22:00 Singapore time (UTC+8)**, without login. Both index tools return `vacancies_available`, `waitlist_length`, and `vacancy_status`, with snapshot time and cache age in `vacancy_metadata`. Counts are attached only when NTU's published vacancy term matches the requested timetable. Outside those hours (`closed`), on a term mismatch (`term_mismatch`), for an unlisted index (`not_listed`), or on an NTU error (`unavailable`), counts are `null` and schedules remain available. A reported `0` is distinct from an unknown count.
@@ -126,6 +129,18 @@ Personal Planner results include registered courses and saved Plans 1–3 for NT
 Graduate schedules use class groups rather than undergraduate index numbers. PGR reports the currently published term and does not provide teaching weeks.
 
 Example inputs:
+
+Search by partial code or title words:
+
+```json
+{"query":"SC20","academic_year":2026,"semester":1}
+```
+
+```json
+{"query":"DATA STRUCTURES","academic_year":2026,"semester":1}
+```
+
+Get a course's metadata or indexes:
 
 ```json
 {"course_code":"SC2001","academic_year":2026,"semester":1}
@@ -190,6 +205,12 @@ The live stdio smoke test launches through `uvx` and makes real requests to NTU 
 uv run python tests/live_smoke.py
 ```
 
+The course search smoke test checks partial codes, title keywords, full-time and part-time offerings, pagination, empty results, and two published semesters:
+
+```sh
+uv run python tests/live_search_smoke.py
+```
+
 The undergraduate exam smoke test exercises NTU's public General Access flow through MCP:
 
 ```sh
@@ -228,3 +249,9 @@ The public exam timetable currently lists SC2001's AY2026 Semester 1 exam on 202
 ## Limits
 
 Vacancies reflect NTU's reported snapshot for its currently published term and can change before registration. Outside 09:00–22:00 Singapore time, vacancy requests are skipped; timetable tools still work.
+
+## Disclaimer
+
+This is an independent project and is not affiliated with, sponsored by, or endorsed by Nanyang Technological University (NTU), Singapore.
+
+Your NTU credentials are read locally and submitted to NTU over HTTPS for login; they are not included in MCP tool responses. Keep them private: agents with access to your configuration files or environment may still be able to read them.

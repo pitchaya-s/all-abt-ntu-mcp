@@ -4,6 +4,25 @@ from typing import Literal
 from typing_extensions import NotRequired, TypedDict
 
 
+class CourseSearchMatch(TypedDict):
+    course_code: str
+    course_name: str
+    au: float | None
+
+
+class SearchCoursesResult(TypedDict):
+    query: str
+    academic_year: int
+    semester: str
+    study_mode: Literal["full_time", "part_time"]
+    total_count: int
+    offset: int
+    has_more: bool
+    courses: list[CourseSearchMatch]
+    source_url: str
+    retrieved_at: str
+
+
 class CourseTerm(TypedDict):
     course_code: str
     academic_year: int | None

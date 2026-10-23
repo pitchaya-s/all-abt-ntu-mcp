@@ -18,12 +18,13 @@ from tests.library.fixtures import fake_get as library_get
 from tests.mazemap.fixtures import fake_get as map_get
 from tests.news.fixtures import ARTICLE_URL, fake_get as news_get
 from tests.repository.fixtures import fake_get as repository_get
+from tests.repository.oai_fixtures import fake_get as oai_get
 from tests.service.fixtures import fake_get as service_get
 from tests.stars.mcp_fixtures import COURSE
 
 
 HEADERS = {"Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25"}
-COUNTS = {"stars": 10, "mazemap": 5, "drntu": 7, "library": 5, "faculty": 2, "news": 3, "service": 2}
+COUNTS = {"stars": 10, "mazemap": 5, "drntu": 12, "library": 5, "faculty": 2, "news": 3, "service": 2}
 
 
 def payload(method="tools/list", params=None):
@@ -41,6 +42,7 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
                 ("faculty.mcp_server.client.http.get", faculty_get), ("library.mcp_server.client.http.get", library_get),
                 ("mazemap.mcp_server.client._get", map_get), ("news.mcp_server.client.http.get", news_get),
                 ("drntu.mcp_server.client.get", repository_get), ("service.mcp_server.client.http.get", service_get),
+                ("drntu.mcp_server.oai_client.get", oai_get),
             ]:
                 stack.enter_context(patch(target, side_effect=data))
             stack.enter_context(patch("stars.mcp_server.fetch_course", return_value=COURSE))
@@ -60,6 +62,7 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
                             ("mazemap_list_campuses", {}), ("drntu_search", {"query": "learning"}),
                             ("library_search", {"query": "algorithms"}), ("faculty_search", {"query": "Example"}),
                             ("news_get_article", {"url": ARTICLE_URL}), ("service_search", {"query": "clinic"}),
+                            ("drntu_oai_list_records", {"headers_only": True, "limit": 1}),
                         ]:
                             result = await client.call_tool(name, arguments)
                             self.assertFalse(result.is_error, result)
@@ -83,7 +86,7 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
             for response in responses:
                 self.assertEqual(response.status_code, 200)
                 self.assertNotIn("mcp-session-id", response.headers)
-                self.assertEqual(len(response.json()["result"]["tools"]), 34)
+                self.assertEqual(len(response.json()["result"]["tools"]), sum(COUNTS.values()))
             for method in ("GET", "DELETE"):
                 response = await http.request(method, "/mcp")
                 self.assertEqual(response.status_code, 405)

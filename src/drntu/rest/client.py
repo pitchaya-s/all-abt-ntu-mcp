@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from .models import RepositoryError
+from ..models import RepositoryError
 
 
 API = "https://dr.ntu.edu.sg/server/api"

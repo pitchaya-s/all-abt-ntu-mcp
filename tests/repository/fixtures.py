@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 
-from drntu.client import API
+from drntu.rest.client import API
 
 
 ITEM_ID = "11111111-1111-4111-8111-111111111111"

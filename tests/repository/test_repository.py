@@ -4,8 +4,10 @@ from unittest.mock import patch
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from drntu import datasets, mcp_server, parser, repository
-from drntu.models import RepositoryError, SearchFilter
+from drntu import mcp_server
+from drntu.rest import datasets, parser, repository
+from drntu.models import RepositoryError
+from drntu.rest.models import SearchFilter
 from .fixtures import CONTAINER_ID, DOI, ITEM, ITEM_ID, VERSION, fake_get, hal
 
 

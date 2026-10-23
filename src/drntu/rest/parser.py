@@ -3,8 +3,9 @@
 from uuid import UUID
 from urllib.parse import parse_qs, urlsplit
 
+from ..models import MetadataValue, RepositoryError
 from .client import API
-from .models import Checksum, Container, File, ItemSummary, MetadataValue, Page, RepositoryError, SearchFilter
+from .models import Checksum, Container, File, ItemSummary, Page, SearchFilter
 
 
 def identifier(value):

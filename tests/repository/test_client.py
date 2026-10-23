@@ -6,14 +6,14 @@ from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
-from drntu.client import RepositoryClient
+from drntu.rest.client import RepositoryClient
 from drntu.models import RepositoryError
 
 
 class ClientTests(unittest.TestCase):
     def setUp(self):
         self.client = RepositoryClient()
-        self.sleep = patch("drntu.client.time.sleep").start()
+        self.sleep = patch("drntu.rest.client.time.sleep").start()
         self.addCleanup(patch.stopall)
 
     def response(self, data=None, content_type="application/json", body=None):
@@ -23,7 +23,7 @@ class ClientTests(unittest.TestCase):
         return result
 
     def test_cache_refresh_expiry_and_bounded_entries(self):
-        with patch("drntu.client.urlopen", side_effect=lambda *a, **k: self.response()) as fetch:
+        with patch("drntu.rest.client.urlopen", side_effect=lambda *a, **k: self.response()) as fetch:
             first = self.client.get("/core/items/example")
             self.assertFalse(first[1]["cached"])
             self.assertTrue(self.client.get("/core/items/example")[1]["cached"])
@@ -39,7 +39,7 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(len(self.client._cache), 64)
 
     def test_query_encoding_preserves_multiple_filters_without_cookies(self):
-        with patch("drntu.client.urlopen", return_value=self.response()) as fetch:
+        with patch("drntu.rest.client.urlopen", return_value=self.response()) as fetch:
             self.client.get("/discover/search/objects", {"query": "A & B", "f.subject": ["one,equals", "two,contains"]})
         request = fetch.call_args.args[0]
         params = parse_qs(urlsplit(request.full_url).query)
@@ -57,7 +57,7 @@ class ClientTests(unittest.TestCase):
             (self.response(data=[1]), False, "unexpected response"),
             (oversized, False, "8 MB"),
         ]:
-            with patch("drntu.client.urlopen", return_value=response), self.assertRaisesRegex(RepositoryError, message):
+            with patch("drntu.rest.client.urlopen", return_value=response), self.assertRaisesRegex(RepositoryError, message):
                 self.client.get("/example", dataset=dataset)
             self.assertFalse(self.client._cache)
 
@@ -68,12 +68,12 @@ class ClientTests(unittest.TestCase):
                                 (HTTPError("url", 503, "unavailable", headers, None), 2),
                                 (HTTPError("url", 403, "denied", headers, None), 1),
                                 (HTTPError("url", 404, "missing", headers, None), 1)]:
-            with patch("drntu.client.urlopen", side_effect=error) as fetch, self.assertRaises(RepositoryError) as caught:
+            with patch("drntu.rest.client.urlopen", side_effect=error) as fetch, self.assertRaises(RepositoryError) as caught:
                 self.client.get("/example")
             self.assertEqual(fetch.call_count, attempts)
             self.assertNotIn("untrusted detail", str(caught.exception))
         headers.replace_header("Retry-After", "120")
-        with patch("drntu.client.urlopen", side_effect=HTTPError("url", 429, "limited", headers, None)) as fetch:
+        with patch("drntu.rest.client.urlopen", side_effect=HTTPError("url", 429, "limited", headers, None)) as fetch:
             with self.assertRaisesRegex(RepositoryError, "429"):
                 self.client.get("/example")
             self.assertEqual(fetch.call_count, 1)

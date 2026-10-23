@@ -1,10 +1,10 @@
 # DR-NTU tools
 
-Public publication and dataset lookups in the shared `all-abt-ntu-mcp` server. No credentials, keyring, Chromium, or extra dependencies are needed. See the [main README](../../README.md) for installation and MCP client configuration.
+Public publication, dataset, and OAI-PMH metadata lookups in the shared `all-abt-ntu-mcp` server. No credentials, keyring, Chromium, or extra dependencies are needed. See the [main README](../../README.md) for installation and MCP client configuration.
 
 ## Tools
 
-All results have `retrieved_at`, `source_url`, and `cached`. Responses are cached in memory for five minutes, with at most 64 entries. `refresh: true` refetches the requested response. Requests are serialized, paced at least 500 ms apart, limited to 8 MB, and use a 20-second timeout with one retry for transient failures. Longer server retry delays return an error instead of blocking the tool or retrying early.
+All results have `retrieved_at`, `source_url`, and `cached`. Responses are cached in memory for five minutes, with at most 64 entries per REST/OAI client. `refresh: true` refetches the requested response. Each client serializes requests, paces them at least 500 ms apart, limits responses to 8 MB, and uses a 20-second timeout with one retry for transient failures. Longer server retry delays return an error instead of blocking the tool or retrying early.
 
 DSpace listings use zero-based `page` and `page_size` from 1–50. Follow `pagination.next_page` until `null`. Total counts remain `null` when the source omits them, as happens with individual search facets. Malformed records or inconsistent result pages fail rather than silently appearing complete.
 
@@ -80,6 +80,50 @@ The dataset API returns the complete version metadata; `limit` and `offset` boun
 
 HTML responses, including CAPTCHA pages with HTTP 200, and access denials stop retrieval with an actionable error. The integration does not start a browser, collect credentials, solve CAPTCHA, or reuse personal NTU sessions.
 
+### `drntu_oai_identify`
+
+Optional: `refresh`.
+
+Returns the OAI repository name, base URL, protocol version, administrator contacts, earliest modification datestamp, deletion policy, date precision, response date, and repository descriptions as XML. These are public repository details, not a student's profile.
+
+### `drntu_oai_list_metadata_formats`
+
+Optional: `identifier`, an OAI identifier from the record tools, and `refresh`.
+
+Lists metadata prefixes, schema URLs, and namespaces supported by the repository, or by one identifier. Schemas are reported without downloading or resolving them. The current public endpoint advertises formats including `oai_dc`, `qdc`, `mods`, and `dim`; discover available values instead of assuming a format applies to every record.
+
+### `drntu_oai_list_sets`
+
+Optional: `resumption_token`, `limit` from 1–50, default 20, `offset`, default 0, and `refresh`.
+
+Lists OAI sets with `set_spec`, name, and any descriptions as XML. Set specs are OAI identifiers, not REST community/collection UUIDs. Use them as `set_spec` in record listings.
+
+### `drntu_oai_list_records`
+
+Optional: `metadata_prefix`, defaulting to `oai_dc` when omitted on an initial request; `set_spec`; `from_date`; `until_date`; `resumption_token`; `headers_only`, default false; `limit` from 1–50, default 10; `offset`, default 0; and `refresh`.
+
+Uses `ListRecords`, or `ListIdentifiers` when `headers_only` is true. Date bounds are inclusive repository modification/deletion datestamps, **not publication dates**. Use valid `YYYY-MM-DD` dates or UTC `YYYY-MM-DDTHH:MM:SSZ` timestamps. When both bounds are present, their precision must match and the start must not exceed the end.
+
+```json
+{"from_date": "2026-01-01", "until_date": "2026-01-02", "limit": 5}
+```
+
+Each result preserves the OAI identifier, datestamp, set specs, and deleted status. Deleted records and identifier-only listings have no metadata. Flat Dublin Core is normalized into repeated `dc.*` fields with values and language tags. Other formats, nested metadata, and unknown field attributes retain `metadata_xml`; provenance is preserved in `about_xml`. Identifiers and rights inside metadata do not establish permission to download the underlying files. `noRecordsMatch` returns an empty result; malformed responses and other OAI errors fail clearly.
+
+OAI pagination differs from REST pagination. NTU chooses its own response-page size; `limit` and `offset` slice that page locally. `pagination.page_count` is the number of records in that provider page, not the repository total. Follow `next_offset` using the same arguments, including the current token and filters. Once it is null, use the returned `resumption_token` with `offset: 0`, omit **all** selection filters including `metadata_prefix`, and keep `headers_only` unchanged. A null token means no further provider page. Cursor, complete-list size, and token expiration are returned only when supplied by NTU; cursor values are preserved without interpreting them as local offsets.
+
+```json
+{"resumption_token": "TOKEN_RETURNED_BY_NTU", "limit": 5}
+```
+
+Tokens are opaque and can expire. On `badResumptionToken`, restart with the original filters and `refresh: true`. The server never follows every continuation automatically or stores a harvested database.
+
+### `drntu_oai_get_record`
+
+Required: `identifier`. Optional: `metadata_prefix`, default `oai_dc`, and `refresh`.
+
+Retrieves one OAI record in the same representation as record listings. Supply an OAI identifier returned by OAI listing, **not** a UUID from `drntu_search`. A deleted record preserves its header without inventing metadata.
+
 ## Sources
 
 | Endpoint | Purpose |
@@ -96,10 +140,11 @@ HTML responses, including CAPTCHA pages with HTTP 200, and access denials stop r
 | `https://dr.ntu.edu.sg/server/api/core/bundles/{uuid}/bitstreams` | File metadata and content links |
 | `https://researchdata.ntu.edu.sg/api/datasets/:persistentId` | Latest dataset metadata with `persistentId=doi:...` |
 | `https://researchdata.ntu.edu.sg/api/datasets/:persistentId/versions/{version}` | Explicit published dataset release |
+| `https://dr.ntu.edu.sg/server/oai/request` | OAI-PMH Identify, ListMetadataFormats, ListSets, ListRecords, ListIdentifiers, and GetRecord |
 
-The API root was checked to identify the repository's DSpace/CRIS format. Bundle details and individual bitstream metadata repeat fields already included in listings; separate format lookups were inspected but are omitted to avoid a request for every file. The OAI Identify endpoint was checked, but OAI harvesting is not needed for interactive searches and is not implemented.
+The API root was checked to identify the repository's DSpace/CRIS format. Bundle details and individual bitstream metadata repeat fields already included in listings; separate format lookups were inspected but are omitted to avoid a request for every file. OAI-PMH supports incremental metadata retrieval, while the REST search tools provide keyword and facet searches.
 
-Primary references: [DSpace REST contract](https://github.com/DSpace/RestContract), [search contract](https://github.com/DSpace/RestContract/blob/main/search-endpoint.md), and [Dataverse Native API](https://guides.dataverse.org/en/6.6/api/native-api.html). Current NTU response shapes were also checked directly over HTTPS.
+Primary references: [DSpace REST contract](https://github.com/DSpace/RestContract), [search contract](https://github.com/DSpace/RestContract/blob/main/search-endpoint.md), [Dataverse Native API](https://guides.dataverse.org/en/6.6/api/native-api.html), and [OAI-PMH 2.0](https://www.openarchives.org/OAI/openarchivesprotocol.html). Current NTU response shapes were also checked directly over HTTPS.
 
 ## Tests
 
@@ -115,6 +160,12 @@ Opt-in live stdio checks search pages, publication filtering, item abstracts, br
 uv run python -m tests.repository.live_smoke
 ```
 
+OAI-only live stdio checks exercise all six protocol verbs, provider continuation, date filters, alternate-format XML, empty results, and expired/invalid token errors. Prints statuses and counts without saving or printing research metadata:
+
+```sh
+uv run python -m tests.repository.live_oai_smoke
+```
+
 ## Limitation
 
-Only publicly exposed metadata is supported. No file downloads, full-text extraction, authenticated repository access, dataset search, or OAI bulk harvesting is implemented. Metadata may describe restricted or embargoed content. Dataset access can be interrupted by CAPTCHA; availability during one smoke test is not a guarantee of continued automated access.
+Only publicly exposed metadata is supported. No file downloads, full-text extraction, authenticated repository access, dataset search, or automatic repository-wide OAI harvesting is implemented. OAI timestamps describe repository changes, not publication dates. Continuation tokens can expire and NTU controls source-page sizes. Metadata may describe restricted or embargoed content. Dataset access can be interrupted by CAPTCHA; availability during one smoke test is not a guarantee of continued automated access.

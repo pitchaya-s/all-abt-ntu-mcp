@@ -22,7 +22,7 @@ const client = new Client({ name: "ntu-typescript-test", version: "1.0" });
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 59);
+  assert.equal(tools.length, 64);
   for (const tool of tools) {
     assert.equal(tool.outputSchema.type, "object");
     assert(Object.keys(tool.outputSchema.properties).length > 0);
@@ -113,7 +113,7 @@ try {
     command: "python", args: [join(tests, "repository", "protocol_server.py")], cwd: repositoryCwd,
     env: { PYTHONPATH: [join(tests, "..", "src"), join(tests, "..")].join(delimiter) },
   }));
-  assert.equal((await repository.listTools()).tools.filter(tool => tool.name.startsWith("drntu_")).length, 7);
+  assert.equal((await repository.listTools()).tools.filter(tool => tool.name.startsWith("drntu_")).length, 12);
   for (const [name, parameters] of [
     ["drntu_search", { query: "learning" }],
     ["drntu_get_item", { item_id: "11111111-1111-4111-8111-111111111111" }],
@@ -121,6 +121,10 @@ try {
     ["drntu_list_bundles", { item_id: "11111111-1111-4111-8111-111111111111" }],
     ["drntu_list_files", { bundle_id: "22222222-2222-4222-8222-222222222222" }],
     ["drntu_get_dataset", { persistent_id: "doi:10.21979/EXAMPLE/DATA" }],
+    ["drntu_oai_identify", {}], ["drntu_oai_list_metadata_formats", {}],
+    ["drntu_oai_list_sets", { limit: 1 }],
+    ["drntu_oai_list_records", { headers_only: true, limit: 1 }],
+    ["drntu_oai_get_record", { identifier: "oai:dr.ntu.edu.sg:10356/EXAMPLE1" }],
   ]) {
     const result = await repository.callTool({ name, arguments: parameters });
     assert(!result.isError, name);

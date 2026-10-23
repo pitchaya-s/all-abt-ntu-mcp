@@ -1,6 +1,7 @@
 """Published Dataverse citation metadata and file inventories, without login."""
 
-from .models import Checksum, Dataset, DatasetFile, RepositoryError
+from ..models import RepositoryError
+from .models import Checksum, Dataset, DatasetFile
 from .parser import records
 
 

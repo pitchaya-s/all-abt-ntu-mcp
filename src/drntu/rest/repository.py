@@ -1,5 +1,6 @@
+from ..models import RepositoryError
 from . import parser
-from .models import Bundle, Bundles, Containers, FacetDefinition, Facets, FacetValue, Files, Item, RepositoryError, SearchResults
+from .models import Bundle, Bundles, Containers, FacetDefinition, Facets, FacetValue, Files, Item, SearchResults
 
 
 def search_parameters(query, scope_id, entity_type, filters):

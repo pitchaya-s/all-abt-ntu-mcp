@@ -141,11 +141,9 @@ src/
 │   └── parser.py           Place and route normalization
 ├── drntu/
 │   ├── mcp_server.py        Public repository tool registration and schemas
-│   ├── models.py           Typed publication, facet, and dataset responses
-│   ├── client.py           HTTP requests, pacing, and caching
-│   ├── parser.py           DSpace metadata and pagination validation
-│   ├── repository.py       Publication search, browsing, and file discovery
-│   └── datasets.py         Published Dataverse versions and file inventories
+│   ├── models.py           Shared metadata, snapshots, and errors
+│   ├── rest/               DSpace search, files, and Dataverse datasets
+│   └── oai/                OAI-PMH client, parser, models, and service
 ├── library/
 │   ├── mcp_server.py        Library tool registration and schemas
 │   ├── personal_tools.py    Local authenticated facility tool
@@ -259,6 +257,11 @@ Search for a place first, then use its POI ID for details or directions. See the
 | `drntu_list_bundles` | An item's file groups, including original documents | No |
 | `drntu_list_files` | File names, sizes, checksums, rights, and content links | No |
 | `drntu_get_dataset` | Published dataset metadata, versions, and file inventories | No |
+| `drntu_oai_identify` | Repository identity, date precision, and deletion policy | No |
+| `drntu_oai_list_metadata_formats` | Available OAI metadata formats and schemas | No |
+| `drntu_oai_list_sets` | OAI collection and community sets | No |
+| `drntu_oai_list_records` | Metadata or identifiers filtered by modification date and set | No |
+| `drntu_oai_get_record` | One record by its OAI identifier | No |
 
 Public metadata can describe restricted files. See the [DR-NTU guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) for parameters, examples, and sources.
 

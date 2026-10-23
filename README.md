@@ -12,6 +12,22 @@ uvx --from all-abt-ntu-mcp==0.1.0-beta.1 all-abt-ntu
 
 The client examples below include the `personal` extra for authenticated tools.
 
+## Custom MCP for Cloud AI
+
+In a cloud AI client that supports custom remote MCP servers:
+
+1. Open the MCP or connector settings and add a server with any name you like.
+2. Enter this server URL:
+
+   ```text
+   https://all-abt-ntu-mcp.vercel.app/mcp
+   ```
+
+3. Select **No authentication** and, if asked, **Streamable HTTP** as the transport.
+4. Save and enable the server.
+
+The hosted server provides **public tools only**. No NTU credentials are needed. Personal tools, such as NTULearn and saving STARS plans, require the local setup below.
+
 ## Chromium
 
 For authenticated STARS, NTULearn and LibFacilities tools, install Chromium once:

@@ -1,10 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "regions": ["sin1"],
   "functions": {
-    "app.py": {
+    "api/index.py": {
       "maxDuration": 300,
       "excludeFiles": "{tests/**,.env*,**/.env*,.venv/**,dist/**,build/**,.impeccable/**,**/__pycache__/**,**/*.md}"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
 }

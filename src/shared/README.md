@@ -4,7 +4,7 @@ STARS, NTULearn, and LibFacilities use the same credential store in `shared.cred
 
 ## Hosted public server
 
-The Vercel entrypoint is root `app.py`, configured through `tool.vercel.entrypoint` in `pyproject.toml`. It creates `shared.http`'s ASGI app. `shared.public_server` explicitly registers public tool modules, while `shared.server` adds personal tools for local stdio. The hosted import path does not load keyring access, authenticated sessions, personal handlers, or NTULearn.
+The Vercel entrypoint is the file-based function `api/index.py`. `vercel.json` selects the **Other** framework preset and rewrites requests to that function, which creates `shared.http`'s ASGI app. `shared.public_server` explicitly registers public tool modules, while `shared.server` adds personal tools for local stdio. The hosted import path does not load keyring access, authenticated sessions, personal handlers, or NTULearn.
 
 The HTTP endpoint is `/mcp`, using stateless Streamable HTTP with JSON responses and a 1 MB request limit. Each request manages its own SDK lifecycle, so it works when the host omits ASGI lifespan events or changes event loops between requests. No server session identifier, sticky routing, database, or credentials are required. GET/DELETE on `/mcp` return 405 because there is no persistent event stream or session to delete. `/` and `/health` return public status information.
 
@@ -20,7 +20,7 @@ From the repository root:
 
 ```sh
 uv run python -m unittest tests.hosted.test_http -v
-uv run uvicorn app:app --host 127.0.0.1 --port 8000
+uv run uvicorn api.index:app --host 127.0.0.1 --port 8000
 ```
 
 In another terminal, the opt-in smoke makes a few public NTU reads:
@@ -43,7 +43,7 @@ Then run:
 uv run node tests/hosted/typescript_smoke.mjs "$NTU_MCP_TEST_SDK" http://127.0.0.1:8001/mcp
 ```
 
-Deployment references: [Vercel Python entrypoints and configuration](https://vercel.com/docs/functions/runtimes/python) and [MCP HTTP deployment guidance](https://py.sdk.modelcontextprotocol.io/run/deploy/).
+Deployment references: [Vercel file-based Python functions](https://vercel.com/docs/functions/runtimes/python/api-directory) and [MCP HTTP deployment guidance](https://py.sdk.modelcontextprotocol.io/run/deploy/).
 
 ## Credential storage
 

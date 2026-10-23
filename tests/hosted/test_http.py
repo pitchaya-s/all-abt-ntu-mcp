@@ -120,8 +120,8 @@ class RejectPersonal(importlib.abc.MetaPathFinder):
         if fullname in {"keyring", "shared.credentials", "shared.server", "stars.personal_tools", "library.personal_tools", "library.session"} or fullname.startswith(("ntulearn", "stars.wish", "playwright")):
             raise AssertionError("Hosted entrypoint imported a personal module: " + fullname)
 sys.meta_path.insert(0, RejectPersonal())
-import app
-assert app.app
+from api.index import app
+assert app
 print("Public entrypoint imports no credential or personal-service modules.")
 '''
         result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2],

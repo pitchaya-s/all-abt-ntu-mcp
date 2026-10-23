@@ -115,7 +115,7 @@ class SearchClientTests(unittest.TestCase):
             search_courses("ZZ00", 2026, 1)
             with search._cache_lock:
                 key = next(iter(search._cache))
-                search._cache[key] = (0, search._cache[key][1])
+                search._cache[key] = (search.time.monotonic() - search.CACHE_TTL_SECONDS - 1, search._cache[key][1])
             search_courses("ZZ00", 2026, 1)
             self.assertEqual(fetch.call_count, 2)
             with patch.object(search, "CACHE_TTL_SECONDS", 0):

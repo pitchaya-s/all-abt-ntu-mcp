@@ -47,7 +47,7 @@ Deployment references: [Vercel file-based Python functions](https://vercel.com/d
 
 ## Credential storage
 
-Storage is opt-in. Run `all-abt-ntu auth save` yourself in a local terminal; username and password are visible while typing, and piped input is refused. Running it again replaces the saved account/password. `auth status` reports whether an account is stored, and `auth delete` removes it. With uvx, append these arguments to your existing uvx command; no standalone CLI installation is needed. No credential management commands are exposed as MCP tools.
+Storage is opt-in. Run `all-abt-ntu auth save` yourself in a local terminal; the username is visible and the password is hidden while typing. Piped input and terminals that cannot hide password input are refused. Credentials are stored encrypted in the native OS keyring and never included in MCP responses sent to the LLM. Running the command again replaces the saved account/password. `auth status` reports whether an account is stored, and `auth delete` removes it. With uvx, append these arguments to your existing uvx command; no standalone CLI installation is needed. No credential management commands are exposed as MCP tools.
 
 The keyring entry uses service `all-abt-ntu-mcp`, account `ntu-account`. The username, password, and an opaque revision identifier are stored together as the keyring secret. Neither credential is stored in application files, environment variables, or logs, or returned through MCP. Configuration from older versions is not imported automatically; remove any old credentials from `.env` and client settings yourself. A network username is expanded to a student email address for NTULearn; a full NTU email is used as supplied.
 

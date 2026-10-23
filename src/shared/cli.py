@@ -1,7 +1,9 @@
 """Local credential commands; no secret inputs are exposed through MCP."""
 
 import argparse
+from getpass import GetPassWarning, getpass
 import sys
+import warnings
 
 from .credentials import CredentialError, credential_status, delete_credentials, save_credentials
 
@@ -28,7 +30,9 @@ def main() -> None:
                 raise CredentialError("Credential setup requires your own interactive terminal; piped input is refused.")
             print("Save/update your NTU account in the native OS keyring and enable automatic login for STARS, NTULearn and LibFacilities.")
             username = input("NTU network username or email: ")
-            password = input("NTU password: ")
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", GetPassWarning)
+                password = getpass("NTU password: ")
             save_credentials(username, password)
             print("Credentials saved in the OS keyring. Automatic login enabled.")
         elif args.action == "status":
@@ -39,6 +43,9 @@ def main() -> None:
         elif args.action == "delete":
             delete_credentials()
             print("Stored credentials deleted. Automatic login disabled.")
+    except GetPassWarning:
+        print("Cannot hide password input. Use an interactive terminal that supports hidden input; no credentials were saved.", file=sys.stderr)
+        raise SystemExit(1) from None
     except CredentialError as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1) from None

@@ -1,12 +1,18 @@
-# all-abt-ntu-mcp
+# All About NTU MCP
 
 An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, and campus services.
 
-[STARS guide](src/stars/README.md) · [NTULearn guide](src/ntulearn/README.md) · [MazeMap guide](src/mazemap/README.md) · [DR-NTU guide](src/drntu/README.md).
+[STARS guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/stars/README.md) · [NTULearn guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/ntulearn/README.md) · [MazeMap guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/mazemap/README.md) · [DR-NTU guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/drntu/README.md).
 
-[Library guide](src/library/README.md) · [Faculty guide](src/faculty/README.md) · [News guide](src/news/README.md) · [Campus services guide](src/service/README.md).
+[Library guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/library/README.md) · [Faculty guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/faculty/README.md) · [News guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/news/README.md) · [Campus services guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/service/README.md).
 
-For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
+For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the public tools from PyPI:
+
+```sh
+uvx --from all-abt-ntu-mcp==0.1.0-beta.1 all-abt-ntu
+```
+
+The client examples below include the `personal` extra for authenticated tools.
 
 ## Chromium
 
@@ -21,12 +27,14 @@ uvx --from 'playwright>=1.50,<2' playwright install chromium
 Public tools need no credentials. For personal tools, opt into native OS keyring storage by running this **yourself in a local terminal**:
 
 ```sh
-uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu auth save
+uvx --from all-abt-ntu-mcp==0.1.0-beta.1 all-abt-ntu auth save
 ```
 
-Both username and password are visible while typing. The prompts save one account for STARS, NTULearn and LibFacilities and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
+Your password is hidden while typing and stored encrypted in your OS keyring, rather than in plaintext files. The server never includes it in MCP responses sent to the LLM.
 
-The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [shared credential storage](src/shared/README.md#credential-storage).
+The prompts save one account for STARS, NTULearn and LibFacilities and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
+
+The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [shared credential storage](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/shared/README.md#credential-storage).
 
 Some Linux installations do not include a keyring service. Install a provider such as GNOME Keyring or KWallet using your distribution's package manager, then follow your desktop's setup instructions to start and unlock it before running `auth save`.
 
@@ -37,7 +45,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
-args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu"]
+args = ["--from", "all-abt-ntu-mcp[personal]==0.1.0-beta.1", "all-abt-ntu"]
 env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
@@ -51,7 +59,7 @@ Register for your user:
 
 ```sh
 claude mcp add --scope user all-abt-ntu-mcp \
-  -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu
+  -- uvx --from 'all-abt-ntu-mcp[personal]==0.1.0-beta.1' all-abt-ntu
 claude mcp list
 ```
 
@@ -67,7 +75,7 @@ Add to `~/.config/opencode/opencode.json`:
   "mcp": {
     "all-abt-ntu-mcp": {
       "type": "local",
-      "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu"],
+      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]==0.1.0-beta.1", "all-abt-ntu"],
       "enabled": true,
       "timeout": 240000
     }
@@ -82,7 +90,7 @@ Personal tools use your locally saved keyring account. Check `opencode mcp list`
 Clone the repository and run the server from a local checkout:
 
 ```sh
-git clone --branch all-abt https://github.com/pitchaya-s/ntu-stars-mcp.git all-abt-ntu-mcp
+git clone --branch main https://github.com/pitchaya-s/ntu-stars-mcp.git all-abt-ntu-mcp
 cd all-abt-ntu-mcp
 uv sync
 uv run all-abt-ntu
@@ -185,7 +193,7 @@ Public lookups work without credentials. Planner and Degree Audit use the shared
 | `stars_save_stars_plan` | Replace a saved plan's course/index list and verify the saved result | Yes |
 | `stars_get_degree_audit` | Your AU requirements, results, and registered courses | Yes |
 
-Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `null`. Saving a plan replaces its entire course/index list. See the [STARS guide](src/stars/README.md) for parameters, examples, and sources.
+Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `null`. Saving a plan replaces its entire course/index list. See the [STARS guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/stars/README.md) for parameters, examples, and sources.
 
 ### NTULearn
 
@@ -212,7 +220,7 @@ Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `nu
 | `ntulearn_download_course` | Download course attachments into local folders | Yes |
 | `ntulearn_whats_new` | Recent announcements, upcoming events, and grade snapshots | Yes |
 
-Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn guide](src/ntulearn/README.md) for parameters, examples, and sources.
+Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/ntulearn/README.md) for parameters, examples, and sources.
 
 ### MazeMap
 
@@ -224,7 +232,7 @@ Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn
 | `mazemap_get_place` | One place's location, aliases, building, and floor | No |
 | `mazemap_get_directions` | Walking instructions, distance, time, and accessibility | No |
 
-Search for a place first, then use its POI ID for details or directions. See the [MazeMap guide](src/mazemap/README.md) for parameters, examples, and sources.
+Search for a place first, then use its POI ID for details or directions. See the [MazeMap guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/mazemap/README.md) for parameters, examples, and sources.
 
 ### DR-NTU
 
@@ -238,7 +246,7 @@ Search for a place first, then use its POI ID for details or directions. See the
 | `drntu_list_files` | File names, sizes, checksums, rights, and content links | No |
 | `drntu_get_dataset` | Published dataset metadata, versions, and file inventories | No |
 
-Public metadata can describe restricted files. See the [DR-NTU guide](src/drntu/README.md) for parameters, examples, and sources.
+Public metadata can describe restricted files. See the [DR-NTU guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/drntu/README.md) for parameters, examples, and sources.
 
 ### Library
 
@@ -251,7 +259,7 @@ Public metadata can describe restricted files. See the [DR-NTU guide](src/drntu/
 | `library_get_map_availability` | Seat and room statuses at a Singapore date and time | No |
 | `library_get_facility_schedule` | Daily room and seat time grids and facility descriptions | Yes |
 
-Use the returned record ID and context for details. See the [Library guide](src/library/README.md) for parameters and access limitations.
+Use the returned record ID and context for details. See the [Library guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/library/README.md) for parameters and access limitations.
 
 ### Faculty
 
@@ -260,7 +268,7 @@ Use the returned record ID and context for details. See the [Library guide](src/
 | `faculty_search` | Find faculty by name or research interest, with public profile details | No |
 | `faculty_list_interests` | Research-interest labels and IDs for faculty search | No |
 
-See the [Faculty guide](src/faculty/README.md) for parameters, pagination, and sources.
+See the [Faculty guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/faculty/README.md) for parameters, pagination, and sources.
 
 ### News
 
@@ -270,7 +278,7 @@ See the [Faculty guide](src/faculty/README.md) for parameters, pagination, and s
 | `news_list_categories` | Published news category labels and filter IDs | No |
 | `news_get_article` | Read an article's text in bounded chunks | No |
 
-See the [News guide](src/news/README.md) for parameters and sources.
+See the [News guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/news/README.md) for parameters and sources.
 
 ### Campus services
 
@@ -279,7 +287,7 @@ See the [News guide](src/news/README.md) for parameters and sources.
 | `service_search` | Find food outlets, shops, clinics, and services with hours and contacts | No |
 | `service_list_filters` | Official directory type and category filter IDs | No |
 
-See the [Campus services guide](src/service/README.md) for parameters and directory coverage.
+See the [Campus services guide](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/service/README.md) for parameters and directory coverage.
 
 ## Tests
 
@@ -301,11 +309,11 @@ uv run node tests/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
 
 These interoperability checks use offline fixtures and never edit saved plans.
 
-Hosted HTTP checks cover public-only registration, rejected personal calls, output schemas, both modern and legacy Python SDK clients, Host/Origin validation, request-size limits, and independent serverless event loops. See the [HTTP test instructions](src/shared/README.md#http-tests) for the TypeScript client and opt-in live smoke.
+Hosted HTTP checks cover public-only registration, rejected personal calls, output schemas, both modern and legacy Python SDK clients, Host/Origin validation, request-size limits, and independent serverless event loops. See the [HTTP test instructions](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/shared/README.md#http-tests) for the TypeScript client and opt-in live smoke.
 
-Live checks and service-specific testing instructions: [STARS](src/stars/README.md#tests) · [NTULearn](src/ntulearn/README.md#tests) · [MazeMap](src/mazemap/README.md#tests) · [DR-NTU](src/drntu/README.md#tests).
+Live checks and service-specific testing instructions: [STARS](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/stars/README.md#tests) · [NTULearn](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/ntulearn/README.md#tests) · [MazeMap](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/mazemap/README.md#tests) · [DR-NTU](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/drntu/README.md#tests).
 
-[Library tests](src/library/README.md#tests) · [Faculty tests](src/faculty/README.md#tests) · [News tests](src/news/README.md#tests) · [Campus services tests](src/service/README.md#tests).
+[Library tests](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/library/README.md#tests) · [Faculty tests](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/faculty/README.md#tests) · [News tests](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/news/README.md#tests) · [Campus services tests](https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/src/service/README.md#tests).
 
 ## Limitation
 

@@ -10,7 +10,7 @@ from . import public_server
 
 mcp = MCPServer(
     "all-abt-ntu-mcp",
-    version="0.1.0",
+    version="0.1.0-beta.1",
     instructions=(
         public_server.INSTRUCTIONS
         + " Optional personal tools use an opt-in native OS keyring entry; personal records are cached only in memory. "

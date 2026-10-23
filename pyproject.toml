@@ -1,9 +1,18 @@
 [project]
 name = "all-abt-ntu-mcp"
-version = "0.1.0"
-description = "Local MCP server for NTU schedules, learning, maps, research, faculty, library, news, and campus services"
+version = "0.1.0-beta.1"
+description = "MCP server for NTU schedules, learning, maps, research, faculty, library, news, and campus services"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "pitchaya-s" }]
+keywords = ["ntu", "mcp", "stars", "ntulearn"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Education",
+]
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=2,<3",
@@ -17,11 +26,18 @@ dependencies = [
 [project.optional-dependencies]
 personal = ["playwright>=1.50,<2"]
 
+[project.urls]
+Homepage = "https://github.com/pitchaya-s/ntu-stars-mcp"
+Repository = "https://github.com/pitchaya-s/ntu-stars-mcp"
+Documentation = "https://github.com/pitchaya-s/ntu-stars-mcp/blob/main/README.md"
+Issues = "https://github.com/pitchaya-s/ntu-stars-mcp/issues"
+
 [project.scripts]
 all-abt-ntu = "shared.cli:main"
 
 [tool.uv.build-backend]
 module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "shared"]
+source-exclude = [".env", ".env.*", "*.har", "cookies*.json", "storage_state*.json", "*.log"]
 
 [build-system]
 requires = ["uv_build>=0.10.11,<0.11.0"]

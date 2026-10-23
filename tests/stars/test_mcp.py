@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from mcp import Client
 
-from stars.mcp_server import mcp
+from shared.server import mcp
 from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 
 
@@ -127,7 +127,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("credentials_configured", status.structured_content)
 
                 with patch(
-                    "stars.mcp_server.fetch_stars_planner",
+                    "stars.personal_tools.fetch_stars_planner",
                     return_value={
                         "service": "stars_planner",
                         "page_title": "STARS Planner",
@@ -151,7 +151,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(planner.structured_content["service"], "stars_planner")
 
                 with patch(
-                    "stars.mcp_server.fetch_degree_audit",
+                    "stars.personal_tools.fetch_degree_audit",
                     return_value={
                         "service": "degree_audit",
                         "page_title": "Degree Audit",

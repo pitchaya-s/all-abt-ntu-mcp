@@ -179,7 +179,7 @@ class WishSessionManager:
             if (username_sent or password_sent) and _is_login_page(html) and re.search(
                 r"invalid|incorrect|failed|wrong password", html, re.I
             ):
-                raise NTUAuthError("NTU rejected the credentials. Update them locally with `all-abt-ntu-mcp auth save`.")
+                raise NTUAuthError("NTU rejected the credentials. Update them locally with `all-abt-ntu auth save`.")
             forms = _Forms()
             forms.feed(html)
             matching = next(
@@ -225,7 +225,7 @@ class WishSessionManager:
             if password_sent:
                 if _is_login_page(html):
                     if re.search(r"invalid|incorrect|failed|wrong password", html, re.I):
-                        raise NTUAuthError("NTU rejected the credentials. Update them locally with `all-abt-ntu-mcp auth save`.")
+                        raise NTUAuthError("NTU rejected the credentials. Update them locally with `all-abt-ntu auth save`.")
                     raise NTUAuthError("NTU did not accept the login; check credentials or account access.")
                 return
         raise NTUAuthError("NTU's login flow did not complete a supported password login.")

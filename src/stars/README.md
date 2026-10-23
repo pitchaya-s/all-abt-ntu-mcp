@@ -2,6 +2,8 @@
 
 These tools run in the shared `all-abt-ntu-mcp` server. See the [main README](../../README.md) for installation and client configuration.
 
+Public tools are registered in `mcp_server.py` and `room_tools.py`. Authenticated tools live in `personal_tools.py` and are registered only by the local stdio server; the hosted HTTP server exposes public tools only.
+
 ## Inputs and results
 
 Undergraduate schedule tools take a `course_code`, `academic_year`, and `semester`. The year is the first year of the academic year; semester is `1`, `2`, or `"S"` for Special Term. Course codes contain letters and digits, up to 10 characters. Keep index numbers as strings.
@@ -185,7 +187,7 @@ Only NTU endpoints supply timetable and academic records. Forms are followed wit
 | STARS Planner | [Authenticated entry](https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main), [selection](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.time_table), [Planner view](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.planner), [load plan](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.load_time_table), [save plan](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.save_time_table) | Registered courses and saved plans; saving is limited to the chosen saved plan |
 | Degree Audit | [Authenticated audit](https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display) | The student's published degree requirements and academic tables |
 
-WISH authentication follows NTU's [login workflow](https://wish.wis.ntu.edu.sg/pls/webexe/ldap_login.login). Credentials come from the same opt-in native OS keyring entry as NTULearn; access restrictions and challenges are respected. Manage it locally with `all-abt-ntu-mcp auth save`, `auth status`, and `auth delete`. See [credential storage and session behavior](../ntulearn/README.md#credentials-and-sessions). Passwords are never accepted as MCP arguments or read from environment variables/config files.
+WISH authentication follows NTU's [login workflow](https://wish.wis.ntu.edu.sg/pls/webexe/ldap_login.login). Credentials come from the [shared credential store](../shared/README.md#credential-storage), also used by NTULearn and LibFacilities; access restrictions and challenges are respected. Manage it locally with `all-abt-ntu auth save`, `auth status`, and `auth delete`. Passwords are never accepted as MCP arguments or read from environment variables/config files.
 
 ## Tests
 

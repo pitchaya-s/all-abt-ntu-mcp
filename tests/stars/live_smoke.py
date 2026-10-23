@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 async def main(args):
-    params = StdioServerParameters(command='uvx', args=['--no-cache', '--from', str(ROOT), 'all-abt-ntu-mcp'], cwd=str(ROOT))
+    params = StdioServerParameters(command='uvx', args=['--no-cache', '--from', str(ROOT), 'all-abt-ntu'], cwd=str(ROOT))
     async with Client(params) as client:
         async def call(name, **arguments):
             result = await client.call_tool(name, arguments)

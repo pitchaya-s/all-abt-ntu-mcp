@@ -17,7 +17,7 @@ from stars.client import teaching
 from stars.parser import NTUPageError, parse_course_page
 from stars.parser.schedule import parse_teaching_schedule
 from stars.parser.search import parse_course_search
-from stars.mcp_server import mcp
+from shared.server import mcp
 from .room_fixtures import FULL_TIME, PART_TIME, block, page, snapshot
 
 

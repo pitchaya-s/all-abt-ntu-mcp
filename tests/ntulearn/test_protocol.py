@@ -10,7 +10,7 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
 from ntulearn import mcp_server
-from stars.mcp_server import mcp
+from shared.server import mcp
 from ntulearn.models import LearnError
 from .fixtures import CONTENT, COURSE, SECRET
 

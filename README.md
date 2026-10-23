@@ -1,12 +1,12 @@
 # all-abt-ntu-mcp
 
-A local MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, and campus services.
+An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, and campus services.
 
 [STARS guide](src/stars/README.md) · [NTULearn guide](src/ntulearn/README.md) · [MazeMap guide](src/mazemap/README.md) · [DR-NTU guide](src/drntu/README.md).
 
 [Library guide](src/library/README.md) · [Faculty guide](src/faculty/README.md) · [News guide](src/news/README.md) · [Campus services guide](src/service/README.md).
 
-Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
+For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
 
 ## Chromium
 
@@ -21,12 +21,12 @@ uvx --from 'playwright>=1.50,<2' playwright install chromium
 Public tools need no credentials. For personal tools, opt into native OS keyring storage by running this **yourself in a local terminal**:
 
 ```sh
-uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu-mcp auth save
+uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu auth save
 ```
 
 Both username and password are visible while typing. The prompts save one account for STARS, NTULearn and LibFacilities and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
 
-The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [credential storage](src/ntulearn/README.md#credentials-and-sessions).
+The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [shared credential storage](src/shared/README.md#credential-storage).
 
 Some Linux installations do not include a keyring service. Install a provider such as GNOME Keyring or KWallet using your distribution's package manager, then follow your desktop's setup instructions to start and unlock it before running `auth save`.
 
@@ -37,7 +37,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
-args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"]
+args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu"]
 env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
@@ -51,7 +51,7 @@ Register for your user:
 
 ```sh
 claude mcp add --scope user all-abt-ntu-mcp \
-  -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu-mcp
+  -- uvx --with 'playwright>=1.50,<2' --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu
 claude mcp list
 ```
 
@@ -67,7 +67,7 @@ Add to `~/.config/opencode/opencode.json`:
   "mcp": {
     "all-abt-ntu-mcp": {
       "type": "local",
-      "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"],
+      "command": ["uvx", "--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu"],
       "enabled": true,
       "timeout": 240000
     }
@@ -85,10 +85,10 @@ Clone the repository and run the server from a local checkout:
 git clone --branch all-abt https://github.com/pitchaya-s/ntu-stars-mcp.git all-abt-ntu-mcp
 cd all-abt-ntu-mcp
 uv sync
-uv run all-abt-ntu-mcp
+uv run all-abt-ntu
 ```
 
-For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu-mcp auth save` in your own terminal. Use `uv run all-abt-ntu-mcp auth status` or `auth delete` to inspect storage status or remove the account. These commands manage credentials; starting the server still uses `uv run all-abt-ntu-mcp`.
+For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu auth save` in your own terminal. Use `uv run all-abt-ntu auth status` or `auth delete` to inspect storage status or remove the account. These commands manage credentials; starting the server still uses `uv run all-abt-ntu`.
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
@@ -96,9 +96,10 @@ The process uses MCP stdio, so it stays open while its MCP client is connected. 
 
 ```text
 src/
-├── shared/                 MCP runtime, CLI, keyring, HTTP, and website parsing
+├── shared/                 Local/public runtimes, HTTP app, keyring, and parsing
 ├── stars/
 │   ├── mcp_server.py        STARS tool registration and input schemas
+│   ├── personal_tools.py    Local authenticated STARS tools
 │   ├── room_tools.py        Teaching-based room tool registration
 │   ├── room_schemas.py      Typed room constraints and results
 │   ├── domain/             Course models, timetable matching and room searches
@@ -125,6 +126,7 @@ src/
 │   └── datasets.py         Published Dataverse versions and file inventories
 ├── library/
 │   ├── mcp_server.py        Library tool registration and schemas
+│   ├── personal_tools.py    Local authenticated facility tool
 │   ├── models.py           Catalogue, access and facility responses
 │   ├── client.py           OneSearch requests and pagination
 │   ├── facilities.py       Public facility directory and map availability
@@ -155,6 +157,7 @@ tests/
 ├── faculty/                Faculty directory tests and synthetic fixtures
 ├── news/                   News search and article tests with synthetic fixtures
 ├── service/                Campus directory tests and synthetic fixtures
+├── hosted/                 Public HTTP protocol, isolation, and deployment checks
 ├── test_*.py               Keyring, local CLI, and shared lifecycle tests
 └── typescript_smoke.mjs     Shared MCP interoperability check
 ```
@@ -297,6 +300,8 @@ uv run node tests/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
 ```
 
 These interoperability checks use offline fixtures and never edit saved plans.
+
+Hosted HTTP checks cover public-only registration, rejected personal calls, output schemas, both modern and legacy Python SDK clients, Host/Origin validation, request-size limits, and independent serverless event loops. See the [HTTP test instructions](src/shared/README.md#http-tests) for the TypeScript client and opt-in live smoke.
 
 Live checks and service-specific testing instructions: [STARS](src/stars/README.md#tests) · [NTULearn](src/ntulearn/README.md#tests) · [MazeMap](src/mazemap/README.md#tests) · [DR-NTU](src/drntu/README.md#tests).
 

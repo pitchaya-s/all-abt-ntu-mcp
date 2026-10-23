@@ -23,7 +23,7 @@ _UNAVAILABLE = (
     "The native OS keyring is unavailable or locked. Unlock/configure Secret Service or KWallet "
     "on Linux, Keychain on macOS, or Credential Manager on Windows. No plaintext fallback is used."
 )
-SETUP_MESSAGE = "No NTU credentials are stored. Run `all-abt-ntu-mcp auth save` in your own terminal."
+SETUP_MESSAGE = "No NTU credentials are stored. Run `all-abt-ntu auth save` in your own terminal."
 
 
 class CredentialError(RuntimeError):
@@ -77,7 +77,7 @@ def _read(backend) -> dict | None:
             raise ValueError
         return record
     except (ValueError, TypeError, CredentialError):
-        raise CredentialError("The NTU keyring entry is invalid. Run `all-abt-ntu-mcp auth save` to replace it, or `auth delete` to remove it.") from None
+        raise CredentialError("The NTU keyring entry is invalid. Run `all-abt-ntu auth save` to replace it, or `auth delete` to remove it.") from None
 
 
 def _validate(username: str, password: str) -> None:

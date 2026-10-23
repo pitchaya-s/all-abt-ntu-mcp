@@ -13,14 +13,14 @@ ROOT = Path(__file__).resolve().parents[2]
 async def main() -> None:
     async with Client(StdioServerParameters(
         command="uvx",
-        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "all-abt-ntu-mcp"],
+        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "all-abt-ntu"],
         env={key: os.environ[key] for key in ("NTU_PERSONAL_CACHE_TTL_SECONDS",) if key in os.environ},
         cwd=str(ROOT),
     )) as client:
         listing = await client.list_tools()
         assert {"stars_auth_status", "stars_get_stars_planner", "stars_get_degree_audit"} <= {t.name for t in listing.tools}
         status = await client.call_tool("stars_auth_status", {})
-        assert not status.is_error and status.structured_content["credentials_configured"], "Run all-abt-ntu-mcp auth save in your local terminal first."
+        assert not status.is_error and status.structured_content["credentials_configured"], "Run all-abt-ntu auth save in your local terminal first."
         planner, audit = await asyncio.gather(
             client.call_tool("stars_get_stars_planner", {"refresh": True}),
             client.call_tool("stars_get_degree_audit", {}),

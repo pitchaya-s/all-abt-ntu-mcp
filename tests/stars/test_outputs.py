@@ -9,7 +9,8 @@ from mcp import Client
 
 from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 from stars import compact
-from stars.mcp_server import get_course_indexes, get_index, mcp
+from stars.mcp_server import get_course_indexes, get_index
+from shared.server import mcp
 from stars.client import NTURequestError
 from stars.parser import parse_course_page
 

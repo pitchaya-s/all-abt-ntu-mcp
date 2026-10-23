@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 async def main(args):
-    params = StdioServerParameters(command='uvx', args=['--no-cache', '--from', str(ROOT), 'all-abt-ntu-mcp'], cwd=str(ROOT))
+    params = StdioServerParameters(command='uvx', args=['--no-cache', '--from', str(ROOT), 'all-abt-ntu'], cwd=str(ROOT))
     async with Client(params) as client:
         query = dict(query=args.query, academic_year=args.academic_year, semester=args.semester, study_mode=args.study_mode, limit=2)
         reply = await client.call_tool('stars_search_courses', query)

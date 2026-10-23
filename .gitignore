@@ -8,4 +8,6 @@ build/
 *.egg-info/
 .coverage*
 .env
+.env.*
+.vercel/
 .impeccable/

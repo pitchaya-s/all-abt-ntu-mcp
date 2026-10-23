@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from mcp import Client
 
-from stars.mcp_server import mcp
+from shared.server import mcp
 from stars.parser import NTUPageError
 from stars.wish import plan_editor as editor
 from stars.wish.models import NTUAuthError, NTUPersonalDataError
@@ -241,7 +241,7 @@ class PlanMCPTests(unittest.IsolatedAsyncioTestCase):
     async def test_tool_schema_annotations_and_call(self):
         reply = {"status": "saved", "academic_year": 2026, "semester": 2, "saved_plan": saved_plan(),
                  "verified_at": "2026-10-21T00:00:00+00:00", "source_url": SAVE_PLAN_URL}
-        with patch("stars.mcp_server.persist_stars_plan", return_value=reply) as save:
+        with patch("stars.personal_tools.persist_stars_plan", return_value=reply) as save:
             async with Client(mcp) as client:
                 tool = next(t for t in (await client.list_tools()).tools if t.name == "stars_save_stars_plan")
                 self.assertFalse(tool.annotations.read_only_hint)

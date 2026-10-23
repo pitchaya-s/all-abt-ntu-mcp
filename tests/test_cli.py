@@ -12,7 +12,7 @@ class CredentialCLITests(unittest.TestCase):
     def call(self, *arguments):
         output, errors = StringIO(), StringIO()
         errors.isatty = lambda: True
-        with patch("sys.argv", ["all-abt-ntu-mcp", *arguments]), redirect_stdout(output), redirect_stderr(errors):
+        with patch("sys.argv", ["all-abt-ntu", *arguments]), redirect_stdout(output), redirect_stderr(errors):
             main()
         return output.getvalue() + errors.getvalue()
 
@@ -41,7 +41,7 @@ class CredentialCLITests(unittest.TestCase):
 
     def test_invalid_arguments_are_not_echoed_to_logs(self):
         output, errors = StringIO(), StringIO()
-        with patch("sys.argv", ["all-abt-ntu-mcp", "auth", "save", "--password", "secret-in-invalid-argument"]), redirect_stdout(output), redirect_stderr(errors):
+        with patch("sys.argv", ["all-abt-ntu", "auth", "save", "--password", "secret-in-invalid-argument"]), redirect_stdout(output), redirect_stderr(errors):
             with self.assertRaises(SystemExit):
                 main()
         self.assertNotIn("secret-in-invalid-argument", output.getvalue() + errors.getvalue())

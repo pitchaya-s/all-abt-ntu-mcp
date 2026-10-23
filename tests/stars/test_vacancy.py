@@ -7,7 +7,7 @@ from urllib.parse import parse_qs
 
 from mcp import Client
 
-from stars.mcp_server import mcp
+from shared.server import mcp
 from stars.client import NTURequestError
 from stars.client import vacancy
 from stars.parser import NTUPageError, parse_course_page, parse_course_vacancies

@@ -7,7 +7,7 @@ import tempfile
 from mcp import Client
 
 from ntulearn import mcp_server
-from stars.mcp_server import mcp
+from shared.server import mcp
 
 
 def flatten(nodes):

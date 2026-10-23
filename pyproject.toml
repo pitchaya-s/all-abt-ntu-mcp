@@ -1,7 +1,7 @@
 [project]
 name = "all-abt-ntu-mcp"
 version = "0.1.0"
-description = "Local MCP server for NTU Singapore STARS and NTULearn"
+description = "Local MCP server for NTU schedules, learning, maps, research, faculty, library, news, and campus services"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -10,6 +10,7 @@ dependencies = [
     "typing-extensions>=4.12,<5",
     "pypdf>=6,<7",
     "keyring>=25.6,<27",
+    "tzdata>=2025.1",
 ]
 
 [project.optional-dependencies]
@@ -19,7 +20,7 @@ personal = ["playwright>=1.50,<2"]
 all-abt-ntu-mcp = "shared.cli:main"
 
 [tool.uv.build-backend]
-module-name = ["ntu_stars_mcp", "ntulearn_mcp", "shared"]
+module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "shared"]
 
 [build-system]
 requires = ["uv_build>=0.10.11,<0.11.0"]

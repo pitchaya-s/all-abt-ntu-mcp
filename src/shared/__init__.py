@@ -1,1 +1,1 @@
-"""Configuration shared by the STARS and NTULearn tools."""
+"""Runtime and credential support shared by NTU tools."""

@@ -1,14 +1,16 @@
 # all-abt-ntu-mcp
 
-A local MCP server for NTU Singapore STARS and NTULearn: course schedules, vacancies, exam timetables, saved plans, learning materials, announcements, calendar entries, and grades. Data comes directly from NTU's systems.
+A local MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, and campus services.
 
-[STARS guide](src/ntu_stars_mcp/README.md) · [NTULearn guide](src/ntulearn_mcp/README.md).
+[STARS guide](src/stars/README.md) · [NTULearn guide](src/ntulearn/README.md) · [MazeMap guide](src/mazemap/README.md) · [DR-NTU guide](src/drntu/README.md).
+
+[Library guide](src/library/README.md) · [Faculty guide](src/faculty/README.md) · [News guide](src/news/README.md) · [Campus services guide](src/service/README.md).
 
 Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer.
 
 ## Chromium
 
-For authenticated STARS and NTULearn tools, install Chromium once:
+For authenticated STARS, NTULearn and LibFacilities tools, install Chromium once:
 
 ```sh
 uvx --from 'playwright>=1.50,<2' playwright install chromium
@@ -22,9 +24,11 @@ Public tools need no credentials. For personal tools, opt into native OS keyring
 uvx --from git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt all-abt-ntu-mcp auth save
 ```
 
-Both username and password are visible while typing. The prompts save one account for STARS and NTULearn and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
+Both username and password are visible while typing. The prompts save one account for STARS, NTULearn and LibFacilities and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
 
-The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [credential storage](src/ntulearn_mcp/README.md#credentials-and-sessions).
+The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [credential storage](src/ntulearn/README.md#credentials-and-sessions).
+
+Some Linux installations do not include a keyring service. Install a provider such as GNOME Keyring or KWallet using your distribution's package manager, then follow your desktop's setup instructions to start and unlock it before running `auth save`.
 
 ## Codex
 
@@ -34,11 +38,12 @@ Add to `~/.codex/config.toml`:
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
 args = ["--with", "playwright>=1.50,<2", "--from", "git+https://github.com/pitchaya-s/ntu-stars-mcp.git@all-abt", "all-abt-ntu-mcp"]
+env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
 ```
 
-Restart Codex and check `codex mcp list`. Personal tools use your locally saved keyring account.
+Restart Codex and check `codex mcp list`. Personal tools use your locally saved keyring account. The `env_vars` line forwards the Linux desktop session needed for keyring access; start Codex from a terminal where `auth status` succeeds. These variables contain no NTU credentials.
 
 ## Claude Code
 
@@ -91,23 +96,67 @@ The process uses MCP stdio, so it stays open while its MCP client is connected. 
 
 ```text
 src/
-├── shared/                 Shared MCP runtime, local CLI, and keyring
-├── ntu_stars_mcp/
+├── shared/                 MCP runtime, CLI, keyring, HTTP, and website parsing
+├── stars/
 │   ├── mcp_server.py        STARS tool registration and input schemas
-│   ├── domain/             Course models and timetable matching
-│   ├── ntu_client/         Public NTU requests and caching
+│   ├── room_tools.py        Teaching-based room tool registration
+│   ├── room_schemas.py      Typed room constraints and results
+│   ├── domain/             Course models, timetable matching and room searches
+│   ├── client/             Public NTU requests and caching
 │   ├── parser/             Schedule and personal-page parsing
 │   └── wish/               WISH login and saved-plan editing
-└── ntulearn_mcp/
-    ├── mcp_server.py        NTULearn tool registration and input schemas
-    ├── models/             Typed responses grouped by domain
-    ├── ntu_client/         Login, sessions, and REST requests
-    ├── parser/             Response and document parsing
-    └── services/           Content, files, mailbox, people, and activity
+├── ntulearn/
+│   ├── mcp_server.py        NTULearn tool registration and input schemas
+│   ├── models/             Typed responses grouped by domain
+│   ├── client/             Login, sessions, and REST requests
+│   ├── parser/             Response and document parsing
+│   └── services/           Content, files, mailbox, people, and activity
+├── mazemap/
+│   ├── mcp_server.py        Public map tool registration and input schemas
+│   ├── models.py           Typed place and direction responses
+│   ├── client.py           HTTP requests, pacing, and caching
+│   └── parser.py           Place and route normalization
+├── drntu/
+│   ├── mcp_server.py        Public repository tool registration and schemas
+│   ├── models.py           Typed publication, facet, and dataset responses
+│   ├── client.py           HTTP requests, pacing, and caching
+│   ├── parser.py           DSpace metadata and pagination validation
+│   ├── repository.py       Publication search, browsing, and file discovery
+│   └── datasets.py         Published Dataverse versions and file inventories
+├── library/
+│   ├── mcp_server.py        Library tool registration and schemas
+│   ├── models.py           Catalogue, access and facility responses
+│   ├── client.py           OneSearch requests and pagination
+│   ├── facilities.py       Public facility directory and map availability
+│   ├── session.py          Optional facility login and daily time grids
+│   ├── schedule.py         Time-grid validation and normalization
+│   └── parser.py           Primo record normalization
+├── faculty/
+│   ├── mcp_server.py        Public faculty tools and input schemas
+│   ├── models.py           Typed profile and research-interest responses
+│   ├── client.py           Directory requests, filters, and pagination
+│   └── parser.py           Profile cards and interest form parsing
+├── news/
+│   ├── mcp_server.py        Public news tools and input schemas
+│   ├── models.py           Typed story, category, and article responses
+│   ├── client.py           News search and bounded article retrieval
+│   └── parser.py           Story cards and article body extraction
+└── service/
+    ├── mcp_server.py        Public campus service tools and input schemas
+    ├── models.py           Typed location and filter responses
+    ├── client.py           Complete directory collection and local search
+    └── parser.py           Contact, hours, and map normalization
 tests/
-├── ntu_stars/              STARS tests and fictionalized fixtures
+├── stars/                  STARS tests and fictionalized fixtures
 ├── ntulearn/               NTULearn tests and synthetic fixtures
-└── test_*.py               Keyring, local CLI, and shared lifecycle tests
+├── mazemap/                MazeMap tests and synthetic fixtures
+├── repository/             DR-NTU tests and synthetic fixtures
+├── library/                OneSearch and LibFacilities tests and fixtures
+├── faculty/                Faculty directory tests and synthetic fixtures
+├── news/                   News search and article tests with synthetic fixtures
+├── service/                Campus directory tests and synthetic fixtures
+├── test_*.py               Keyring, local CLI, and shared lifecycle tests
+└── typescript_smoke.mjs     Shared MCP interoperability check
 ```
 
 ## Tools
@@ -124,6 +173,8 @@ Public lookups work without credentials. Planner and Degree Audit use the shared
 | `stars_get_index` | One index's complete schedule, vacancies, and waitlist length | No |
 | `stars_compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks | No |
 | `stars_find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes | No |
+| `stars_find_available_rooms` | Teaching-observed rooms with no scheduled classes in a time/week window | No |
+| `stars_get_room_schedule` | Courses, indexes and lessons using a room | No |
 | `stars_get_graduate_course_schedule` | Graduate course class groups and scheduled sessions | No |
 | `stars_get_undergraduate_exam_schedule` | Undergraduate exam date, time, duration, and published-term notice | No |
 | `stars_auth_status` | Whether optional WISH credentials are configured and a session has been verified | No |
@@ -131,7 +182,7 @@ Public lookups work without credentials. Planner and Degree Audit use the shared
 | `stars_save_stars_plan` | Replace a saved plan's course/index list and verify the saved result | Yes |
 | `stars_get_degree_audit` | Your AU requirements, results, and registered courses | Yes |
 
-Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `null`. Saving a plan replaces its entire course/index list. See the [STARS guide](src/ntu_stars_mcp/README.md) for parameters, examples, and sources.
+Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `null`. Saving a plan replaces its entire course/index list. See the [STARS guide](src/stars/README.md) for parameters, examples, and sources.
 
 ### NTULearn
 
@@ -158,16 +209,83 @@ Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `nu
 | `ntulearn_download_course` | Download course attachments into local folders | Yes |
 | `ntulearn_whats_new` | Recent announcements, upcoming events, and grade snapshots | Yes |
 
-Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn guide](src/ntulearn_mcp/README.md) for parameters, examples, and sources.
+Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn guide](src/ntulearn/README.md) for parameters, examples, and sources.
+
+### MazeMap
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `mazemap_list_campuses` | NTU campuses and their map IDs | No |
+| `mazemap_list_buildings` | Buildings and floor IDs, names, and levels | No |
+| `mazemap_search_places` | Find rooms, venues, and amenities by code or name | No |
+| `mazemap_get_place` | One place's location, aliases, building, and floor | No |
+| `mazemap_get_directions` | Walking instructions, distance, time, and accessibility | No |
+
+Search for a place first, then use its POI ID for details or directions. See the [MazeMap guide](src/mazemap/README.md) for parameters, examples, and sources.
+
+### DR-NTU
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `drntu_search` | Find publications by keywords, repository scope, and facet filters | No |
+| `drntu_get_item` | Published metadata, abstracts, citations, and rights | No |
+| `drntu_browse` | Explore communities, subcommunities, and collections | No |
+| `drntu_get_facets` | Available search filters, values, and result counts | No |
+| `drntu_list_bundles` | An item's file groups, including original documents | No |
+| `drntu_list_files` | File names, sizes, checksums, rights, and content links | No |
+| `drntu_get_dataset` | Published dataset metadata, versions, and file inventories | No |
+
+Public metadata can describe restricted files. See the [DR-NTU guide](src/drntu/README.md) for parameters, examples, and sources.
+
+### Library
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `library_search` | Search OneSearch by keywords, title, author, ISBN, or resource type | No |
+| `library_get_record` | Bibliographic metadata, identifiers, descriptions, and access links | No |
+| `library_get_availability` | Physical holdings and institutional full-text service links | No |
+| `library_list_facilities` | Library facilities, floor maps, and closure notices | No |
+| `library_get_map_availability` | Seat and room statuses at a Singapore date and time | No |
+| `library_get_facility_schedule` | Daily room and seat time grids and facility descriptions | Yes |
+
+Use the returned record ID and context for details. See the [Library guide](src/library/README.md) for parameters and access limitations.
+
+### Faculty
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `faculty_search` | Find faculty by name or research interest, with public profile details | No |
+| `faculty_list_interests` | Research-interest labels and IDs for faculty search | No |
+
+See the [Faculty guide](src/faculty/README.md) for parameters, pagination, and sources.
+
+### News
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `news_search` | Search news by keyword, category, and latest or oldest order | No |
+| `news_list_categories` | Published news category labels and filter IDs | No |
+| `news_get_article` | Read an article's text in bounded chunks | No |
+
+See the [News guide](src/news/README.md) for parameters and sources.
+
+### Campus services
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `service_search` | Find food outlets, shops, clinics, and services with hours and contacts | No |
+| `service_list_filters` | Official directory type and category filter IDs | No |
+
+See the [Campus services guide](src/service/README.md) for parameters and directory coverage.
 
 ## Tests
 
-Personal-data fixtures are synthetic. Timetable fixtures use fictional course labels and indexes while retaining the HTML structures needed for parser tests. Opt-in live tests print counts and statuses; they do not save academic records or learning materials in the repository.
+Personal-data, map, repository, library, faculty, news, and service fixtures are synthetic. Timetable fixtures use fictional course labels and indexes while retaining the HTML structures needed for parser tests. Opt-in live tests print counts and statuses; they do not save academic records or learning materials in the repository.
 
 The offline tests cover keyring storage and failure handling, local credential prompts, session recovery, parsing, scheduling, lossless compaction, output-schema validation, tool calls/errors, and resource discovery. Protocol tests use Python SDK clients and an independent JSON-RPC client over stdio, including protocol versions `2025-06-18` and `2025-11-25`:
 
 ```sh
-uv run python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -t . -v
 ```
 
 An optional check uses the official TypeScript SDK. Node dependencies stay in a temporary directory:
@@ -175,16 +293,20 @@ An optional check uses the official TypeScript SDK. Node dependencies stay in a 
 ```sh
 NTU_MCP_TEST_SDK="$(mktemp -d)"
 npm install --prefix "$NTU_MCP_TEST_SDK" --ignore-scripts --no-audit --no-fund @modelcontextprotocol/sdk@1.32.1
-uv run node tests/ntu_stars/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
+uv run node tests/typescript_smoke.mjs "$NTU_MCP_TEST_SDK"
 ```
 
 These interoperability checks use offline fixtures and never edit saved plans.
 
-Live checks and service-specific testing instructions: [STARS](src/ntu_stars_mcp/README.md#tests) · [NTULearn](src/ntulearn_mcp/README.md#tests).
+Live checks and service-specific testing instructions: [STARS](src/stars/README.md#tests) · [NTULearn](src/ntulearn/README.md#tests) · [MazeMap](src/mazemap/README.md#tests) · [DR-NTU](src/drntu/README.md#tests).
+
+[Library tests](src/library/README.md#tests) · [Faculty tests](src/faculty/README.md#tests) · [News tests](src/news/README.md#tests) · [Campus services tests](src/service/README.md#tests).
 
 ## Limitation
 
-Access depends on NTU permissions and service availability. Timetables are published schedules; vacancies are snapshots. NTULearn may restrict content, and large collections can return partial results. Inline document reading extracts text without OCR.
+Access depends on service availability and NTU permissions. Timetables are published schedules; vacancies are snapshots. NTULearn may restrict content, and large collections can return partial results. Inline document reading extracts text without OCR. MazeMap directions are estimates; map data does not establish room availability or current physical access. DR-NTU file metadata does not establish download permission, and the dataset service may interrupt requests with CAPTCHA.
+
+Room searches cover published undergraduate teaching only, not occupancy, graduate classes, exams, other bookings or access permissions. Unplaced lesson venues remain outside room-specific coverage. Library records and access labels do not establish subscription entitlement, anonymous full-text access, or a loanable copy. Facility booking statuses do not establish occupancy. MFA stops library login; no borrowing or facility bookings are submitted.
 
 ## Disclaimer
 

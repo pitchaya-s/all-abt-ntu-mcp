@@ -4,9 +4,9 @@ import unittest
 from unittest.mock import patch
 
 
-from ntulearn_mcp.services import messages
-from ntulearn_mcp.ntu_client.client import LearnClient
-from ntulearn_mcp.models import LearnError
+from ntulearn.services import messages
+from ntulearn.client.client import LearnClient
+from ntulearn.models import LearnError
 from .fixtures import COURSE, FixtureSession, NOW, RESPONSES, SECRET, USER
 
 

@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ntulearn_mcp.models import AuthStatus, Download
+from ntulearn.models import AuthStatus, Download
 
 PREFIX = "/learn/api/public/v1"
 COURSE = "_100_1"

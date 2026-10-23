@@ -6,8 +6,8 @@ import tempfile
 
 from mcp import Client
 
-from ntulearn_mcp import mcp_server
-from ntu_stars_mcp.mcp_server import mcp
+from ntulearn import mcp_server
+from stars.mcp_server import mcp
 
 
 async def main():

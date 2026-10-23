@@ -26,7 +26,7 @@ def main() -> None:
         if args.action == "save":
             if not sys.stdin.isatty() or not sys.stderr.isatty():
                 raise CredentialError("Credential setup requires your own interactive terminal; piped input is refused.")
-            print("Save/update your NTU account in the native OS keyring and enable automatic login for STARS and NTULearn.")
+            print("Save/update your NTU account in the native OS keyring and enable automatic login for STARS, NTULearn and LibFacilities.")
             username = input("NTU network username or email: ")
             password = input("NTU password: ")
             save_credentials(username, password)

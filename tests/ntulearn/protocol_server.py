@@ -1,7 +1,7 @@
 """Synthetic NTULearn stdio server; no network or account credentials."""
 from fixtures import COURSE, PREFIX, RESPONSES, FixtureSession
-from ntulearn_mcp.ntu_client.client import LearnClient
-from ntulearn_mcp import mcp_server
+from ntulearn.client.client import LearnClient
+from ntulearn import mcp_server
 from shared.server import main
 
 if __name__ == "__main__":

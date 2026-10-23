@@ -43,7 +43,7 @@ class Credentials:
 
 
 class CredentialStatus(TypedDict):
-    credentials_configured: bool
+    credentials_configured: bool | None
     credential_storage: str
     credential_error: str | None
 
@@ -110,7 +110,7 @@ def credential_status() -> CredentialStatus:
     try:
         credentials = read_credentials()
     except CredentialError as error:
-        return {"credentials_configured": False,
+        return {"credentials_configured": None,
                 "credential_storage": "os_keyring", "credential_error": str(error)}
     return {"credentials_configured": bool(credentials.username and credentials.password),
             "credential_storage": "os_keyring", "credential_error": None}

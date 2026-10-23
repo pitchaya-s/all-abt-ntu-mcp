@@ -6,8 +6,8 @@ import tempfile
 
 from mcp import Client
 
-from ntulearn_mcp import mcp_server
-from ntu_stars_mcp.mcp_server import mcp
+from ntulearn import mcp_server
+from stars.mcp_server import mcp
 
 
 def flatten(nodes):
@@ -25,7 +25,7 @@ async def main():
                     raise RuntimeError(result.content[0].text)
                 return result.structured_content
 
-            assert len((await client.list_tools()).tools) == 32
+            assert len([t for t in (await client.list_tools()).tools if t.name.startswith('ntulearn_')]) == 20
             courses = (await call('ntulearn_list_courses', limit=100))['courses']
             selected = [course for course in courses if course.get('available') == 'Yes' and course.get('organization') is not True]
             assert selected, 'No available enrolled course to sample.'

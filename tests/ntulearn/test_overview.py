@@ -3,9 +3,9 @@ import unittest
 from unittest.mock import patch
 
 
-from ntulearn_mcp.services import overview
-from ntulearn_mcp.ntu_client.client import LearnClient
-from ntulearn_mcp.models import LearnError
+from ntulearn.services import overview
+from ntulearn.client.client import LearnClient
+from ntulearn.models import LearnError
 from .fixtures import COURSE, FixtureSession, NOW
 
 
@@ -18,7 +18,7 @@ class OverviewTests(unittest.TestCase):
         result = overview.get_upcoming(self.client, NOW, NOW + timedelta(days=1), [COURSE], 'GradebookColumn')
         self.assertTrue(result.complete)
         self.assertEqual(len(result.items), 1)
-        with patch('ntulearn_mcp.services.overview.datetime') as clock:
+        with patch('ntulearn.services.overview.datetime') as clock:
             clock.now.return_value = NOW
             result = overview.whats_new(self.client, since=NOW - timedelta(days=1), selected=[COURSE])
         self.assertTrue(result.complete)

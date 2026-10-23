@@ -7,10 +7,10 @@ from zipfile import ZipFile
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from ntulearn_mcp.services import files
-from ntulearn_mcp.ntu_client.client import LearnClient
-from ntulearn_mcp.parser.documents import extract
-from ntulearn_mcp.models import Download, LearnError
+from ntulearn.services import files
+from ntulearn.client.client import LearnClient
+from ntulearn.parser.documents import extract
+from ntulearn.models import Download, LearnError
 from .fixtures import COURSE, FixtureSession, NOW, PREFIX, RESPONSES
 
 

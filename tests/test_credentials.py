@@ -12,10 +12,10 @@ from shared.credentials import (
     ACCOUNT, SERVICE, CredentialError, _backend, credential_status,
     delete_credentials, read_credentials, save_credentials,
 )
-from ntulearn_mcp.ntu_client.session import Session
-from ntulearn_mcp.models import LearnError
-from ntu_stars_mcp.wish.models import NTUAuthError
-from ntu_stars_mcp.wish.session import WishSessionManager
+from ntulearn.client.session import Session
+from ntulearn.models import LearnError
+from stars.wish.models import NTUAuthError
+from stars.wish.session import WishSessionManager
 from tests.credential_fixtures import MemoryKeyring, stored_credentials
 
 
@@ -60,7 +60,7 @@ class KeyringTests(unittest.TestCase):
     def test_locked_keyring_and_unconfirmed_changes_fail_without_secret_details(self):
         with patch.object(self.backend, "get_password", side_effect=RuntimeError("secret-backend-detail")):
             status = credential_status()
-            self.assertFalse(status["credentials_configured"])
+            self.assertIsNone(status["credentials_configured"])
             self.assertNotIn("secret-backend-detail", json.dumps(status))
         with patch.object(self.backend, "set_password"):
             with self.assertRaisesRegex(CredentialError, "did not confirm"):
@@ -133,8 +133,21 @@ class SessionCredentialTests(unittest.TestCase):
 
 
 class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
+    async def test_inaccessible_saved_credentials_are_reported_as_unknown_over_mcp(self):
+        from stars.mcp_server import mcp
+        with stored_credentials("example001", "mcp-test-secret") as backend:
+            with patch.object(backend, "get_password", side_effect=RuntimeError("secret-backend-detail")):
+                async with Client(mcp) as client:
+                    for name in ("stars_auth_status", "ntulearn_auth_status"):
+                        result = await client.call_tool(name, {})
+                        self.assertFalse(result.is_error)
+                        self.assertIsNone(result.structured_content["credentials_configured"])
+                        self.assertFalse(result.structured_content["session_verified"])
+                        self.assertTrue(result.structured_content["credential_error"])
+                        self.assertNotIn("secret-backend-detail", result.model_dump_json())
+
     async def test_status_and_credential_errors_never_expose_keyring_secrets(self):
-        from ntu_stars_mcp.mcp_server import mcp
+        from stars.mcp_server import mcp
         with stored_credentials("example001", "mcp-test-secret"):
             async with Client(mcp) as client:
                 for name in ("stars_auth_status", "ntulearn_auth_status"):

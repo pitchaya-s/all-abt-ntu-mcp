@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import patch
 
 
-from ntulearn_mcp.services import people
-from ntulearn_mcp.ntu_client.client import LearnClient
+from ntulearn.services import people
+from ntulearn.client.client import LearnClient
 from .fixtures import COURSE, FixtureSession, SECRET
 
 

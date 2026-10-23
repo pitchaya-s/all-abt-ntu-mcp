@@ -9,9 +9,9 @@ from jsonschema import Draft202012Validator
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
-from ntulearn_mcp import mcp_server
-from ntu_stars_mcp.mcp_server import mcp
-from ntulearn_mcp.models import LearnError
+from ntulearn import mcp_server
+from stars.mcp_server import mcp
+from ntulearn.models import LearnError
 from .fixtures import CONTENT, COURSE, SECRET
 
 
@@ -26,7 +26,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                                            env={"PYTHONPATH": str(ROOT / "src"), "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"})
             async with Client(params) as client:
                 listing = await client.list_tools()
-                self.assertEqual(len(listing.tools), 32)
+                self.assertEqual(len([t for t in listing.tools if t.name.startswith("ntulearn_")]), 20)
                 by_name = {tool.name: tool for tool in listing.tools}
                 self.assertNotIn("register_courses", by_name)
                 for tool in listing.tools:

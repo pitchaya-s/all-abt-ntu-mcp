@@ -11,7 +11,7 @@ const client = new Client({ name: "ntu-public-http-test", version: "1.0" });
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(endpoint)));
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 39);
+  assert.equal(tools.length, 44);
   assert(tools.every(tool => tool.annotations.readOnlyHint && tool.outputSchema));
   for (const [name, args] of [
     ["stars_get_course_metadata", { course_code: "ZZ0001", academic_year: 2026, semester: 1 }],
@@ -28,7 +28,7 @@ try {
   const denied = await client.callTool({ name: "stars_get_degree_audit", arguments: {} });
   assert(denied.isError);
   assert.deepEqual((await client.listResources()).resources, []);
-  console.log("TypeScript HTTP interoperability passed: 39 public tools; personal reads rejected.");
+  console.log("TypeScript HTTP interoperability passed: 44 public tools; personal reads rejected.");
 } finally {
   await client.close();
 }

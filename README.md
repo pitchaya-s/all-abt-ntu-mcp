@@ -1,8 +1,8 @@
 # All About NTU MCP
 
-An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, and campus services.
+An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, campus services, and shuttle arrivals.
 
-[STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md).
+[STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md).
 
 For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the public tools from PyPI:
 
@@ -163,11 +163,16 @@ src/
 │   ├── models.py           Typed story, category, and article responses
 │   ├── client.py           News search and bounded article retrieval
 │   └── parser.py           Story cards and article body extraction
-└── service/
+├── service/
     ├── mcp_server.py        Public campus service tools and input schemas
     ├── models.py           Typed location and filter responses
     ├── client.py           Complete directory collection and local search
     └── parser.py           Contact, hours, and map normalization
+└── omnibus/
+    ├── mcp_server.py        Public shuttle and bus tool registration
+    ├── models.py           Typed route, stop, arrival, and status responses
+    ├── client.py           OutSystems session, endpoint discovery, and API reads
+    └── parser.py           Route, vehicle, stop, and arrival normalization
 tests/
 ├── stars/                  STARS tests and fictionalized fixtures
 ├── ntulearn/               NTULearn tests and synthetic fixtures
@@ -297,6 +302,18 @@ See the [Faculty guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/
 
 See the [News guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) for parameters and sources.
 
+### NTU Omnibus
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `omnibus_get_live_buses` | Current positions for an NTU shuttle route | No |
+| `omnibus_list_routes` | Shuttle route names and published colors | No |
+| `omnibus_list_stops` | Search NTU shuttle and LTA stop associations | No |
+| `omnibus_get_arrivals` | NTU shuttle and LTA arrival estimates, including services 179 and 199 when present in the feed | No |
+| `omnibus_get_service_status` | Shuttle schedules, special-day flags, and temporary notices | No |
+
+Route path geometry is not included in these tools. See the [NTU Omnibus guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md) for parameters, source behavior, and limits.
+
 ### Campus services
 
 | Tool | Purpose | Credentials |
@@ -336,6 +353,7 @@ Live checks and service-specific testing instructions: [STARS](https://github.co
 - Timetables are published schedules; vacancies are snapshots.
 - NTULearn may restrict content, and large collections can return partial results. Inline document reading extracts text without OCR.
 - MazeMap directions are estimates. Map data does not establish room availability or current physical access.
+- NTU Omnibus positions and arrivals are live snapshots that can be empty or stale; route path geometry is outside the tool outputs.
 - DR-NTU file metadata does not establish download permission. The dataset service may interrupt requests with CAPTCHA.
 - Room searches cover published undergraduate teaching only, excluding occupancy, graduate classes, exams, other bookings, and access permissions. Unplaced lesson venues remain outside room-specific coverage.
 - Library records and access labels do not establish subscription entitlement, anonymous full-text access, or a loanable copy.

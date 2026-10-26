@@ -2,9 +2,7 @@
 
 An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, career opportunities, news, campus services, shuttle arrivals, and student administration.
 
-[STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [CareerAxis](src/careeraxis/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md).
-
-Local student administration: [One Stop @ SAC](src/onestop/README.md).
+[STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [CareerAxis](src/careeraxis/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md) · [One Stop @ SAC](src/onestop/README.md).
 
 For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the public tools from PyPI:
 

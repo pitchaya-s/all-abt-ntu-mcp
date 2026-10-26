@@ -118,6 +118,16 @@ For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu aut
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
+### Run an HTTP server on localhost
+
+To connect an MCP client using Streamable HTTP, start the public server from the repository root:
+
+```sh
+uv run uvicorn api.index:app --host 127.0.0.1 --port 8000
+```
+
+Configure the client with `http://127.0.0.1:8000/mcp` and select **Streamable HTTP**. The server listens only on this computer. This HTTP endpoint provides public tools; personal tools require the local stdio command above.
+
 ## Source layout
 
 ```text

@@ -369,11 +369,11 @@ def build_prerequisite_tree(
         return [(code, relation, status) for (code, relation), status in references.items()]
 
     dependents: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
-    for course_code in term_course_codes:
-        record = records[course_code]
+    for scheduled_course_code in term_course_codes:
+        record = records[scheduled_course_code]
         for required_code, relation, match_status in record_references(record):
             current = dependents[required_code].setdefault(
-                course_code,
+                scheduled_course_code,
                 {"match_status": match_status, "relations": set()},
             )
             if current["match_status"] == "possible" or match_status == "possible":

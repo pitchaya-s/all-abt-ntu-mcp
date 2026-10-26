@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from mcp import Client
 
+from stars.client.teaching import TeachingSnapshot
+from stars.domain import Course
 from shared.server import mcp
 from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 
@@ -27,6 +29,7 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "stars_get_course_indexes",
                         "stars_get_graduate_course_schedule",
                         "stars_get_undergraduate_exam_schedule",
+                        "stars_get_prerequisite_tree",
                         "stars_auth_status",
                         "stars_get_stars_planner",
                         "stars_save_stars_plan",
@@ -178,6 +181,46 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertTrue(invalid.is_error)
                 fetch.assert_not_called()
+
+    async def test_prerequisite_tree_root_matches_requested_course(self) -> None:
+        cases = (
+            ("MH2802", 1, "DA5001"),
+            ("SC2001", 1, "DA5001"),
+            ("MH2802", 2, "DT2005"),
+        )
+        snapshots = [
+            TeachingSnapshot(
+                academic_year=2026,
+                semester=str(semester),
+                courses=(Course(decoy, "Unrelated schedule course", None, {}, {}),),
+                retrieved_at="2026-10-26T00:00:00+00:00",
+                source_url="https://example.test/schedule",
+            )
+            for _course_code, semester, decoy in cases
+        ]
+
+        with (
+            patch("stars.mcp_server.fetch_teaching_snapshot", side_effect=snapshots),
+            patch(
+                "stars.mcp_server.fetch_course_prerequisite_metadata",
+                return_value={"course_name": "Requested course", "prerequisite": None},
+            ),
+        ):
+            async with Client(mcp) as client:
+                for course_code, semester, _ in cases:
+                    result = await client.call_tool(
+                        "stars_get_prerequisite_tree",
+                        {
+                            "course_code": course_code,
+                            "academic_year": 2026,
+                            "semester": semester,
+                            "prerequisite_depth": 2,
+                            "dependent_depth": 2,
+                        },
+                    )
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(result.structured_content["course_code"], course_code)
+                    self.assertEqual(result.structured_content["root"]["course_code"], course_code)
 
 
 if __name__ == "__main__":

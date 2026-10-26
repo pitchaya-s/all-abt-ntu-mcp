@@ -1,17 +1,15 @@
+import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
 from mcp import Client
 
 from shared.server import mcp
-from stars.client import NTURequestError
-from stars.client import vacancy
+from stars.client import NTURequestError, vacancy
 from stars.parser import NTUPageError, parse_course_page, parse_course_vacancies
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HTML = (FIXTURES / "zz0001-vacancy-2026-2.html").read_text()

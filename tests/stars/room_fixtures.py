@@ -1,7 +1,7 @@
 """Synthetic term-wide HTML with shared indexes, aliases and uncertain sessions."""
 
-from stars.parser.schedule import parse_teaching_schedule
 from stars.client.teaching import TeachingSnapshot
+from stars.parser.schedule import parse_teaching_schedule
 
 
 def block(code, rows, au="3 AU"):

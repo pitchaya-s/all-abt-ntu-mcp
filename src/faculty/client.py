@@ -2,9 +2,9 @@ from urllib.parse import urlencode
 from uuid import UUID
 
 from shared.public_http import PublicHTTPClient
-from .models import FacultyError, Interests
-from . import parser
 
+from . import parser
+from .models import FacultyError, Interests
 
 DIRECTORY = "https://www.ntu.edu.sg/research/faculty-directory/"
 API = DIRECTORY + "GetAcademicProfiles/"
@@ -50,9 +50,7 @@ class FacultyClient:
             options, _ = self._interests(refresh)
             if interest_id not in {item.interest_id for item in options}:
                 raise FacultyError("Unknown interest_id; use faculty_list_interests to find current filter IDs.")
-        if page > 1:
-            # NTU reports zero totals for out-of-range pages, even when the query has matches.
-            first = self._page(query, interest_id, 1, refresh)
-            if page > first.total_pages:
-                raise FacultyError(f"Page exceeds this search's {first.total_pages} pages; start at page 1 and follow next_page.")
-        return self._page(query, interest_id, page, refresh)
+        result = self._page(query, interest_id, page, refresh)
+        if page > 1 and page > result.total_pages:
+            raise FacultyError(f"Page exceeds this search's {result.total_pages} pages; start at page 1 and follow next_page.")
+        return result

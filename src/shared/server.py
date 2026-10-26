@@ -1,5 +1,7 @@
 """Local stdio server with public tools and optional personal services."""
 
+import asyncio
+
 from mcp.server import MCPServer
 
 from careeraxis import mcp_server as careeraxis_personal
@@ -38,19 +40,23 @@ careeraxis_personal.register_tools(mcp)
 
 def main() -> None:
     from stars.wish.session import wish_session
+
+    async def serve() -> None:
+        try:
+            await mcp.run_stdio_async()
+        finally:
+            await mcp_server.session.close()
+
     try:
-        mcp.run(transport="stdio")
+        asyncio.run(serve())
     finally:
         try:
             wish_session.close()
         finally:
             try:
-                mcp_server.session.close()
+                library_personal.session.close()
             finally:
                 try:
-                    library_personal.session.close()
+                    onestop.session.close()
                 finally:
-                    try:
-                        onestop.session.close()
-                    finally:
-                        careeraxis_personal.client.session.close()
+                    careeraxis_personal.client.session.close()

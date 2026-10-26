@@ -1,18 +1,18 @@
 """Ephemeral SSO and serialized native Service Portal workflows."""
 
+import re
+import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
 from threading import RLock, get_ident
-import time
 from urllib.parse import urlencode, urlsplit
 
 from shared.credentials import CredentialError, credential_status, read_credentials
-from .models import AuthStatus, OneStopError
 
+from .models import AuthStatus, OneStopError
 
 BASE = "https://ntuadminonestop.service-now.com"
 PORTAL = BASE + "/ntussp"
@@ -252,14 +252,16 @@ class OneStopSession:
         )
 
     def _login(self, credentials):
-        if time.monotonic() < self._login_not_before:
-            raise OneStopError("A recent One Stop login did not complete. Wait one minute before retrying.")
-        self._login_not_before = time.monotonic() + 60
         self._verified = False
         self._last_verified = None
         self._cache.clear()
         self._open()
         self._page.goto(PORTAL, wait_until="domcontentloaded", timeout=30000)
+        if self._logged_in():
+            self._verified = True
+            self._last_verified = datetime.now(timezone.utc)
+            self._login_not_before = 0
+            return
         from playwright.sync_api import Error
         deadline = time.monotonic() + 60
         password_sent = False
@@ -284,6 +286,9 @@ class OneStopSession:
                         # This integration is for the student portal, like LibFacilities.
                         if not credentials.email.lower().endswith("@e.ntu.edu.sg"):
                             raise OneStopError("One Stop student tools require a saved NTU student network account.")
+                        if time.monotonic() < self._login_not_before:
+                            raise OneStopError("A recent One Stop login did not complete. Wait one minute before retrying.")
+                        self._login_not_before = time.monotonic() + 60
                         self._page.locator("#userNameInput").fill(credentials.username + "@student.main.ntu.edu.sg")
                         self._page.locator("#passwordInput").fill(credentials.password)
                         password_sent = True

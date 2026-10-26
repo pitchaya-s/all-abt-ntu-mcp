@@ -1,13 +1,16 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
-from stars.client import exams
-from stars.parser.exam import parse_undergraduate_exam_plan, parse_undergraduate_exam_schedule
-from stars.client import NTURequestError, get_undergraduate_exam_schedule
-from stars.parser import CourseUnavailable, NTUPageError
+import httpx
 
+from stars.client import NTURequestError, exams, get_undergraduate_exam_schedule
+from stars.parser import CourseUnavailable, NTUPageError
+from stars.parser.exam import (
+    parse_undergraduate_exam_plan,
+    parse_undergraduate_exam_schedule,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "undergrad-exam-zz0001-2026-1.html"
 EXAM_HTML = FIXTURE.read_bytes().decode("windows-1252")
@@ -83,6 +86,9 @@ class UndergraduateExamClientTests(unittest.TestCase):
         self.assertEqual(cached, result)
         self.assertEqual(fetch.call_count, 4)
         requests = [call.args[0] for call in fetch.call_args_list]
+        clients = [call.args[2] for call in fetch.call_args_list]
+        self.assertTrue(all(isinstance(client, httpx.Client) for client in clients))
+        self.assertTrue(all(client is clients[0] for client in clients))
         self.assertEqual(requests[0].full_url, exams.UNDERGRAD_EXAM_FORM_URL)
         self.assertEqual(
             parse_qs(requests[1].data.decode()),

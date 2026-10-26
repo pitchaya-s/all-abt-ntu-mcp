@@ -4,7 +4,7 @@ Public campus lookups in the shared `all-abt-ntu-mcp` server. No credentials, ke
 
 ## Tools
 
-All tools return typed structured results with `retrieved_at`, `source_url`, and `cached`. Successful HTTP responses are cached in memory for five minutes, bounded to 128 entries. Set `refresh: true` to refetch the requested data. Requests have a 20-second timeout, are serialized and paced at least 250 ms apart, and retry transient failures once. There is no background map download.
+All tools return typed structured results with `retrieved_at`, `source_url`, and `cached`. Responses use the shared in-memory cache, bounded to 64 entries for five minutes. Set `refresh: true` to refetch the requested data. Pooled HTTPS connections support up to two in-flight reads per client, with request starts paced at 250 ms by default and one retry for transient failures. Public HTTP settings are documented in the [shared runtime guide](../shared/README.md#public-http-reads). There is no background map download.
 
 ### `mazemap_list_campuses`
 

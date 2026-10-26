@@ -1,17 +1,16 @@
 import asyncio
-from contextlib import asynccontextmanager
 import json
 import os
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from jsonschema import Draft202012Validator
 from mcp import Client, ClientSession
-from mcp.types import CallToolResult
 from mcp.client.stdio import StdioServerParameters, stdio_client
-
+from mcp.types import CallToolResult
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVER = Path(__file__).with_name("protocol_server.py")
@@ -33,7 +32,7 @@ class SDKProtocolTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as cwd:
             async with Client(StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd, env=environment())) as client:
                 listing = await client.list_tools()
-                self.assertEqual(len([t for t in listing.tools if t.name.startswith("stars_")]), 14)
+                self.assertEqual(len([t for t in listing.tools if t.name.startswith("stars_")]), 15)
                 for tool in listing.tools:
                     self.assertIsNotNone(tool.output_schema, tool.name)
                     self.assertEqual(tool.output_schema["type"], "object", tool.name)
@@ -143,7 +142,7 @@ class RawProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with raw_client(version) as request:
                 listing = await request("tools/list", {})
                 tools = listing["result"]["tools"]
-                self.assertEqual(len([t for t in tools if t["name"].startswith("stars_")]), 14)
+                self.assertEqual(len([t for t in tools if t["name"].startswith("stars_")]), 15)
                 self.assertEqual(tools, (await request("tools/list", {}))["result"]["tools"])
                 tool = next(tool for tool in tools if tool["name"] == "stars_get_course_indexes")
                 self.assertIn("inputSchema", tool)

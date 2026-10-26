@@ -1,8 +1,7 @@
-from copy import deepcopy
-from io import BytesIO
-from email.message import Message
 import json
 import unittest
+from copy import deepcopy
+from datetime import datetime, timezone
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
@@ -12,6 +11,7 @@ from faculty import mcp_server, parser
 from faculty.client import API, DIRECTORY, FacultyClient
 from faculty.models import FacultyError
 from shared.public_http import PublicRequestError
+
 from .fixtures import INTEREST_ID, OPTIONS, OTHER_ID, PROFILE, fake_get
 
 
@@ -50,7 +50,7 @@ class FacultyTests(unittest.TestCase):
         self.assertIsNone(empty.next_page)
         with self.assertRaisesRegex(FacultyError, "Page exceeds"):
             self.client.search(page=3)
-        self.assertEqual(parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["1"])
+        self.assertEqual(parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["3"])
 
     def test_interest_discovery_deduplication_and_filtering(self):
         result = self.client.list_interests(limit=1)
@@ -104,19 +104,11 @@ class FacultyTests(unittest.TestCase):
         client = FacultyClient()
         url = API + "?interests=all&page=1&searchFaculty=Example"
         body, _ = fake_get(url)
-        def response(*args, **kwargs):
-            value = BytesIO(body)
-            value.headers = Message()
-            value.headers["Content-Type"] = "application/json; charset=utf-8"
-            value.geturl = lambda: url
-            return value
-        with patch.object(client.http.opener, "open", side_effect=response) as fetch, patch("shared.public_http.time.sleep"):
+        with patch.object(client.http, "_fetch", return_value=(body, datetime.now(timezone.utc))) as fetch:
             self.assertFalse(client.search("Example").cached)
             self.assertTrue(client.search("Example").cached)
             self.assertFalse(client.search("Example", refresh=True).cached)
             self.assertEqual(fetch.call_count, 2)
-            self.assertNotIn("Cookie", fetch.call_args.args[0].headers)
-            self.assertNotIn("Authorization", fetch.call_args.args[0].headers)
         for error in (PublicRequestError("NTU faculty directory returned HTTP 503; try again later."), KeyError("raw provider detail")):
             with patch.object(mcp_server.client, "search", side_effect=error), self.assertRaises(ToolError) as caught:
                 mcp_server.search()

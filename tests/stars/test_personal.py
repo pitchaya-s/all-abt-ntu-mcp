@@ -1,12 +1,13 @@
-from shared.credentials import delete_credentials
-from tests.credential_fixtures import stored_credentials
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, get_ident
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from threading import Barrier, get_ident
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
+from shared.credentials import delete_credentials
+from stars.client import NTURequestError
+from stars.parser import NTUPageError, parse_degree_audit_page, parse_stars_planner_page
 from stars.wish.forms import _is_login_page
 from stars.wish.models import NTUAuthError
 from stars.wish.session import (
@@ -15,9 +16,7 @@ from stars.wish.session import (
     PLANNER_URL,
     WishSessionManager,
 )
-from stars.client import NTURequestError
-from stars.parser import NTUPageError, parse_degree_audit_page, parse_stars_planner_page
-
+from tests.credential_fixtures import stored_credentials
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PLANNER_HTML = (FIXTURES / "personal-stars-planner-sanitized.html").read_text()
@@ -35,6 +34,22 @@ class PersonalParserTests(unittest.TestCase):
         self.assertEqual(result["registered_courses"][0]["Index No"], "00001")
         self.assertEqual(len(result["timetable_tables"]), 1)
         self.assertEqual(result["timetable_tables"][0]["records"][0]["Day"], "TUE")
+
+    def test_stars_planner_recognizes_an_unlabelled_registration_table(self) -> None:
+        html = """<html><head><title>STARS Planner</title></head><body>
+        <table><tr><th>Course</th><th>Course Title</th><th>Index No</th><th>Course AU</th></tr>
+        <tr><td>AB1234</td><td>Example</td><td>00001</td><td>3</td></tr></table>
+        </body></html>"""
+        result = parse_stars_planner_page(html)
+        self.assertEqual(result["registered_courses_status"], "parsed")
+        self.assertEqual(result["registered_courses"][0]["course_code"], "AB1234")
+
+    def test_course_selection_landing_is_not_reported_as_registered_courses(self) -> None:
+        html = """<html><head><title>STARS Planner</title></head><body><h1>Course Selection</h1>
+        <table><tr><th>Course</th><th>Course Title</th><th>Index No</th></tr>
+        <tr><td>AB1234</td><td>Available Course</td><td>00001</td></tr></table></body></html>"""
+        with self.assertRaisesRegex(NTUPageError, "registered-course view was missing"):
+            parse_stars_planner_page(html)
 
     def test_degree_audit_extracts_academic_tables_and_excludes_identity_tables(self) -> None:
         result = parse_degree_audit_page(AUDIT_HTML)

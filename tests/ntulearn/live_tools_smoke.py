@@ -1,8 +1,8 @@
 """Opt-in NTULearn capability checks; output is limited to counts and sanitized statuses."""
 
 import asyncio
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from mcp import Client
 
@@ -85,7 +85,7 @@ async def main():
                         assert Path(item['path']).is_relative_to(directory) and Path(item['path']).stat().st_size == item['bytes_written']
                 print('Live bounded course download: files:', len(downloaded['files']), 'bytes:', downloaded['bytes_written'], 'issues:', len(downloaded['issues']), flush=True)
     finally:
-        mcp_server.session.close()
+        await mcp_server.session.close()
 
 
 if __name__ == '__main__':

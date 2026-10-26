@@ -1,19 +1,17 @@
-from copy import deepcopy
-from datetime import datetime, timedelta, timezone
-from email.message import Message
-from email.utils import format_datetime
-from io import BytesIO
 import json
 import unittest
+from copy import deepcopy
+from datetime import datetime, timezone
 from unittest.mock import patch
-from urllib.error import HTTPError, URLError
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from mazemap.client import API, MapClient
+from mazemap import parser
+from mazemap.client import MapClient
 from mazemap.mcp_server import _call
 from mazemap.models import MapError
-from mazemap import parser
+from shared.public_http import PublicRequestError
+
 from .fixtures import COLLECTION, POI, ROUTING, SEARCH_POI, fake_get
 
 
@@ -66,6 +64,7 @@ class ParserTests(unittest.TestCase):
 class ClientTests(unittest.TestCase):
     def setUp(self):
         self.client = MapClient()
+        self.addCleanup(self.client.http.close)
 
     def test_search_pagination_uses_extra_match_without_claiming_total_coverage(self):
         with patch.object(self.client, "_get", side_effect=fake_get) as get:
@@ -84,6 +83,17 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(self.client.list_buildings(query="missing").buildings, [])
             self.assertEqual(self.client.get_place(1001).place.identifier, "EX-B1-07")
             self.assertEqual(self.client.get_directions(1001, 1002).routes[0].duration_seconds, 22)
+
+    def test_route_floor_without_a_building_is_preserved(self):
+        def route_with_outdoor_floor(base, path, parameters, refresh=False):
+            data, metadata = fake_get(base, path, parameters, refresh)
+            if "/routing/" in path:
+                data["floors"][0]["buildingId"] = None
+            return data, metadata
+
+        with patch.object(self.client, "_get", side_effect=route_with_outdoor_floor):
+            result = self.client.get_directions(1001, 1002)
+        self.assertIsNone(result.floors[0].building_id)
 
     def test_invalid_scope_blank_query_and_mismatched_ids(self):
         with patch.object(self.client, "_get", side_effect=fake_get):
@@ -107,60 +117,32 @@ class ClientTests(unittest.TestCase):
             with patch.object(self.client, "_get", side_effect=bad_route), self.assertRaises(MapError):
                 self.client.get_directions(1001, 1002)
 
-    def response(self, data=COLLECTION, content_type="application/json"):
-        result = BytesIO(json.dumps(data).encode())
-        result.headers = Message()
-        result.headers["Content-Type"] = content_type
-        return result
+    def test_shared_cache_refresh_and_expiry(self):
+        calls = []
 
-    def test_cache_refresh_expiry_and_no_cookie_headers(self):
-        with patch("mazemap.client.urlopen", side_effect=lambda *a, **k: self.response()) as fetch, patch("mazemap.client.time.sleep"):
+        def fetch(url):
+            calls.append(url)
+            return json.dumps(COLLECTION).encode(), datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        with patch.object(self.client.http, "_fetch", side_effect=fetch):
             self.assertFalse(self.client.list_campuses().cached)
             self.assertTrue(self.client.list_campuses().cached)
             self.assertFalse(self.client.list_campuses(refresh=True).cached)
-            self.assertEqual(fetch.call_count, 2)
-            key = next(iter(self.client._cache))
-            stamp, data, retrieved = self.client._cache[key]
-            self.client._cache[key] = (stamp - 301, data, retrieved)
+            self.assertEqual(len(calls), 2)
+            key = next(iter(self.client.http._cache))
+            stamp, body, retrieved = self.client.http._cache[key]
+            self.client.http._cache[key] = (stamp - 301, body, retrieved)
             self.assertFalse(self.client.list_campuses().cached)
-            self.assertEqual(fetch.call_count, 3)
-            self.assertFalse(any(k.lower() in ("cookie", "authorization") for k in fetch.call_args.args[0].headers))
+            self.assertEqual(len(calls), 3)
 
     def test_network_errors_rate_limits_and_http_statuses(self):
-        headers = Message()
-        headers["Retry-After"] = "1"
-        for error, attempts in [(URLError("private detail"), 2),
-                                (HTTPError(API, 503, "unavailable", headers, None), 2),
-                                (HTTPError(API, 404, "missing", headers, None), 1)]:
-            with patch("mazemap.client.urlopen", side_effect=error) as fetch, patch("mazemap.client.time.sleep"):
-                with self.assertRaises(MapError) as caught:
-                    self.client.list_campuses()
-                self.assertEqual(fetch.call_count, attempts)
-                self.assertNotIn("private detail", str(caught.exception))
-        with patch("mazemap.client.urlopen", side_effect=[HTTPError(API, 429, "limited", headers, None), self.response()]) as fetch, patch("mazemap.client.time.sleep"):
-            self.assertEqual(len(self.client.list_campuses().campuses), 1)
-            self.assertEqual(fetch.call_count, 2)
+        with patch.object(self.client.http, "_fetch", side_effect=PublicRequestError("MazeMap returned HTTP 503; try again later.")):
+            with self.assertRaisesRegex(MapError, "HTTP 503") as caught:
+                self.client.list_campuses()
+        self.assertNotIn("private detail", str(caught.exception))
 
-    def test_bad_content_and_oversized_response_are_not_cached(self):
-        malformed = self.response()
-        malformed.seek(0)
-        malformed.truncate()
-        malformed.write(b"not json")
-        malformed.seek(0)
-        oversized = self.response()
-        oversized.read = lambda n: b" " * n
-        for response in [self.response(content_type="text/html"), malformed, oversized]:
-            with patch("mazemap.client.urlopen", return_value=response), patch("mazemap.client.time.sleep"):
-                with self.assertRaises(MapError):
-                    self.client.list_campuses()
-                self.assertFalse(self.client._cache)
-
-    def test_long_retry_after_is_respected_without_blocking_the_tool(self):
-        for retry_after in ["120", format_datetime(datetime.now(timezone.utc) + timedelta(minutes=5))]:
-            headers = Message()
-            headers["Retry-After"] = retry_after
-            error = HTTPError(API, 429, "limited", headers, None)
-            with patch("mazemap.client.urlopen", side_effect=error) as fetch, patch("mazemap.client.time.sleep"):
-                with self.assertRaisesRegex(MapError, "429"):
-                    self.client.list_campuses()
-                self.assertEqual(fetch.call_count, 1)
+    def test_invalid_json_is_not_cached(self):
+        with patch.object(self.client.http, "_fetch", return_value=(b"not json", datetime.now(timezone.utc))):
+            with self.assertRaisesRegex(MapError, "invalid JSON"):
+                self.client.list_campuses()
+            self.assertFalse(self.client.http._cache)

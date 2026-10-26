@@ -32,7 +32,7 @@ Labels are not API filter values. Unknown IDs are rejected rather than silently 
 
 ## Requests and caching
 
-Both tools include `retrieved_at`, `source_url`, and `cached`. Responses stay in memory for five minutes; `refresh: true` fetches them again. Requests use the shared bounded HTTP client with a 20-second timeout, serialized requests, pacing, one retry for transient failures, and a bounded cache. Unexpected JSON, changed form structure, inconsistent pagination, and access denials return errors.
+Both tools include `retrieved_at`, `source_url`, and `cached`. Responses stay in memory for five minutes; `refresh: true` fetches them again. Requests use the shared pooled HTTP client with an 8 MB response bound, a 20-second timeout, up to two in-flight reads per client, and 250 ms default pacing. Public HTTP settings are documented in the [shared runtime guide](../shared/README.md#public-http-reads). Unexpected JSON, changed form structure, inconsistent pagination, and access denials return errors.
 
 The directory covers profiles NTU publishes here; it does not establish a complete employee list, current employment, supervision availability, or contact responsiveness. No full profile pages are fetched.
 

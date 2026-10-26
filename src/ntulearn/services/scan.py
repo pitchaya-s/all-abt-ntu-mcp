@@ -1,10 +1,10 @@
 """Shared request budgets and pagination for cross-course reads."""
 
+import asyncio
 from datetime import datetime, timezone
 
 from ..client.client import identifier
-from ..models import Issue
-from ..models import LearnError
+from ..models import Issue, LearnError
 
 
 class LimitReached(LearnError):
@@ -19,20 +19,22 @@ class Scan:
         self.requests = 0
         self.freshness = []
         self.issues = []
+        self._request_lock = asyncio.Lock()
 
-    def call(self, function, *args, cost=1, **kwargs):
-        if self.requests + cost > self.limit:
-            raise LimitReached('Request budget reached; narrow the course selection or increase max_requests.')
-        self.requests += cost
-        result = function(*args, **kwargs)
+    async def call(self, function, *args, cost=1, **kwargs):
+        async with self._request_lock:
+            if self.requests + cost > self.limit:
+                raise LimitReached('Request budget reached; narrow the course selection or increase max_requests.')
+            self.requests += cost
+        result = await function(*args, **kwargs)
         if hasattr(result, 'retrieved_at'):
             self.freshness.append({key: getattr(result, key) for key in ('retrieved_at', 'from_cache', 'cache_age_seconds')})
         elif hasattr(result, 'downloaded_at'):
             self.freshness.append(dict(retrieved_at=result.downloaded_at, from_cache=False, cache_age_seconds=0))
         return result
 
-    def get(self, client, path, params=None, refresh=False):
-        data, freshness = self.call(client.session.get, path, params, refresh)
+    async def get(self, client, path, params=None, refresh=False):
+        data, freshness = await self.call(client.session.get, path, params, refresh)
         self.freshness.append(freshness)
         return data
 
@@ -46,11 +48,12 @@ class Scan:
                     cache_age_seconds=max((row['cache_age_seconds'] for row in self.freshness), default=0))
 
 
-def pages(scan, function, field, *args, refresh=False, **kwargs):
+async def pages(scan, function, field, *args, refresh=False, **kwargs):
     offset = 0
     while True:
-        result = scan.call(function, *args, limit=100, offset=offset, refresh=refresh, **kwargs)
-        yield from getattr(result, field)
+        result = await scan.call(function, *args, limit=100, offset=offset, refresh=refresh, **kwargs)
+        for row in getattr(result, field):
+            yield row
         if result.next_offset is None:
             return
         if result.next_offset <= offset:
@@ -58,13 +61,16 @@ def pages(scan, function, field, *args, refresh=False, **kwargs):
         offset = result.next_offset
 
 
-def course_ids(client, scan, selected, refresh=False):
+async def course_ids(client, scan, selected, refresh=False):
     if selected is not None:
         if not selected or len(selected) > 100:
             raise LearnError('Select between 1 and 100 course IDs, or omit course_ids.')
         return list(dict.fromkeys(identifier(value) for value in selected))
-    return [course.id for course in pages(scan, client.list_courses, 'courses', refresh=refresh)
-            if course.available != 'No' and course.organization is not True]
+    result = []
+    async for course in pages(scan, client.list_courses, 'courses', refresh=refresh):
+        if course.available != 'No' and course.organization is not True:
+            result.append(course.id)
+    return result
 
 
 def aware(value, name):

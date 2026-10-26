@@ -1,5 +1,5 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from stars.domain import session_signature
 from stars.parser import (
@@ -10,7 +10,6 @@ from stars.parser import (
     parse_graduate_course_page,
     parse_teaching_weeks,
 )
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

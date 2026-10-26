@@ -1,10 +1,10 @@
 import asyncio
-from contextlib import ExitStack
 import os
-from pathlib import Path
 import subprocess
 import sys
 import unittest
+from contextlib import ExitStack
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx2
@@ -16,16 +16,16 @@ from shared.http import create_app
 from tests.faculty.fixtures import fake_get as faculty_get
 from tests.library.fixtures import fake_get as library_get
 from tests.mazemap.fixtures import fake_get as map_get
-from tests.news.fixtures import ARTICLE_URL, fake_get as news_get
+from tests.news.fixtures import ARTICLE_URL
+from tests.news.fixtures import fake_get as news_get
 from tests.omnibus.fixtures import FixtureClient as OmnibusFixtureClient
 from tests.repository.fixtures import fake_get as repository_get
 from tests.repository.oai_fixtures import fake_get as oai_get
 from tests.service.fixtures import fake_get as service_get
 from tests.stars.mcp_fixtures import COURSE
 
-
 HEADERS = {"Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25"}
-COUNTS = {"stars": 10, "mazemap": 5, "drntu": 12, "library": 5, "faculty": 2, "news": 3, "service": 2, "omnibus": 5}
+COUNTS = {"stars": 11, "mazemap": 5, "drntu": 12, "library": 5, "faculty": 2, "news": 3, "service": 2, "omnibus": 5}
 
 
 def payload(method="tools/list", params=None):

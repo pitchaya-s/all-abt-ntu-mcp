@@ -1,25 +1,26 @@
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from ntulearn.services import files
 from ntulearn.client.client import LearnClient
-from ntulearn.parser.documents import extract
 from ntulearn.models import Download, LearnError
-from .fixtures import COURSE, FixtureSession, NOW, PREFIX, RESPONSES
+from ntulearn.parser.documents import extract
+from ntulearn.services import files
+
+from .fixtures import COURSE, NOW, PREFIX, RESPONSES, FixtureSession
 
 
-class FileTests(unittest.TestCase):
+class FileTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.session = FixtureSession()
         self.client = LearnClient(self.session)
 
-    def test_inline_text_and_pdf_extraction_bounds_and_office(self):
+    async def test_inline_text_and_pdf_extraction_bounds_and_office(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'example.txt'
             path.write_text('Example text')
@@ -55,7 +56,7 @@ class FileTests(unittest.TestCase):
             with self.assertRaises(LearnError):
                 extract(path)
 
-    def test_inline_read_uses_attachment_metadata_and_cleans_temporary_files(self):
+    async def test_inline_read_uses_attachment_metadata_and_cleans_temporary_files(self):
         path = f'{PREFIX}/courses/{COURSE}/contents/_202_1/attachments'
         seen = []
         def download(course, content_id, attachment, destination, **kwargs):
@@ -63,40 +64,40 @@ class FileTests(unittest.TestCase):
             Path(destination).write_text('Inline example')
             return Download(path=destination, bytes_written=14, downloaded_at=NOW)
         with patch.dict(RESPONSES, {path: {'results': [{'id': '_500_1', 'fileName': '../../example.txt'}]}}), patch.object(self.client, 'download_file', side_effect=download):
-            result = files.read_file_content(self.client, COURSE, '_202_1', '_500_1')
+            result = await files.read_file_content(self.client, COURSE, '_202_1', '_500_1')
         self.assertEqual(result.text, 'Inline example')
         self.assertFalse(seen[0].exists())
 
-    def test_course_download_preserves_folders_skips_existing_and_bounds_files(self):
+    async def test_course_download_preserves_folders_skips_existing_and_bounds_files(self):
         def download(course, content_id, attachment, destination, **kwargs):
             Path(destination).write_bytes(b'example')
             return Download(path=destination, bytes_written=7, downloaded_at=NOW)
         with tempfile.TemporaryDirectory() as directory, patch.object(self.client, 'download_file', side_effect=download) as get:
-            result = files.download_course(self.client, COURSE, directory)
+            result = await files.download_course(self.client, COURSE, directory)
             self.assertTrue(result.complete)
             self.assertEqual(result.bytes_written, 7)
             self.assertTrue(Path(result.files[0].path).is_relative_to(Path(directory)))
             self.assertIn('Week 1', result.files[0].path)
-            result = files.download_course(self.client, COURSE, directory)
+            result = await files.download_course(self.client, COURSE, directory)
             self.assertEqual(result.files[0].status, 'skipped_existing')
             self.assertEqual(get.call_count, 1)
             other = Path(directory) / 'bounded'
-            result = files.download_course(self.client, COURSE, str(other), max_requests=3)
+            result = await files.download_course(self.client, COURSE, str(other), max_requests=3)
             self.assertFalse(result.complete)
             self.assertLessEqual(result.requests_used, 3)
-            streamed = files.download_course(self.client, COURSE, str(Path(directory) / 'streamed'), max_requests=8)
+            streamed = await files.download_course(self.client, COURSE, str(Path(directory) / 'streamed'), max_requests=8)
             self.assertEqual(streamed.bytes_written, 7)
             self.assertFalse(streamed.complete)
             self.assertLessEqual(streamed.requests_used, 8)
 
-    def test_download_rejects_symlink_directory_and_reports_failed_attachment(self):
+    async def test_download_rejects_symlink_directory_and_reports_failed_attachment(self):
         with tempfile.TemporaryDirectory() as directory:
             link = Path(directory) / 'link'
             link.symlink_to(Path(directory), target_is_directory=True)
             with self.assertRaisesRegex(LearnError, 'symbolic'):
-                files.download_course(self.client, COURSE, str(link))
+                await files.download_course(self.client, COURSE, str(link))
             with patch.object(self.client, 'download_file', side_effect=LearnError('Download denied (HTTP 403).')):
-                result = files.download_course(self.client, COURSE, directory)
+                result = await files.download_course(self.client, COURSE, directory)
             self.assertFalse(result.complete)
             self.assertEqual(result.files[0].status, 'failed')
             self.assertEqual(result.bytes_written, 0)

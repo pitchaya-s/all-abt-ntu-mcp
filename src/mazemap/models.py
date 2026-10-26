@@ -87,7 +87,7 @@ class Route(Model):
 
 
 class RouteFloor(Floor):
-    building_id: int
+    building_id: int | None
 
 
 class RouteBuilding(Model):

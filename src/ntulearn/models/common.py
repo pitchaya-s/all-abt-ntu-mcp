@@ -17,6 +17,7 @@ class AuthStatus(Model):
     credential_storage: Literal["os_keyring"] = "os_keyring"
     credential_error: str | None = None
     session_verified: bool
+    authentication_method: Literal["browser_cookie", "sso"] | None = None
     last_verified_at: datetime | None
     session_storage: Literal["in_memory_only"] = "in_memory_only"
     cache_ttl_seconds: int

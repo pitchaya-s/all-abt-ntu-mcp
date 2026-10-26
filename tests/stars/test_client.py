@@ -1,7 +1,8 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
-from urllib.error import URLError
+
+import httpx
 
 from stars.client import (
     NTURequestError,
@@ -11,7 +12,6 @@ from stars.client import (
     graduate,
     http,
 )
-
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zz0001-2026-1.html"
 HTML = FIXTURE.read_bytes().decode("windows-1252")
@@ -29,12 +29,12 @@ class ClientTests(unittest.TestCase):
             graduate._graduate_cache.clear()
 
     def test_invalid_course_code_is_rejected_before_network(self) -> None:
-        with patch("stars.client.http.urlopen") as open_url:
+        with patch.object(http, "_request_html") as request_html:
             with self.assertRaisesRegex(ValueError, "Course code"):
                 get_course("ZZ0001?x=1", 2026, 1)
             with self.assertRaisesRegex(ValueError, "Semester"):
                 get_course("ZZ0001", 2026, 3)
-            open_url.assert_not_called()
+            request_html.assert_not_called()
 
     def test_undergraduate_fetch_uses_public_schedule_form(self) -> None:
         with patch("stars.client.courses._fetch_html_request", return_value="page") as fetch:
@@ -52,7 +52,8 @@ class ClientTests(unittest.TestCase):
 
     def test_network_failure_is_reported_and_not_cached(self) -> None:
         with patch.object(http, "MAX_RETRIES", 0), patch(
-            "stars.client.http.urlopen", side_effect=URLError("offline")
+            "stars.client.http._request_html",
+            side_effect=httpx.ConnectError("offline", request=httpx.Request("GET", courses.BASE_URL)),
         ):
             with self.assertRaisesRegex(NTURequestError, "after 1 attempt"):
                 get_course("ZZ0001", 2026, 1)

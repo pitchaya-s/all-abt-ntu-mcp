@@ -3,9 +3,10 @@ from unittest.mock import patch
 
 from mcp import Client
 
+from shared.server import mcp
 from stars.client.teaching import TeachingSnapshot
 from stars.domain import Course
-from shared.server import mcp
+
 from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 
 

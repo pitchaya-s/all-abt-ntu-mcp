@@ -1,13 +1,13 @@
-from pathlib import Path
 import re
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
+from stars.client import NTURequestError
 from stars.parser import NTUPageError, parse_stars_planner_page
 from stars.parser.planner import parse_saved_plan_timetable
-from stars.client import NTURequestError
 from stars.wish.models import NTUPersonalDataError
 from stars.wish.planner import PLANNER_VIEW_URL, read_stars_planner
 

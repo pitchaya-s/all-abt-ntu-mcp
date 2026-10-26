@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 from room_fixtures import snapshot as room_snapshot
+
 from shared.server import main
 from stars.client import NTURequestError, validate_course_code
 from stars.client.validation import _academic_term
@@ -36,5 +37,5 @@ if __name__ == "__main__":
         for target in ("persist_stars_plan", "fetch_stars_planner", "fetch_degree_audit"):
             stack.enter_context(patch(f"stars.personal_tools.{target}", side_effect=NTURequestError("Personal actions are disabled in protocol fixtures.")))
         stack.enter_context(patch("shared.credentials.keyring.get_keyring", side_effect=RuntimeError("Offline test has no keyring")))
-        stack.enter_context(patch("stars.client.http.urlopen", side_effect=AssertionError("Offline test attempted HTTP")))
+        stack.enter_context(patch("stars.client.http._request_html", side_effect=AssertionError("Offline test attempted HTTP")))
         main()

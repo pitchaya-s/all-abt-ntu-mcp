@@ -1,312 +1,929 @@
-from shared.credentials import delete_credentials, save_credentials
-from tests.credential_fixtures import stored_credentials
-from concurrent.futures import ThreadPoolExecutor
-import json
-from pathlib import Path
+import asyncio
+import http.cookiejar
+import os
+import sys
 import tempfile
-from threading import get_ident
 import unittest
-from unittest.mock import Mock, patch
+from pathlib import Path
+from threading import Lock
+from types import ModuleType, SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 
-from ntulearn.client.session import BASE, Session, _READ_PATH
+import httpx
+
+from ntulearn.client.browser_cookies import (
+    SessionCookie,
+    install_cookies,
+    playwright_cookies,
+    read_browser_cookie_sets,
+)
+from ntulearn.client.config import SessionConfig
+from ntulearn.client.http import AuthGenerationChanged
+from ntulearn.client.session import Session
 from ntulearn.models import LearnError
+from shared.credentials import CredentialError, Credentials
 
-from .fixtures import COURSE, PREFIX, SECRET
-
-
-class Response:
-    def __init__(self, status=200, data=None, content_type="application/json", body=None, **headers):
-        self.status = status
-        self.headers = {"content-type": content_type, **headers}
-        self.data = b'{}' if data is None else json.dumps(data).encode()
-        if body is not None:
-            self.data = body
-        self.disposed = False
-
-    def body(self):
-        return self.data
-
-    def dispose(self):
-        self.disposed = True
+PREFIX = "/learn/api/public/v1"
+COURSES = PREFIX + "/users/me/courses"
+SECRET = "synthetic-session-secret-never-returned"
+LOGIN_CREDENTIALS = Credentials(
+    username="student001",
+    email="student001@e.ntu.edu.sg",
+    password="synthetic-password",
+    revision="revision-one",
+)
 
 
-class AuthTests(unittest.TestCase):
-    def setUp(self):
-        credentials = stored_credentials("student001", SECRET)
-        credentials.__enter__()
-        self.addCleanup(credentials.__exit__, None, None, None)
-        self.env = patch.dict("os.environ", {"NTULEARN_HEADLESS": "true", "NTULEARN_CACHE_TTL_SECONDS": "300"})
-        self.env.start()
-        self.session = Session()
-        self.session._verified = True
+def cookies(value="expires:1,id:synthetic"):
+    return (
+        SessionCookie(
+            "BbRouter", value, ".ntu.edu.sg", path="/", secure=True,
+            domain_specified=True,
+        ),
+        SessionCookie(
+            "XSRF-TOKEN", "synthetic-xsrf", "ntulearn.ntu.edu.sg", path="/learn",
+            secure=True, domain_specified=False,
+        ),
+    )
 
-    def tearDown(self):
-        self.session.close()
-        self.env.stop()
 
-    def test_cache_refresh_mutation_and_ttl(self):
-        path = PREFIX + "/users/me/courses"
-        responses = [Response(data={"results": []}) for _ in range(3)]
-        with patch.object(self.session, "_request", side_effect=responses) as request:
-            first, fresh = self.session.get(path)
-            first["results"].append("mutated")
-            cached, metadata = self.session.get(path)
-            self.assertEqual(cached, {"results": []})
-            self.assertTrue(metadata["from_cache"])
-            self.assertEqual(fresh["retrieved_at"], metadata["retrieved_at"])
-            self.session.get(path, refresh=True)
-            self.session.ttl = 0
-            self.session.get(path)
-            self.assertEqual(request.call_count, 3)
-        self.assertTrue(all(response.disposed for response in responses))
+def api_response(request, status=200, data=None, *, headers=None, content=None):
+    if data is not None:
+        return httpx.Response(status, json=data, headers=headers, request=request)
+    return httpx.Response(status, content=content or b"", headers=headers, request=request)
 
-    def test_expiry_reauthenticates_once_and_rejects_repeated_expiry(self):
-        for response in [Response(401), Response(302), Response(content_type="text/html", body=b'<form>login</form>')]:
-            self.session._cache.clear()
-            self.session._verified = True
-            with patch.object(self.session, "_login") as login, patch.object(self.session, "_request", side_effect=[response, Response(data={"results": []})]):
-                self.session.get(PREFIX + "/users/me/courses", refresh=True)
-                login.assert_called_once()
-                self.assertTrue(response.disposed)
-        self.session._verified = True
-        with patch.object(self.session, "_login") as login, patch.object(self.session, "_request", side_effect=[Response(401), Response(401)]):
-            with self.assertRaisesRegex(LearnError, "expired again"):
-                self.session.get(PREFIX + "/users/me/courses", refresh=True)
-            login.assert_called_once()
-            self.assertFalse(self.session.status().session_verified)
 
-    def test_denied_access_and_server_errors_are_not_hidden_or_cached(self):
-        for status in [400, 403, 404]:
-            with patch.object(self.session, "_login") as login, patch.object(self.session, "_request", return_value=Response(status)):
-                with self.assertRaisesRegex(LearnError, f"HTTP {status}"):
-                    self.session.get(PREFIX + "/users/me/courses", refresh=True)
-                login.assert_not_called()
-        with patch("ntulearn.client.session.time.sleep"), patch.object(self.session, "_request", side_effect=[Response(503), Response(429), Response(data={"results": []})]) as request:
-            self.session.get(PREFIX + "/users/me/courses", refresh=True)
-            self.assertEqual(request.call_count, 3)
+class RoutingTransport(httpx.AsyncBaseTransport):
+    def __init__(self, handler):
+        self.handler = handler
 
-    def test_expired_response_is_disposed_before_replacing_its_context(self):
-        events = []
-        expired = Response(401)
-        dispose = expired.dispose
-        def close_response():
-            self.assertNotIn("context_closed", events)
-            events.append("response_disposed")
-            dispose()
-        expired.dispose = close_response
-        def login():
-            self.assertEqual(events, ["response_disposed"])
-            events.append("context_closed")
-            self.session._verified = True
-        with patch.object(self.session, "_login", side_effect=login), patch.object(self.session, "_request", side_effect=[expired, Response(data={"results": []})]):
-            self.session.get(PREFIX + "/users/me/courses", refresh=True)
-        self.assertEqual(events, ["response_disposed", "context_closed"])
+    async def handle_async_request(self, request):
+        result = self.handler(request)
+        if hasattr(result, "__await__"):
+            result = await result
+        return result
 
-    def test_malformed_and_oversized_json_are_rejected(self):
-        for response in [Response(body=b'invalid'), Response(body=b'0' * 5_000_001), Response(content_type="text/plain")]:
-            with patch.object(self.session, "_request", return_value=response), self.assertRaises(LearnError):
-                self.session.get(PREFIX + "/users/me/courses", refresh=True)
-            self.assertTrue(response.disposed)
 
-    def test_only_fixed_read_endpoints_reach_http(self):
-        self.session._context = Mock()
-        for path in ["https://other.invalid", "/learn/api/public/v1/users/me?x=1", "/learn/api/public/v1/courses/../users/me", "/learn/api/v1/messages/mailbox"]:
-            with self.assertRaises(LearnError):
-                self.session.get(path)
-        self.session._context.request.get.assert_not_called()
-        with self.assertRaisesRegex(LearnError, "closed"):
-            self.session.close()
-            self.session.get(PREFIX + "/users/me")
+class SessionTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.sessions = []
 
-    def test_single_browser_thread_and_generic_errors_do_not_leak_secrets(self):
-        def operation():
-            return get_ident()
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            identities = list(executor.map(lambda _: self.session.run(operation), range(6)))
-        self.assertEqual(len(set(identities)), 1)
-        self.assertNotEqual(identities[0], get_ident())
-        def failure():
+    async def asyncTearDown(self):
+        await asyncio.gather(*(session.close() for session in self.sessions), return_exceptions=True)
+
+    def make_session(
+        self,
+        handler,
+        *,
+        browser_reader=lambda: [],
+        sso_login=None,
+        external_handler=None,
+        browser_cookies=False,
+        transport_type="mock",
+        **settings,
+    ):
+        env = {
+            "NTULEARN_BROWSER_COOKIES": str(browser_cookies).lower(),
+            "NTULEARN_REQUEST_INTERVAL_SECONDS": "0",
+            **settings,
+        }
+        main_transport = (
+            RoutingTransport(handler)
+            if transport_type == "async"
+            else httpx.MockTransport(handler)
+        )
+        external_transport = (
+            httpx.MockTransport(external_handler)
+            if external_handler is not None
+            else None
+        )
+        async def unused_login(*args, **kwargs):
+            raise AssertionError("SSO login was not expected")
+        with patch.dict(os.environ, env):
+            session = Session(
+                browser_cookie_reader=browser_reader,
+                sso_login=sso_login or unused_login,
+                transport=main_transport,
+                external_transport=external_transport,
+            )
+        self.sessions.append(session)
+        return session
+
+    def authenticated_handler(self, request):
+        if request.url.path == PREFIX + "/users/me":
+            return api_response(request, data={"id": "_900_1"})
+        if request.url.path == COURSES:
+            return api_response(request, data={"results": [{"id": "_100_1"}]})
+        return api_response(request, status=404)
+
+    async def test_config_bounds_and_browser_discovery_is_disabled_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            config = SessionConfig.from_env()
+        self.assertFalse(config.browser_cookies)
+        self.assertEqual(config.request_concurrency, 4)
+        self.assertEqual(config.request_interval_seconds, 0.1)
+        for env in (
+            {"NTULEARN_REQUEST_CONCURRENCY": "0"},
+            {"NTULEARN_REQUEST_CONCURRENCY": "9"},
+            {"NTULEARN_REQUEST_INTERVAL_SECONDS": "nan"},
+            {"NTULEARN_TIMEOUT_SECONDS": "0"},
+            {"NTULEARN_BROWSER_COOKIES": "yes"},
+        ):
+            with self.subTest(env=env), patch.dict(os.environ, env), self.assertRaises(LearnError):
+                SessionConfig.from_env()
+
+    async def test_transport_rejects_queued_requests_with_an_old_auth_generation(self):
+        sent = []
+
+        def handler(request):
+            sent.append(request)
+            return api_response(request, data={"results": []})
+
+        session = self.make_session(handler)
+        session.http.set_cookies(cookies(), generation=2)
+        with self.assertRaises(AuthGenerationChanged):
+            await session.http.get(COURSES, expected_generation=1)
+        with self.assertRaises(AuthGenerationChanged):
+            await session.http.download_bytes(
+                PREFIX + "/courses/_1_1/contents/_2_1/attachments/_3_1/download",
+                1000,
+                expected_generation=1,
+            )
+        self.assertEqual(sent, [])
+
+    async def test_stale_response_cannot_overwrite_rotated_session_cookies(self):
+        request_started = asyncio.Event()
+        release_response = asyncio.Event()
+        received_cookie = []
+
+        async def handler(request):
+            received_cookie.append(request.headers.get("cookie", ""))
+            request_started.set()
+            await release_response.wait()
+            return api_response(
+                request,
+                data={"results": []},
+                headers={"set-cookie": "BbRouter=stale-response; Domain=ntu.edu.sg; Path=/; Secure"},
+            )
+
+        session = self.make_session(handler, transport_type="async")
+        session.http.set_cookies(cookies("expires:1,id:old"), generation=0)
+        request = asyncio.create_task(
+            session.http.get(COURSES, expected_generation=0)
+        )
+        await request_started.wait()
+        session.http.set_cookies(cookies("expires:1,id:new"), generation=1)
+        release_response.set()
+        with self.assertRaises(AuthGenerationChanged):
+            await request
+        self.assertIn("id:old", received_cookie[0])
+        self.assertTrue(any(cookie.value == "expires:1,id:new" for cookie in session.http.client.cookies.jar))
+
+    def test_browser_cookie_extraction_keeps_a_scoped_cookie_set_per_browser(self):
+        seen = []
+
+        def cookie(name, value, domain, *, expires=None):
+            return SimpleNamespace(
+                name=name, value=value, domain=domain, path="/", expires=expires,
+                secure=True, domain_specified=domain.startswith("."), _rest={},
+            )
+
+        class BrowserModule:
+            def edge(self, *, domain_name):
+                seen.append(("edge", domain_name))
+                raise OSError(SECRET)
+
+            def chrome(self, *, domain_name):
+                seen.append(("chrome", domain_name))
+                return [
+                    cookie("BbRouter", "expires:1,id:chrome", ".ntu.edu.sg"),
+                    cookie("JSESSIONID", "secondary", "ntulearn.ntu.edu.sg"),
+                    cookie("other", "foreign", ".example.invalid"),
+                    cookie("expired", "old", ".ntu.edu.sg", expires=1),
+                    cookie("unsafe", "bad\r\nvalue", ".ntu.edu.sg"),
+                ]
+
+            def firefox(self, *, domain_name):
+                seen.append(("firefox", domain_name))
+                return [cookie("BbRouter", "expires:1,id:firefox", ".ntu.edu.sg")]
+
+        result = read_browser_cookie_sets(module=BrowserModule(), browsers=("edge", "chrome", "firefox"))
+        self.assertEqual(seen, [("edge", "ntu.edu.sg"), ("chrome", "ntu.edu.sg"), ("firefox", "ntu.edu.sg")])
+        self.assertEqual(len(result), 2)
+        self.assertEqual({item.name for item in result[0]}, {"BbRouter", "JSESSIONID"})
+        self.assertEqual(result[1][0].value, "expires:1,id:firefox")
+        self.assertNotIn(SECRET, repr(result))
+
+    def test_playwright_cookies_keep_all_ntulearn_state_and_reject_other_domains(self):
+        result = playwright_cookies([
+            {"name": "BbRouter", "value": "expires:1,id:one", "domain": ".ntu.edu.sg", "path": "/", "secure": True},
+            {"name": "JSESSIONID", "value": "state", "domain": "ntulearn.ntu.edu.sg", "path": "/learn", "secure": True},
+            {"name": "MSAuth", "value": "secret", "domain": "login.microsoftonline.com", "path": "/", "secure": True},
+        ])
+        self.assertEqual({cookie.name for cookie in result}, {"BbRouter", "JSESSIONID"})
+        self.assertNotIn("secret", repr(result))
+        jar = http.cookiejar.CookieJar()
+        install_cookies(jar, result)
+        self.assertEqual(len(list(jar)), 2)
+        self.assertEqual(
+            playwright_cookies([
+                {"name": "BbRouter", "value": "malformed", "domain": "..ntu.edu.sg"},
+                {"name": "BbRouter", "value": "malformed", "domain": None},
+            ]),
+            (),
+        )
+
+    async def test_validated_browser_cookies_skip_sso_and_are_reused(self):
+        requests = []
+        sso = AsyncMock()
+
+        def handler(request):
+            requests.append(request)
+            return self.authenticated_handler(request)
+
+        session = self.make_session(
+            handler,
+            browser_reader=lambda: [cookies()],
+            sso_login=sso,
+            browser_cookies=True,
+        )
+        first, freshness = await session.get(COURSES)
+        second, cached = await session.get(COURSES)
+        self.assertEqual(first, second)
+        self.assertFalse(freshness["from_cache"])
+        self.assertTrue(cached["from_cache"])
+        self.assertEqual(len(requests), 2)
+        self.assertIn("BbRouter=expires:1,id:synthetic", requests[-1].headers["cookie"])
+        self.assertIn("XSRF-TOKEN=synthetic-xsrf", requests[-1].headers["cookie"])
+        sso.assert_not_awaited()
+        with patch("ntulearn.client.session.credential_status", return_value={
+            "credentials_configured": False,
+            "credential_storage": "os_keyring",
+            "credential_error": None,
+        }):
+            status = await session.status()
+        self.assertTrue(status.session_verified)
+        self.assertEqual(status.authentication_method, "browser_cookie")
+
+    async def test_invalid_browser_cookie_is_rejected_before_sso_fallback(self):
+        seen = []
+
+        def handler(request):
+            seen.append((request.url.path, request.headers.get("cookie", "")))
+            if request.url.path == PREFIX + "/users/me":
+                if "id:valid" in request.headers.get("cookie", ""):
+                    return api_response(request, data={"id": "_900_1"})
+                return api_response(request, status=401)
+            return api_response(request, data={"results": []})
+
+        async def sso(credentials, *, headless):
+            return cookies("expires:1,id:valid")
+
+        session = self.make_session(
+            handler,
+            browser_reader=lambda: [cookies("expires:1,id:stale")],
+            sso_login=sso,
+            browser_cookies=True,
+        )
+        with patch("ntulearn.client.auth.read_credentials", return_value=LOGIN_CREDENTIALS):
+            await session.get(COURSES)
+        self.assertEqual(seen[0][0], PREFIX + "/users/me")
+        self.assertIn("id:stale", seen[0][1])
+        self.assertIn("id:valid", seen[1][1])
+        self.assertEqual(session.auth.state.method, "sso")
+
+    async def test_browser_extraction_failure_falls_back_without_leaking_error(self):
+        async def sso(credentials, *, headless):
+            return cookies("expires:1,id:sso")
+
+        def broken_reader():
             raise RuntimeError(SECRET)
-        with self.assertRaises(LearnError) as error:
-            self.session.run(failure)
-        self.assertNotIn(SECRET, str(error.exception))
-        self.assertNotIn(SECRET, self.session.status().model_dump_json())
 
-    def test_missing_credentials_and_cooldown_never_open_browser(self):
-        with patch.object(self.session, "_open") as opened:
-            delete_credentials()
-            with self.assertRaisesRegex(LearnError, "auth save"):
-                self.session.run(self.session._login)
-            save_credentials("student001", SECRET)
-            self.session._login_not_before = float("inf")
-            with self.assertRaisesRegex(LearnError, "one minute"):
-                self.session.run(self.session._login)
-            opened.assert_not_called()
+        session = self.make_session(
+            self.authenticated_handler,
+            browser_reader=broken_reader,
+            sso_login=sso,
+            browser_cookies=True,
+        )
+        with patch("ntulearn.client.auth.read_credentials", return_value=LOGIN_CREDENTIALS):
+            data, _ = await session.get(COURSES)
+        self.assertEqual(data["results"][0]["id"], "_100_1")
+        self.assertNotIn(SECRET, str(session.auth.state))
 
-    def test_download_no_overwrite_redirect_rules_and_cleanup(self):
-        path = PREFIX + "/courses/_1_1/contents/_2_1/attachments/_3_1/download"
+    async def test_browser_discovery_opt_in_is_enforced(self):
+        reader = Mock(return_value=[cookies()])
+
+        async def sso(credentials, *, headless):
+            return cookies("expires:1,id:sso")
+
+        session = self.make_session(self.authenticated_handler, browser_reader=reader, sso_login=sso)
+        with patch("ntulearn.client.auth.read_credentials", return_value=LOGIN_CREDENTIALS):
+            await session.get(COURSES)
+        reader.assert_not_called()
+        self.assertEqual(session.auth.state.method, "sso")
+
+    async def test_sso_is_lazy_and_uses_credentials_only_after_cookie_discovery(self):
+        reader = Mock(return_value=[])
+        logins = []
+
+        async def sso(credentials, *, headless):
+            logins.append((credentials.revision, headless))
+            return cookies("expires:1,id:sso")
+
+        session = self.make_session(
+            self.authenticated_handler,
+            browser_reader=reader,
+            sso_login=sso,
+            browser_cookies=True,
+        )
+        with patch("ntulearn.client.auth.read_credentials", return_value=LOGIN_CREDENTIALS):
+            self.assertIsNone(session.auth.state)
+            await session.get(COURSES)
+            await session.get(COURSES)
+        self.assertEqual(logins, [("revision-one", True)])
+        self.assertEqual(reader.call_count, 1)
+
+    async def test_tool_operation_checks_keyring_once_across_concurrent_reads(self):
+        reads = 0
+
+        def read():
+            nonlocal reads
+            reads += 1
+            return LOGIN_CREDENTIALS
+
+        async def sso(credentials, *, headless):
+            return cookies("expires:1,id:sso")
+
+        session = self.make_session(self.authenticated_handler, sso_login=sso)
+        with patch("ntulearn.client.auth.read_credentials", side_effect=read):
+            async with session.operation():
+                await asyncio.gather(
+                    session.get(COURSES, {"offset": 0}, True),
+                    session.get(COURSES, {"offset": 1}, True),
+                )
+                await session.get(COURSES, {"offset": 2}, True)
+            self.assertEqual(reads, 1)
+            async with session.operation():
+                await session.get(COURSES, {"offset": 3}, True)
+            self.assertEqual(reads, 2)
+
+    async def test_sso_login_failure_is_sanitized_and_rate_limited(self):
+        calls = 0
+
+        async def broken_login(credentials, *, headless):
+            nonlocal calls
+            calls += 1
+            raise RuntimeError(SECRET)
+
+        session = self.make_session(self.authenticated_handler, sso_login=broken_login)
+        with patch("ntulearn.client.auth.read_credentials", return_value=LOGIN_CREDENTIALS):
+            with self.assertRaises(LearnError) as error:
+                await session.get(COURSES)
+            self.assertNotIn(SECRET, str(error.exception))
+            with self.assertRaisesRegex(LearnError, "recent login"):
+                await session.get(COURSES)
+        self.assertEqual(calls, 1)
+
+    async def test_sso_mfa_is_never_bypassed_and_visible_browser_can_complete_it(self):
+        class Page:
+            def __init__(self):
+                self.stage = "challenge"
+                self.waits = []
+
+            @property
+            def url(self):
+                if self.stage == "authenticated":
+                    return "https://ntulearn.ntu.edu.sg/ultra/institution-page"
+                return "https://login.microsoftonline.com/example/saml2"
+
+            async def goto(self, *args, **kwargs):
+                pass
+
+            def locator(self, selector):
+                return Body(self) if selector == "body" else EmptyLocator()
+
+            async def wait_for_timeout(self, milliseconds):
+                self.waits.append(milliseconds)
+                self.stage = "authenticated"
+
+        class Body:
+            def __init__(self, page):
+                self.page = page
+
+            async def inner_text(self, **kwargs):
+                return "Approve sign-in using Microsoft Authenticator"
+
+        class EmptyLocator:
+            @property
+            def first(self):
+                return self
+
+            async def count(self):
+                return 0
+
+        page = Page()
+        context = SimpleNamespace(
+            new_page=AsyncMock(return_value=page),
+            cookies=AsyncMock(return_value=[{
+                "name": "BbRouter", "value": "expires:1,id:mfa", "domain": ".ntu.edu.sg", "path": "/", "secure": True,
+            }]),
+        )
+        browser = SimpleNamespace(new_context=AsyncMock(return_value=context), close=AsyncMock())
+        playwright = SimpleNamespace(chromium=SimpleNamespace(launch=AsyncMock(return_value=browser)))
+
+        class Manager:
+            async def __aenter__(self):
+                return playwright
+
+            async def __aexit__(self, *args):
+                return None
+
+        package = ModuleType("playwright")
+        package.__path__ = []
+        api = ModuleType("playwright.async_api")
+        api.async_playwright = Manager
+        modules = {"playwright": package, "playwright.async_api": api}
+        with patch.dict(sys.modules, modules):
+            from ntulearn.client.sso import login
+
+            with self.assertRaisesRegex(LearnError, "MFA or CAPTCHA"):
+                await login(LOGIN_CREDENTIALS, headless=True)
+            result = await login(LOGIN_CREDENTIALS, headless=False)
+        self.assertEqual(result[0].name, "BbRouter")
+        self.assertTrue(page.waits)
+        self.assertGreaterEqual(browser.close.await_count, 2)
+
+    async def test_concurrent_initial_requests_share_one_authentication_attempt(self):
+        count = 0
+        guard = Lock()
+        active = maximum_active = 0
+
+        def slow_reader():
+            nonlocal count
+            with guard:
+                count += 1
+            import time
+            time.sleep(0.03)
+            return [cookies()]
+
+        async def handler(request):
+            nonlocal active, maximum_active
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            active += 1
+            maximum_active = max(maximum_active, active)
+            await asyncio.sleep(0.01)
+            active -= 1
+            return api_response(request, data={"results": []})
+
+        session = self.make_session(
+            handler,
+            browser_reader=slow_reader,
+            browser_cookies=True,
+            transport_type="async",
+            **{"NTULEARN_REQUEST_CONCURRENCY": "2"},
+        )
+        results = await asyncio.gather(*(
+            session.get(COURSES, {"offset": offset}, refresh=True)
+            for offset in range(8)
+        ))
+        self.assertEqual(len(results), 8)
+        self.assertEqual(count, 1)
+        self.assertEqual(maximum_active, 2)
+
+    async def test_simultaneous_401s_share_one_refresh_and_retry(self):
+        pending = asyncio.Event()
+        count_lock = asyncio.Lock()
+        course_calls = 0
+        browser_reads = 0
+
+        def reader():
+            nonlocal browser_reads
+            browser_reads += 1
+            return [cookies()]
+
+        async def handler(request):
+            nonlocal course_calls
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            async with count_lock:
+                course_calls += 1
+                current = course_calls
+                if current == 2:
+                    pending.set()
+            if current <= 2:
+                await pending.wait()
+                return api_response(request, status=401)
+            return api_response(request, data={"results": [{"offset": request.url.params.get("offset")}]})
+
+        session = self.make_session(
+            handler,
+            browser_reader=reader,
+            browser_cookies=True,
+            transport_type="async",
+        )
+        results = await asyncio.gather(
+            session.get(COURSES, {"offset": 0}, True),
+            session.get(COURSES, {"offset": 1}, True),
+        )
+        self.assertEqual(len(results), 2)
+        self.assertEqual(browser_reads, 2)  # initial discovery plus one shared refresh
+        self.assertEqual(course_calls, 4)
+        self.assertEqual(session.auth.state.generation, 1)
+
+    async def test_expired_session_rotates_browser_cookies_and_invalidates_cache(self):
+        cookie_sets = iter([cookies("expires:1,id:old"), cookies("expires:1,id:new")])
+        seen = []
+
+        def handler(request):
+            value = request.headers.get("cookie", "")
+            seen.append((request.url.path, value))
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            if "id:old" in value:
+                return api_response(request, status=401)
+            return api_response(request, data={"results": [{"version": "new"}]})
+
+        session = self.make_session(
+            handler,
+            browser_reader=lambda: [next(cookie_sets)],
+            browser_cookies=True,
+        )
+        data, freshness = await session.get(COURSES, refresh=True)
+        self.assertEqual(data["results"][0]["version"], "new")
+        self.assertFalse(freshness["from_cache"])
+        self.assertIn("id:old", seen[1][1])
+        self.assertIn("id:new", seen[-1][1])
+        self.assertEqual(session.auth.state.method, "browser_cookie")
+
+    async def test_credential_rotation_reauthenticates_and_revocation_clears_cache(self):
+        current = LOGIN_CREDENTIALS
+        login_revisions = []
+        api_calls = 0
+
+        def read():
+            if isinstance(current, Exception):
+                raise current
+            return current
+
+        async def sso(credentials, *, headless):
+            login_revisions.append(credentials.revision)
+            return cookies(f"expires:1,id:{credentials.revision}")
+
+        def handler(request):
+            nonlocal api_calls
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            api_calls += 1
+            return api_response(request, data={"results": [{"version": api_calls}]})
+
+        session = self.make_session(handler, sso_login=sso)
+        with patch("ntulearn.client.auth.read_credentials", side_effect=read):
+            first, _ = await session.get(COURSES)
+            self.assertEqual((await session.get(COURSES))[1]["from_cache"], True)
+            current = Credentials("student001", "student001@e.ntu.edu.sg", "new-password", "revision-two")
+            second, freshness = await session.get(COURSES)
+            self.assertFalse(freshness["from_cache"])
+            self.assertEqual(second["results"][0]["version"], 2)
+            self.assertEqual(login_revisions, ["revision-one", "revision-two"])
+            current = CredentialError("The native OS keyring is unavailable or locked.")
+            with self.assertRaises(LearnError) as error:
+                await session.get(COURSES)
+            self.assertNotIn("new-password", str(error.exception))
+            self.assertNotIn("revision-two", str(error.exception))
+        self.assertEqual(first["results"][0]["version"], 1)
+        self.assertEqual(session.cache._entries, {})
+
+    async def test_inflight_old_account_response_cannot_repopulate_cleared_cache(self):
+        current = LOGIN_CREDENTIALS
+        old_request_started = asyncio.Event()
+        release_old_request = asyncio.Event()
+        old_requests = 0
+
+        async def sso(credentials, *, headless):
+            return cookies(f"expires:1,id:{credentials.revision}")
+
+        async def handler(request):
+            nonlocal old_requests
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            if request.url.params.get("offset") == "0" and old_requests == 0:
+                old_requests += 1
+                old_request_started.set()
+                await release_old_request.wait()
+                return api_response(request, data={"results": [{"account": "old"}]})
+            revision = "new" if "revision-two" in request.headers.get("cookie", "") else "old"
+            return api_response(request, data={"results": [{"account": revision}]})
+
+        session = self.make_session(handler, sso_login=sso, transport_type="async")
+        with patch("ntulearn.client.auth.read_credentials", side_effect=lambda: current):
+            old_read = asyncio.create_task(session.get(COURSES, {"offset": 0}, True))
+            await old_request_started.wait()
+            current = Credentials("student001", "student001@e.ntu.edu.sg", "new-password", "revision-two")
+            await session.get(COURSES, {"offset": 1}, True)
+            release_old_request.set()
+            old_data, _ = await old_read
+            # A response issued with the previous account's cookies is
+            # discarded; Session retries under the newly installed identity.
+            self.assertEqual(old_data["results"][0]["account"], "new")
+
+            fresh_data, freshness = await session.get(COURSES, {"offset": 0})
+        self.assertEqual(fresh_data["results"][0]["account"], "new")
+        self.assertTrue(freshness["from_cache"])
+
+    async def test_429_retry_after_and_transient_5xx_are_retried(self):
+        attempts = 0
+
+        def handler(request):
+            nonlocal attempts
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            attempts += 1
+            if attempts == 1:
+                return api_response(request, status=503, data={"error": "temporary"})
+            if attempts == 2:
+                return api_response(request, status=429, headers={"Retry-After": "2"}, data={"error": "slow down"})
+            return api_response(request, data={"results": []})
+
+        session = self.make_session(handler, browser_reader=lambda: [cookies()], browser_cookies=True)
+        with patch("ntulearn.client.http.asyncio.sleep", new=AsyncMock()) as sleep:
+            await session.get(COURSES, refresh=True)
+        self.assertEqual(attempts, 3)
+        sleep.assert_any_await(1.0)
+        sleep.assert_any_await(2.0)
+
+    async def test_excessive_retry_after_and_bad_json_fail_closed(self):
+        def slow(request):
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            return api_response(request, status=429, headers={"Retry-After": "61"})
+
+        session = self.make_session(slow, browser_reader=lambda: [cookies()], browser_cookies=True)
+        with patch("ntulearn.client.http.asyncio.sleep", new=AsyncMock()):
+            with self.assertRaisesRegex(LearnError, "longer than one minute"):
+                await session.get(COURSES, refresh=True)
+
+        def malformed(request):
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            return api_response(request, content=b"not-json", headers={"content-type": "application/json"})
+
+        bad = self.make_session(malformed, browser_reader=lambda: [cookies()], browser_cookies=True)
+        with self.assertRaisesRegex(LearnError, "malformed JSON"):
+            await bad.get(COURSES, refresh=True)
+
+    async def test_read_only_allowlist_and_cache_bypass(self):
+        calls = 0
+
+        def handler(request):
+            nonlocal calls
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            calls += 1
+            return api_response(request, data={"results": [{"call": calls}]})
+
+        session = self.make_session(handler, browser_reader=lambda: [cookies()], browser_cookies=True)
+        with self.assertRaisesRegex(LearnError, "not an academic JSON read endpoint"):
+            await session.get("https://other.invalid/private")
+        first, _ = await session.get(COURSES)
+        first["results"].clear()
+        cached, metadata = await session.get(COURSES)
+        self.assertEqual(cached["results"], [{"call": 1}])
+        self.assertTrue(metadata["from_cache"])
+        fresh, metadata = await session.get(COURSES, refresh=True)
+        self.assertEqual(fresh["results"], [{"call": 2}])
+        self.assertFalse(metadata["from_cache"])
+        self.assertEqual(calls, 2)
+
+    async def test_external_download_redirect_never_receives_ntu_cookies(self):
+        external_headers = []
+        download_requests = 0
+        path = f"{PREFIX}/courses/_1_1/contents/_2_1/attachments/_3_1/download"
+
+        def internal(request):
+            nonlocal download_requests
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            self.assertIn("BbRouter=", request.headers.get("cookie", ""))
+            download_requests += 1
+            host = "files.blackboard.com" if download_requests == 1 else "cdn.blackboardcdn.com"
+            return api_response(request, 302, headers={"Location": f"https://{host}/file.pdf"})
+
+        def external(request):
+            external_headers.append(dict(request.headers))
+            return api_response(request, content=b"%PDF-fixture", headers={
+                "Content-Type": "application/pdf",
+                "Set-Cookie": "vendor-session=must-not-be-reused; Domain=.blackboard.com; Path=/",
+            })
+
+        session = self.make_session(
+            internal,
+            browser_reader=lambda: [cookies()],
+            external_handler=external,
+            browser_cookies=True,
+        )
         with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory) / "example.pdf"
-            context = Mock()
-            self.session._context = context
-            context.request.get.side_effect = [Response(302, location="/bbcswebdav/example.pdf"), Response(content_type="application/pdf", body=b'%PDF-example')]
-            with patch.object(self.session, "_get"), patch("ntulearn.client.session.time.sleep"):
-                result = self.session.download(path, str(target))
-                self.assertEqual(result.bytes_written, len(b'%PDF-example'))
-                self.assertEqual(target.read_bytes(), b'%PDF-example')
-                with self.assertRaisesRegex(LearnError, "never overwritten"):
-                    self.session.download(path, str(target))
-                target.unlink()
-                context.request.get.side_effect = [Response(302, location="https://other.invalid/steal")]
-                with self.assertRaisesRegex(LearnError, "external download host"):
-                    self.session.download(path, str(target))
-                self.assertFalse(target.exists())
-                context.request.get.side_effect = [Response(content_type="text/html", body=b'<form>login</form>')]
-                with self.assertRaisesRegex(LearnError, "no file was saved"):
-                    self.session.download(path, str(target))
-                context.request.get.side_effect = [Response(content_type="application/pdf", body=b'x' * 20_000_001)]
-                with self.assertRaisesRegex(LearnError, "20 MB"):
-                    self.session.download(path, str(target))
-                self.assertFalse(target.exists())
+            for name in ("first.pdf", "second.pdf"):
+                target = Path(directory) / name
+                result = await session.download(path, str(target))
+                self.assertEqual(target.read_bytes(), b"%PDF-fixture")
+                self.assertEqual(result.bytes_written, len(b"%PDF-fixture"))
+            self.assertEqual(len(external_headers), 2)
+            self.assertTrue(all("cookie" not in headers for headers in external_headers))
+            with self.assertRaisesRegex(LearnError, "never overwritten"):
+                await session.download(path, str(Path(directory) / "first.pdf"))
 
-    def test_vendor_file_redirect_uses_an_isolated_cookie_context(self):
-        path = PREFIX + "/courses/_1_1/contents/_2_1/attachments/_3_1/download"
-        self.session._context = Mock()
-        self.session._context.request.get.return_value = Response(302, location="https://files.blackboard.com/example.pdf")
-        self.session._playwright = Mock()
-        remote = self.session._playwright.request.new_context.return_value
-        remote.get.return_value = Response(content_type="application/pdf", body=b'%PDF-example')
-        with tempfile.TemporaryDirectory() as directory, patch.object(self.session, "_get"), patch("ntulearn.client.session.time.sleep"):
-            target = Path(directory) / "example.pdf"
-            self.session.download(path, str(target))
-            self.session._playwright.request.new_context.assert_called_once_with()
-            remote.get.assert_called_once()
-            remote.dispose.assert_called_once()
-            self.assertEqual(target.read_bytes(), b'%PDF-example')
+    async def test_untrusted_download_redirect_is_rejected_without_requesting_it(self):
+        path = f"{PREFIX}/courses/_1_1/contents/_2_1/attachments/_3_1/download"
+        external = Mock()
 
+        def internal(request):
+            if request.url.path == PREFIX + "/users/me":
+                return api_response(request, data={"id": "_900_1"})
+            return api_response(request, 302, headers={"Location": "https://evil.invalid/file"})
 
+        session = self.make_session(
+            internal,
+            browser_reader=lambda: [cookies()],
+            external_handler=external,
+            browser_cookies=True,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(LearnError, "unsupported external download host"):
+                await session.download(path, str(Path(directory) / "file"))
+        external.assert_not_called()
 
-class Locator:
-    def __init__(self, page, name):
-        self.page, self.name = page, name
+    async def test_cancellation_and_shutdown_close_pending_authentication(self):
+        entered = asyncio.Event()
+        cancelled = asyncio.Event()
 
-    @property
-    def first(self):
-        return self
+        class BlockingTransport(httpx.AsyncBaseTransport):
+            async def handle_async_request(self, request):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    cancelled.set()
+                    raise
 
-    def count(self):
-        if self.name == "email":
-            return int(self.page.stage == "email")
-        if self.name == "password":
-            return int(self.page.stage in {"transition", "password"})
-        return int(self.page.stage == "stay")
+        session = self.make_session(
+            self.authenticated_handler,
+            browser_reader=lambda: [cookies()],
+            browser_cookies=True,
+            transport_type="async",
+        )
+        await session.http.aclose()
+        session.http.client = httpx.AsyncClient(
+            base_url="https://ntulearn.ntu.edu.sg",
+            follow_redirects=False,
+            transport=BlockingTransport(),
+        )
+        request = asyncio.create_task(session.get(COURSES))
+        await asyncio.wait_for(entered.wait(), 1)
+        request.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await request
+        await asyncio.wait_for(session.close(), 1)
+        self.assertTrue(cancelled.is_set())
+        with self.assertRaisesRegex(LearnError, "closed"):
+            await session.get(COURSES)
 
-    def fill(self, value):
-        if self.name == "password" and self.page.stage != "password":
-            raise AssertionError("Filled a password before Microsoft's replacement field was ready")
-        self.page.filled.append(self.name)
+    async def test_shutdown_waits_until_an_active_tool_operation_finishes(self):
+        halfway = asyncio.Event()
+        resume = asyncio.Event()
+        session = self.make_session(
+            self.authenticated_handler,
+            browser_reader=lambda: [cookies()],
+            browser_cookies=True,
+        )
 
-    def wait_for(self, **kwargs):
-        if self.name == "Sign in" and self.page.stage == "transition":
-            self.page.stage = "password"
+        async def operation():
+            async with session.operation():
+                await session.get(COURSES, {"offset": 0}, True)
+                halfway.set()
+                await resume.wait()
+                await session.get(COURSES, {"offset": 1}, True)
 
-    def click(self):
-        if self.name == "Next":
-            self.page.stage = "transition"
-        elif self.name == "Sign in":
-            self.page.stage = self.page.after_password
-        else:
-            self.page.stage = "authenticated"
-
-
-class Page:
-    def __init__(self, after_password="stay"):
-        self.stage = "email"
-        self.after_password = after_password
-        self.filled = []
-
-    @property
-    def url(self):
-        return BASE + "/ultra/institution-page" if self.stage == "authenticated" else "https://login.microsoftonline.com/example/saml2"
-
-    def goto(self, *args, **kwargs):
-        pass
-
-    def locator(self, selector):
-        if selector == "body":
-            return self
-        return Locator(self, "email" if "loginfmt" in selector else "password" if "password" in selector else "No")
-
-    def inner_text(self, **kwargs):
-        return {"email": "Sign in", "transition": "Sign in", "password": "Enter password", "stay": "Stay signed in?",
-                "mfa": "Approve sign-in using Microsoft Authenticator", "rejected": "Your account or password is incorrect.",
-                "authenticated": "Courses"}[self.stage]
-
-    def get_by_role(self, role, name, **kwargs):
-        return Locator(self, name)
-
-    def wait_for_timeout(self, milliseconds):
-        pass
+        request = asyncio.create_task(operation())
+        await halfway.wait()
+        shutdown = asyncio.create_task(session.close())
+        await asyncio.sleep(0)
+        self.assertFalse(shutdown.done())
+        resume.set()
+        await request
+        await shutdown
 
 
-class LoginFlowTests(unittest.TestCase):
-    def setUp(self):
-        credentials = stored_credentials("example@e.ntu.edu.sg", SECRET)
-        credentials.__enter__()
-        self.addCleanup(credentials.__exit__, None, None, None)
+class SsoFlowTests(unittest.IsolatedAsyncioTestCase):
+    def modules_for(self, page, context, browser):
+        playwright = SimpleNamespace(chromium=SimpleNamespace(launch=AsyncMock(return_value=browser)))
 
-    def test_reauthentication_replaces_stale_context_without_restarting_browser(self):
-        with stored_credentials("example", SECRET):
-            session = Session()
-        old_context, browser = Mock(), Mock()
-        session._browser = browser
-        session._context = old_context
+        class Manager:
+            async def __aenter__(self):
+                return playwright
+
+            async def __aexit__(self, *args):
+                return None
+
+        package = ModuleType("playwright")
+        package.__path__ = []
+        api = ModuleType("playwright.async_api")
+        api.async_playwright = Manager
+        return {"playwright": package, "playwright.async_api": api}
+
+    async def test_sso_form_only_submits_to_expected_hosts_and_returns_cookies(self):
+        fills = []
+
+        class Page:
+            stage = "email"
+
+            @property
+            def url(self):
+                if self.stage == "authenticated":
+                    return "https://ntulearn.ntu.edu.sg/ultra/institution-page"
+                return "https://login.microsoftonline.com/example/saml2"
+
+            async def goto(self, *args, **kwargs):
+                pass
+
+            def locator(self, selector):
+                if selector == "body":
+                    return Body(self)
+                if "loginfmt" in selector:
+                    return Locator(self, "email")
+                if "password" in selector:
+                    return Locator(self, "password")
+                return Locator(self, "back")
+
+            def get_by_role(self, role, name, **kwargs):
+                return Locator(self, name)
+
+            async def wait_for_timeout(self, milliseconds):
+                pass
+
+        class Body:
+            def __init__(self, page):
+                self.page = page
+
+            async def inner_text(self, **kwargs):
+                return {"email": "Sign in", "password": "Enter password", "stay": "Stay signed in?", "authenticated": "Courses"}[self.page.stage]
+
+        class Locator:
+            def __init__(self, page, name):
+                self.page, self.name = page, name
+
+            @property
+            def first(self):
+                return self
+
+            async def count(self):
+                return int((self.name == "email" and self.page.stage == "email")
+                           or (self.name == "password" and self.page.stage == "password")
+                           or (self.name == "back" and self.page.stage == "stay"))
+
+            async def fill(self, value):
+                fills.append((self.page.url, value))
+
+            async def wait_for(self, **kwargs):
+                pass
+
+            async def click(self):
+                if self.name == "Next":
+                    self.page.stage = "password"
+                elif self.name == "Sign in":
+                    self.page.stage = "stay"
+                elif self.name == "back":
+                    self.page.stage = "authenticated"
+
         page = Page()
-        browser.new_context.return_value.new_page.return_value = page
-        try:
-            with patch.object(session, "_open"), patch.object(session, "_request", return_value=Response(data={"id": "_900_1"})):
-                session.run(session._login)
-            old_context.close.assert_called_once()
-            browser.new_context.assert_called_once_with(locale="en-US")
-            self.assertTrue(session.status().session_verified)
-            self.assertEqual(page.filled, ["email", "password"])
-        finally:
-            session.close()
+        context = SimpleNamespace(
+            new_page=AsyncMock(return_value=page),
+            cookies=AsyncMock(return_value=[{
+                "name": "BbRouter", "value": "expires:1,id:sso", "domain": ".ntu.edu.sg", "path": "/", "secure": True,
+            }]),
+        )
+        browser = SimpleNamespace(new_context=AsyncMock(return_value=context), close=AsyncMock())
+        with patch.dict(sys.modules, self.modules_for(page, context, browser)):
+            from ntulearn.client.sso import login
 
-    def test_password_waits_for_ready_form_and_no_persistent_signin(self):
-        with stored_credentials("example@e.ntu.edu.sg", SECRET):
-            session = Session()
-        page = Page()
-        session._page = page
-        try:
-            with patch.object(session, "_open"), patch.object(session, "_request", return_value=Response(data={"id": "_900_1"})):
-                session.run(session._login)
-            self.assertEqual(page.filled, ["email", "password"])
-            self.assertTrue(session.status().session_verified)
-            self.assertEqual(page.stage, "authenticated")
-        finally:
-            session.close()
+            result = await login(LOGIN_CREDENTIALS, headless=True)
+        self.assertEqual([value for _, value in fills], [LOGIN_CREDENTIALS.email, LOGIN_CREDENTIALS.password])
+        self.assertTrue(all(url.startswith("https://login.microsoftonline.com/") for url, _ in fills))
+        self.assertEqual(result[0].name, "BbRouter")
+        browser.close.assert_awaited_once()
 
-    def test_mfa_and_wrong_password_stop_without_retry(self):
-        for stage, expected in [("mfa", "MFA or CAPTCHA"), ("rejected", "rejected the login")]:
-            with stored_credentials("example@e.ntu.edu.sg", SECRET), patch.dict("os.environ", {"NTULEARN_HEADLESS": "true"}):
-                session = Session()
-            page = Page(after_password=stage)
-            session._page = page
-            try:
-                with patch.object(session, "_open"), self.assertRaisesRegex(LearnError, expected):
-                    session.run(session._login)
-                self.assertEqual(page.filled, ["email", "password"])
-                self.assertFalse(session.status().session_verified)
-            finally:
-                session.close()
+    async def test_sso_stops_before_entering_credentials_on_unexpected_host(self):
+        class Page:
+            url = "https://attacker.invalid/login"
 
+            async def goto(self, *args, **kwargs):
+                pass
 
-class ReadPathTests(unittest.TestCase):
-    def test_allowlist_has_only_required_read_endpoints(self):
-        for path in (f'{PREFIX}/courses/{COURSE}/users', f'/learn/api/v1/courses/{COURSE}/memberships',
-                     '/learn/api/v1/messages/summary', f'/learn/api/v1/courses/{COURSE}/conversations/_800_1'):
-            self.assertIsNotNone(_READ_PATH.fullmatch(path))
-        for path in ('/learn/api/v1/users/_other_1', '/learn/api/v1/messages/send',
-                     f'/learn/api/v1/courses/{COURSE}/conversations/../../users'):
-            self.assertIsNone(_READ_PATH.fullmatch(path))
+        context = SimpleNamespace(new_page=AsyncMock(return_value=Page()))
+        browser = SimpleNamespace(new_context=AsyncMock(return_value=context), close=AsyncMock())
+        with patch.dict(sys.modules, self.modules_for(None, context, browser)):
+            from ntulearn.client.sso import login
+
+            with self.assertRaisesRegex(LearnError, "unexpected host"):
+                await login(LOGIN_CREDENTIALS, headless=True)
+        browser.close.assert_awaited_once()

@@ -1,8 +1,11 @@
 from pathlib import Path
 
-from stars.parser import parse_course_description, parse_course_page, parse_graduate_course_page
+from stars.parser import (
+    parse_course_description,
+    parse_course_page,
+    parse_graduate_course_page,
+)
 from stars.parser.exam import parse_undergraduate_exam_schedule
-
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zz0001-2026-1.html"
 HTML = FIXTURE.read_bytes().decode("windows-1252")

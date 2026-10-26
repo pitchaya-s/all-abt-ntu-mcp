@@ -1,18 +1,19 @@
+import json
+import unittest
 from copy import deepcopy
 from dataclasses import replace
-import json
 from pathlib import Path
-import unittest
 from unittest.mock import patch
 
 from mcp import Client
 
-from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
-from stars import compact
-from stars.mcp_server import get_course_indexes, get_index
 from shared.server import mcp
+from stars import compact
 from stars.client import NTURequestError
+from stars.mcp_server import get_course_indexes, get_index
 from stars.parser import parse_course_page
+
+from .mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 
 
 class CompactOutputTests(unittest.TestCase):

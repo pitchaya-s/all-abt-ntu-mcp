@@ -7,7 +7,6 @@ from shared.public_http import PublicHTTPClient, PublicRequestError
 from ..models import RepositoryError
 from .parser import envelope
 
-
 BASE = "https://dr.ntu.edu.sg/server/oai/request"
 
 
@@ -22,8 +21,7 @@ class OAIClient(PublicHTTPClient):
             try:
                 container, response_date = envelope(body, verb)
             except RepositoryError:
-                with self._lock:
-                    self._cache.pop(url, None)
+                self.invalidate(url)
                 raise
             return container, response_date, snapshot
         except PublicRequestError as error:

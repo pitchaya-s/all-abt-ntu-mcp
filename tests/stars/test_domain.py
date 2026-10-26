@@ -1,9 +1,14 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 
-from stars.domain import Course, Session, clash_status, compare_indexes, find_matching_indexes
+from stars.domain import (
+    Course,
+    Session,
+    clash_status,
+    compare_indexes,
+    find_matching_indexes,
+)
 from stars.parser import parse_course_page
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -2,7 +2,7 @@
 
 Read-only public access to NTU shuttle routes, stop associations, live vehicle positions, arrival estimates, schedules, and service notices. No NTU credentials or extra dependencies are needed.
 
-The client reads NTU Omnibus' current module manifest and JavaScript bundles to discover screen-service paths and version hashes. It caches that endpoint metadata and route-stop associations for five minutes and uses a small cookie jar for the app's anonymous CSRF handshake. The stop cache holds at most eight routes per client and is shared by stop searches and arrival lookups. Live bus positions, arrival estimates, and status responses are not cached. Requests are serialized and paced at least 250 ms apart, with a 20-second timeout and an 8 MB response limit.
+The client reads NTU Omnibus' current module manifest and JavaScript bundles to discover screen-service paths and version hashes. It caches that endpoint metadata and route-stop associations for five minutes and uses a small cookie jar for the app's anonymous CSRF handshake. The stop cache holds at most eight routes per client and is shared by stop searches and arrival lookups. Live bus positions, arrival estimates, and status responses are not cached. Pooled HTTPS requests retain the anonymous cookie only for `apps.ntu.edu.sg`, share the process-wide per-host concurrency and pacing limit, and retry transient failures once while respecting short `Retry-After` delays. Omnibus operations remain serialized around their shared cookie and CSRF state. Requests also have a 20-second timeout and an 8 MB response limit.
 
 ## Tools
 

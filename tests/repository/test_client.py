@@ -1,79 +1,96 @@
-from email.message import Message
-from io import BytesIO
 import json
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs
 
-from drntu.rest.client import RepositoryClient
+import httpx
+
 from drntu.models import RepositoryError
+from drntu.rest.client import RepositoryClient
 
 
 class ClientTests(unittest.TestCase):
     def setUp(self):
-        self.client = RepositoryClient()
-        self.sleep = patch("drntu.rest.client.time.sleep").start()
+        self.requests = []
+        self.responses = []
+        self.sleep = patch("shared.public_http.time.sleep").start()
         self.addCleanup(patch.stopall)
+        self.client = RepositoryClient(transport=httpx.MockTransport(self.handle))
+        self.addCleanup(self.client.http.close)
 
-    def response(self, data=None, content_type="application/json", body=None):
-        result = BytesIO(body if body is not None else json.dumps(data or {"ok": True}).encode())
-        result.headers = Message()
-        result.headers["Content-Type"] = content_type
-        return result
+    def handle(self, request):
+        self.requests.append(request)
+        if self.responses:
+            return self.responses.pop(0)(request)
+        return self.response(request)
+
+    @staticmethod
+    def response(request, data=None, content_type="application/json", body=None, status=200, headers=None):
+        content = body if body is not None else json.dumps({"ok": True} if data is None else data).encode()
+        return httpx.Response(
+            status, headers={"content-type": content_type, **(headers or {})}, content=content, request=request,
+        )
+
+    def queue(self, **kwargs):
+        self.responses.append(lambda request: self.response(request, **kwargs))
 
     def test_cache_refresh_expiry_and_bounded_entries(self):
-        with patch("drntu.rest.client.urlopen", side_effect=lambda *a, **k: self.response()) as fetch:
-            first = self.client.get("/core/items/example")
-            self.assertFalse(first[1]["cached"])
-            self.assertTrue(self.client.get("/core/items/example")[1]["cached"])
-            self.assertEqual(first[1]["retrieved_at"], self.client.get("/core/items/example")[1]["retrieved_at"])
-            self.client.get("/core/items/example", refresh=True)
-            self.assertEqual(fetch.call_count, 2)
-            key = next(iter(self.client._cache))
-            stamp, data, retrieved = self.client._cache[key]
-            self.client._cache[key] = (stamp - 301, data, retrieved)
-            self.assertFalse(self.client.get("/core/items/example")[1]["cached"])
-            for number in range(65):
-                self.client.get("/example/" + str(number))
-            self.assertEqual(len(self.client._cache), 64)
+        first = self.client.get("/core/items/example")
+        self.assertFalse(first[1]["cached"])
+        self.assertTrue(self.client.get("/core/items/example")[1]["cached"])
+        self.assertEqual(first[1]["retrieved_at"], self.client.get("/core/items/example")[1]["retrieved_at"])
+        self.client.get("/core/items/example", refresh=True)
+        self.assertEqual(len(self.requests), 2)
+        key = next(iter(self.client.http._cache))
+        stamp, body, retrieved = self.client.http._cache[key]
+        self.client.http._cache[key] = (stamp - 301, body, retrieved)
+        self.assertFalse(self.client.get("/core/items/example")[1]["cached"])
+        for number in range(65):
+            self.client.get("/example/" + str(number))
+        self.assertEqual(len(self.client.http._cache), 64)
 
     def test_query_encoding_preserves_multiple_filters_without_cookies(self):
-        with patch("drntu.rest.client.urlopen", return_value=self.response()) as fetch:
-            self.client.get("/discover/search/objects", {"query": "A & B", "f.subject": ["one,equals", "two,contains"]})
-        request = fetch.call_args.args[0]
-        params = parse_qs(urlsplit(request.full_url).query)
+        self.client.get("/discover/search/objects", {"query": "A & B", "f.subject": ["one,equals", "two,contains"]})
+        request = self.requests[-1]
+        params = parse_qs(request.url.query.decode())
         self.assertEqual(params["query"], ["A & B"])
         self.assertEqual(params["f.subject"], ["one,equals", "two,contains"])
-        self.assertNotIn("Cookie", request.headers)
-        self.assertNotIn("Authorization", request.headers)
+        self.assertNotIn("cookie", request.headers)
+        self.assertNotIn("authorization", request.headers)
 
     def test_captcha_html_json_errors_and_oversized_responses_are_not_cached(self):
-        oversized = self.response()
-        oversized.read = lambda n: b" " * n
-        for response, dataset, message in [
-            (self.response(content_type="text/html", body=b"<html>CAPTCHA</html>"), True, "CAPTCHA"),
-            (self.response(body=b"invalid json"), False, "invalid JSON"),
-            (self.response(data=[1]), False, "unexpected response"),
-            (oversized, False, "8 MB"),
-        ]:
-            with patch("drntu.rest.client.urlopen", return_value=response), self.assertRaisesRegex(RepositoryError, message):
+        cases = [
+            ({"body": b"<html>CAPTCHA</html>", "content_type": "text/html"}, True, "CAPTCHA"),
+            ({"body": b"invalid json"}, False, "invalid JSON"),
+            ({"data": [1]}, False, "unexpected response"),
+            ({"body": b" " * 8_000_001}, False, "8 MB"),
+        ]
+        for response, dataset, message in cases:
+            self.queue(**response)
+            with self.assertRaisesRegex(RepositoryError, message):
                 self.client.get("/example", dataset=dataset)
-            self.assertFalse(self.client._cache)
+            self.assertFalse(self.client.http._cache)
 
     def test_service_failures_retry_and_public_access_denials_do_not(self):
-        headers = Message()
-        headers["Retry-After"] = "1"
-        for error, attempts in [(URLError("untrusted detail"), 2),
-                                (HTTPError("url", 503, "unavailable", headers, None), 2),
-                                (HTTPError("url", 403, "denied", headers, None), 1),
-                                (HTTPError("url", 404, "missing", headers, None), 1)]:
-            with patch("drntu.rest.client.urlopen", side_effect=error) as fetch, self.assertRaises(RepositoryError) as caught:
+        self.responses.extend([
+            lambda request: self.response(request, status=503, headers={"retry-after": "0"}),
+            lambda request: self.response(request),
+        ])
+        self.client.get("/retry")
+        self.assertEqual(len(self.requests), 2)
+        for status, message in [(403, "denied public access"), (404, "could not find")]:
+            self.queue(status=status)
+            with self.assertRaisesRegex(RepositoryError, message):
                 self.client.get("/example")
-            self.assertEqual(fetch.call_count, attempts)
-            self.assertNotIn("untrusted detail", str(caught.exception))
-        headers.replace_header("Retry-After", "120")
-        with patch("drntu.rest.client.urlopen", side_effect=HTTPError("url", 429, "limited", headers, None)) as fetch:
-            with self.assertRaisesRegex(RepositoryError, "429"):
-                self.client.get("/example")
-            self.assertEqual(fetch.call_count, 1)
+
+        self.responses.append(lambda request: self.response(
+            request, status=429, headers={"retry-after": "120"},
+        ))
+        before = len(self.requests)
+        with self.assertRaisesRegex(RepositoryError, "HTTP 429"):
+            self.client.get("/limited")
+        self.assertEqual(len(self.requests) - before, 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

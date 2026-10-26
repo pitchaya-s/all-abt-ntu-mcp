@@ -53,9 +53,24 @@ The keyring entry uses service `all-abt-ntu-mcp`, account `ntu-account`. The use
 
 Storage uses Python's [keyring library](https://keyring.readthedocs.io/en/latest/) with an allowlist of native Secret Service/KWallet, macOS Keychain, and Windows Credential Manager backends. Plaintext, custom, null, and non-native backends are rejected. A chained backend is used only through its selected native member, without fallback to other members after failure. Unlock the wallet/keychain through its normal OS interface. Locked or unavailable stores return a sanitized error; public tools remain available.
 
-Each authenticated service rereads the entry before personal reads, including cache hits, and before login. Replacing the entry clears that service's old browser session/cache on its next personal operation. Deleting it or losing keyring access blocks the next operation and clears that process's personal session/cache; an already-running request can finish. Session recovery and MFA behavior are described in the individual service guides.
+Authenticated services check credentials before personal operations and before login. NTULearn checks the keyring once at the start of each data-tool operation, including operations served from cache; its auth-status tool reports storage availability without authenticating. Other services retain their own check timing. Replacing the entry clears an affected service's old session and cache on its next personal operation. Deleting it or losing keyring access prevents the next keyring-based login; an already-running operation can finish. NTULearn may still authenticate with opt-in, validated browser cookies when no keyring credentials are available. Session recovery and MFA behavior are described in the individual service guides.
 
 Academic data returned through MCP is visible to the AI client. Credentials and session cookies are excluded from responses. Python/browser memory is not guaranteed to be zeroized. OS keyring permissions govern access by other local processes; keyring storage does not isolate secrets from an agent that can execute arbitrary code as your user.
+
+## Public HTTP reads
+
+Faculty, news, campus services, OneSearch, MazeMap, and DR-NTU use a pooled HTTP client for public HTTPS reads. Each service keeps a bounded five-minute response cache, reuses connections, limits concurrent requests, and spaces request starts. The client follows only HTTPS redirects to that service's allowlisted hosts, rejects cookies, bounds responses to 8 MB, and makes at most one retry for transient network errors, HTTP 429, or selected 5xx responses. It honors short `Retry-After` delays and returns an error rather than retrying before a longer delay.
+
+Set these variables before starting the server to tune the public-read scheduler:
+
+| Variable | Default | Range | Effect |
+| --- | --- | --- | --- |
+| `NTU_PUBLIC_HTTP_CONCURRENCY` | `2` | 1–8 | Maximum in-flight requests per host across public service clients in this process |
+| `NTU_PUBLIC_HTTP_INTERVAL_SECONDS` | `0.25` | 0–10 | Minimum spacing between request starts to the same host across public service clients in this process |
+| `NTU_PUBLIC_HTTP_TIMEOUT_SECONDS` | `20` | 1–120 | Request timeout in seconds |
+| `NTU_PUBLIC_HTTP_MAX_RETRY_DELAY_SECONDS` | `10` | 0–30 | Longest provider-requested wait the client will perform before retrying |
+
+These limits are shared by all public clients in this process, grouped by host; hosted replicas keep independent limits. Omnibus and authenticated NTU endpoints use distinct request owners and are not merged into this public client.
 
 ## Linux keyring access
 

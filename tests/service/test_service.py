@@ -1,13 +1,17 @@
-from datetime import datetime, timezone
 import json
 import unittest
+from datetime import datetime, timezone
+from threading import Barrier, Lock
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
+
+from mcp.server.mcpserver.exceptions import ToolError
 
 from service import mcp_server, parser
 from service.client import ServiceClient
 from service.models import ServiceError
 from shared.public_http import PublicRequestError
-from mcp.server.mcpserver.exceptions import ToolError
+
 from .fixtures import CATEGORY_ID, FORM, ROWS, TYPE_ID, fake_get
 
 
@@ -37,6 +41,40 @@ class ServiceTests(unittest.TestCase):
         self.assertIsNone(first.locations[0].phone)
         self.assertIsNone(first.locations[0].fax)
         self.assertIn("Closed on holidays", first.locations[0].operating_hours)
+
+    def test_directory_pages_fetch_concurrently_and_preserve_page_order(self):
+        barrier = Barrier(2)
+        lock = Lock()
+        active = 0
+        maximum_active = 0
+
+        def read_page(url, refresh=False):
+            nonlocal active, maximum_active
+            page = int(parse_qs(urlsplit(url).query)["page"][0])
+            if page > 1:
+                with lock:
+                    active += 1
+                    maximum_active = max(maximum_active, active)
+                try:
+                    barrier.wait(timeout=2)
+                finally:
+                    with lock:
+                        active -= 1
+            items = [
+                {**ROWS[index % len(ROWS)], "title": f"Synthetic location {index}",
+                 "location": f"Building {index}", "mapUrl": f"https://maps.ntu.edu.sg/?place={index}"}
+                for index in range((page - 1) * 12, page * 12)
+            ]
+            snapshot = dict(retrieved_at=datetime(2026, 1, 1, tzinfo=timezone.utc), source_url=url, cached=True)
+            return json.dumps({"items": items, "totalItems": 36, "totalPages": 3}).encode(), snapshot
+
+        with patch.object(self.client.http, "get", side_effect=read_page):
+            result = self.client.search(limit=100)
+        self.assertEqual(maximum_active, 2)
+        self.assertEqual([item.name for item in result.locations[:3]], [
+            "Synthetic location 0", "Synthetic location 1", "Synthetic location 2",
+        ])
+        self.assertEqual(result.pages_checked, 3)
 
     def test_source_filters_can_return_empty_without_hiding_unfiltered_matches(self):
         filters = self.client.list_filters()

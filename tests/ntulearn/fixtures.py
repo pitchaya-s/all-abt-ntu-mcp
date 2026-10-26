@@ -1,8 +1,10 @@
 """Synthetic response shapes based on verified reads; no real NTU records or sessions."""
 
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from ntulearn.models import AuthStatus, Download
 
@@ -72,7 +74,14 @@ RESPONSES[f'/learn/api/v1/courses/{COURSE}/conversations/_800_1'] = deepcopy(
 
 
 class FixtureSession:
-    def get(self, path, params=None, refresh=False):
+    def __init__(self):
+        self.auth = SimpleNamespace(generation=0)
+
+    @asynccontextmanager
+    async def operation(self):
+        yield
+
+    async def get(self, path, params=None, refresh=False):
         data = deepcopy(RESPONSES[path])
         params = params or {}
         if "results" in data:
@@ -83,13 +92,13 @@ class FixtureSession:
                 data["paging"] = {"nextPage": f"{path}?limit={limit}&offset={offset + limit}"}
         return data, {"retrieved_at": NOW, "from_cache": False, "cache_age_seconds": 0}
 
-    def status(self):
+    async def status(self):
         return AuthStatus(credentials_configured=True, session_verified=True, last_verified_at=NOW, cache_ttl_seconds=300)
 
-    def download(self, path, destination, max_bytes=20_000_000):
+    async def download(self, path, destination, max_bytes=20_000_000):
         with Path(destination).open('xb') as output:
             output.write(b'Example attachment')
         return Download(path=destination, bytes_written=18, downloaded_at=NOW)
 
-    def close(self):
+    async def close(self):
         pass

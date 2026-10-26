@@ -3,11 +3,13 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
+from mcp.server.mcpserver.exceptions import ToolError
+
 from news import mcp_server, parser
 from news.client import NewsClient
 from news.models import NewsError
 from shared.public_http import PublicRequestError
-from mcp.server.mcpserver.exceptions import ToolError
+
 from .fixtures import ARTICLE, ARTICLE_URL, CATEGORY_ID, FORM, fake_get
 
 
@@ -18,8 +20,12 @@ class NewsTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
 
     def test_search_pagination_sort_empty_and_category(self):
+        self.fetch.reset_mock()
         first = self.client.search()
+        self.fetch.assert_called_once()
         second = self.client.search(page=first.next_page)
+        self.assertEqual(self.fetch.call_count, 2)
+        self.assertEqual(parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["2"])
         self.assertEqual((first.total_count, len(first.stories), len(second.stories)), (11, 10, 1))
         self.assertIsNone(second.next_page)
         self.assertNotIn(first.stories[0].url, {item.url for item in second.stories})

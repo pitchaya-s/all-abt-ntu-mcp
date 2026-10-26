@@ -1,18 +1,24 @@
 import json
+import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Event
-import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
+import httpx
 from jsonschema import Draft202012Validator
 from mcp import Client
 from mcp.server import MCPServer
 
 from omnibus import mcp_server, parser
-from omnibus.client import OmnibusClient, _ASSETS, _BASE, _ORIGIN, _STOP_CACHE_TTL_SECONDS
+from omnibus.client import (
+    _ASSETS,
+    _BASE,
+    _STOP_CACHE_TTL_SECONDS,
+    OmnibusClient,
+)
 from omnibus.models import OmnibusError
-from tests.omnibus.fixtures import FixtureClient, RESPONSES
+from tests.omnibus.fixtures import RESPONSES, FixtureClient
 
 
 class ClientTests(unittest.TestCase):
@@ -198,17 +204,54 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(json.loads(args["body"])["versionInfo"], {"moduleVersion": "module-version", "apiVersion": "api-version"})
 
     def test_network_is_bounded_and_refuses_external_hosts(self):
-        c = OmnibusClient()
+        c = OmnibusClient(transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, content=b"x" * 8_000_001, request=request)
+        ))
         with self.assertRaises(OmnibusError):
             c._read("https://unrelated.invalid/")
-        response = Mock()
-        response.geturl.return_value = _BASE
-        response.read.return_value = b"x" * 8_000_001
-        c._opener = MagicMock()
-        c._opener.open.return_value.__enter__.return_value = response
         with self.assertRaisesRegex(OmnibusError, "8 MB"):
             c._get_bytes(_BASE)
-        response.read.assert_called_once_with(8_000_001)
+
+    def test_http_pool_preserves_same_host_csrf_cookies_and_retries_transient_status(self):
+        requests = []
+
+        def handle(request):
+            requests.append(request)
+            if len(requests) == 1:
+                return httpx.Response(
+                    503,
+                    headers={"retry-after": "0", "set-cookie": "nr2Users=crf%3Dfixture"},
+                    request=request,
+                )
+            return httpx.Response(200, content=b"{}", request=request)
+
+        c = OmnibusClient(transport=httpx.MockTransport(handle))
+        with patch("shared.public_http.REQUEST_INTERVAL_SECONDS", 0):
+            self.assertEqual(c._get_bytes(_BASE), b"{}")
+
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(c._csrf_token(), "fixture")
+        self.assertIn("nr2Users=crf%3Dfixture", requests[1].headers.get("cookie", ""))
+
+    def test_redirect_outside_omnibus_host_is_rejected_before_following(self):
+        requests = []
+
+        def handle(request):
+            requests.append(request)
+            return httpx.Response(
+                302,
+                headers={"location": "https://attacker.example/collect"},
+                request=request,
+            )
+
+        c = OmnibusClient(transport=httpx.MockTransport(handle))
+        with (
+            patch("shared.public_http.REQUEST_INTERVAL_SECONDS", 0),
+            self.assertRaisesRegex(OmnibusError, "unexpected redirect"),
+        ):
+            c._read(_BASE)
+
+        self.assertEqual(len(requests), 1)
 
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):

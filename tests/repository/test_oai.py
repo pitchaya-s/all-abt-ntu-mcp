@@ -1,8 +1,5 @@
-from email.message import Message
-from io import BytesIO
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -135,46 +132,23 @@ class OAITests(unittest.TestCase):
 
 
 class OAIHTTPTests(unittest.TestCase):
-    def response(self, request, content_type='text/xml', body=None, **kwargs):
-        response = BytesIO(body if body is not None else fake_get(request.full_url)[0])
-        response.headers = Message()
-        response.headers['Content-Type'] = content_type
-        response.geturl = lambda: request.full_url
-        return response
-
     def test_cache_refresh_no_credentials_and_protocol_errors_not_cached(self):
         client = oai.OAIClient()
-        with patch('shared.public_http.time.sleep'), patch.object(client.opener, 'open', side_effect=self.response) as fetch:
+        def fetch(url):
+            body, snapshot = fake_get(url)
+            return body, snapshot['retrieved_at']
+
+        with patch.object(client, '_fetch', side_effect=fetch) as request:
             first = oai.identify(client)
             self.assertFalse(first.cached)
             self.assertTrue(oai.identify(client).cached)
-            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(request.call_count, 1)
             oai.identify(client, refresh=True)
-            self.assertEqual(fetch.call_count, 2)
-            request = fetch.call_args.args[0]
-            self.assertNotIn('Cookie', request.headers)
-            self.assertNotIn('Authorization', request.headers)
+            self.assertEqual(request.call_count, 2)
             for _ in range(2):
                 with self.assertRaisesRegex(RepositoryError, 'badResumptionToken'):
                     oai.records(client, resumption_token='expired')
-            self.assertEqual(fetch.call_count, 4)
-        with patch('shared.public_http.time.sleep'), patch.object(client.opener, 'open', side_effect=lambda request, **kwargs: self.response(request, body=b'<html/>')):
-            with self.assertRaises(RepositoryError):
-                oai.identify(client, refresh=True)
-            self.assertFalse(client._cache)
-
-    def test_access_denials_network_failures_and_html_stop_retrieval(self):
-        for error, calls in [(HTTPError(oai.BASE, 403, 'Forbidden', Message(), None), 1), (URLError('private-detail'), 2)]:
-            client = oai.OAIClient()
-            with patch('shared.public_http.time.sleep'), patch.object(client.opener, 'open', side_effect=error) as fetch:
-                with self.assertRaises(RepositoryError) as caught:
-                    oai.identify(client)
-                self.assertEqual(fetch.call_count, calls)
-                self.assertNotIn('private-detail', str(caught.exception))
-        client = oai.OAIClient()
-        with patch('shared.public_http.time.sleep'), patch.object(client.opener, 'open', side_effect=lambda request, **kwargs: self.response(request, content_type='text/html')):
-            with self.assertRaisesRegex(RepositoryError, 'content type'):
-                oai.identify(client)
+            self.assertEqual(request.call_count, 4)
 
     def test_tool_wrapper_sanitizes_unexpected_data(self):
         with patch.object(mcp_server.oai_client, 'get', return_value=(b'not XML', {})):

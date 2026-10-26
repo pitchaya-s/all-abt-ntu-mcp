@@ -6,7 +6,7 @@ Catalogue discovery and library facility information in the shared `all-abt-ntu-
 
 ## Tools
 
-Results are typed and include `retrieved_at`, `source_url`, and `cached`. The shared public HTTP client caches responses for five minutes, bounds the cache to 64 entries, serializes requests at least 500 ms apart, applies a 20-second timeout, retries transient failures once, and limits each response to 8 MB. Public tools do not access account cookies, the keyring or a browser.
+Results are typed and include `retrieved_at`, `source_url`, and `cached`. The shared public HTTP client caches responses for five minutes, bounds the cache to 64 entries, pools connections, permits up to two in-flight reads per client with 250 ms default pacing, applies a 20-second timeout, retries transient failures once, and limits each response to 8 MB. Public tools do not access account cookies, the keyring or a browser. Public HTTP settings are documented in the [shared runtime guide](../shared/README.md#public-http-reads).
 
 ### `library_search`
 

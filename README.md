@@ -34,7 +34,7 @@ With other methods, use HTTPS and authentication and review how your data is han
 
 ## Chromium
 
-For authenticated STARS, NTULearn, LibFacilities, One Stop and CareerAxis tools, install Chromium once:
+For authenticated STARS, NTULearn SSO fallback, LibFacilities, One Stop and CareerAxis tools, install Chromium once. NTULearn can optionally reuse an existing browser session without launching Chromium; see its guide for setup:
 
 ```sh
 uvx --from 'playwright>=1.50,<2' playwright install chromium

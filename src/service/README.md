@@ -36,7 +36,7 @@ Returns `types` and `categories`, each containing labels and IDs extracted from 
 
 Results include `retrieved_at`, `source_url`, and `cached`. Pages are cached in memory for five minutes. For a collected directory, `retrieved_at` is the oldest page timestamp, `cached` is true only when every result page came from cache, and `source_url` identifies the first page. `refresh: true` fetches every page again.
 
-The shared public HTTP client provides bounded responses, a 20-second timeout, serialized requests, pacing, and one retry for transient failures. Subsequent searches reuse the cached directory pages. Published hours, contact information, and map links can become outdated; the directory does not establish live opening, occupancy, accessibility, or booking availability.
+The shared public HTTP client pools connections, bounds responses to 8 MB, uses a 20-second timeout, and permits up to two in-flight requests per client with 250 ms default pacing. Later directory pages are fetched with bounded concurrency, and results remain in source page order. Subsequent searches reuse cached pages. Public HTTP settings are documented in the [shared runtime guide](../shared/README.md#public-http-reads). Published hours, contact information, and map links can become outdated; the directory does not establish live opening, occupancy, accessibility, or booking availability.
 
 ## Sources
 

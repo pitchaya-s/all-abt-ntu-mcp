@@ -1,11 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 from uuid import UUID
 
 from shared.public_http import PublicHTTPClient
 from shared.sitefinity import form_options, query_text
-from .models import Filters, SearchResults, ServiceError
-from . import parser
 
+from . import parser
+from .models import Filters, SearchResults, ServiceError
 
 DIRECTORY = "https://www.ntu.edu.sg/life-at-ntu/leisure-and-dining/general-directory/"
 API = DIRECTORY + "GetLocations/"
@@ -41,13 +42,18 @@ class ServiceClient:
         rows, total, pages, snapshot = self._page(type_id, category_id, 1, refresh)
         if pages > 50:
             raise ServiceError("The directory exceeds the 50-page retrieval limit; select a type/category filter.")
-        for page in range(2, pages + 1):
-            items, count, page_count, current = self._page(type_id, category_id, page, refresh)
-            if count != total or page_count != pages:
-                raise ServiceError("The directory changed during retrieval; retry with refresh=true.")
-            rows.extend(items)
-            snapshot["retrieved_at"] = min(snapshot["retrieved_at"], current["retrieved_at"])
-            snapshot["cached"] = snapshot["cached"] and current["cached"]
+        if pages > 1:
+            with ThreadPoolExecutor(max_workers=min(2, pages - 1), thread_name_prefix="ntu-directory") as pool:
+                later_pages = pool.map(
+                    lambda page: self._page(type_id, category_id, page, refresh),
+                    range(2, pages + 1),
+                )
+                for items, count, page_count, current in later_pages:
+                    if count != total or page_count != pages:
+                        raise ServiceError("The directory changed during retrieval; retry with refresh=true.")
+                    rows.extend(items)
+                    snapshot["retrieved_at"] = min(snapshot["retrieved_at"], current["retrieved_at"])
+                    snapshot["cached"] = snapshot["cached"] and current["cached"]
         if len(rows) != total or len({(item.name, item.address) for item in rows}) != total:
             raise ServiceError("NTU returned missing or duplicate directory entries; retry with refresh=true.")
         matches = [item for item in rows if query in " ".join([item.name, item.address or ""]).casefold()

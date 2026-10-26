@@ -1,8 +1,7 @@
 """Bounded content traversal and substring search; attachment bytes are not searched."""
 
 from ..client.client import identifier, model
-from ..models import ContentMatch, ContentNode, ContentSearch, ContentTree
-from ..models import LearnError
+from ..models import ContentMatch, ContentNode, ContentSearch, ContentTree, LearnError
 from .scan import LimitReached, Scan, course_ids, pages
 
 
@@ -13,20 +12,18 @@ def bounds(max_depth, max_nodes):
         raise LearnError('max_nodes must be between 1 and 5000.')
 
 
-def walk(client, scan, course_id, max_depth, max_nodes, refresh, roots=None):
+async def walk(client, scan, course_id, max_depth, max_nodes, refresh, roots=None):
     course_id = identifier(course_id)
     bounds(max_depth, max_nodes)
-    seen = set()
+    seen: set[str] = set()
 
-    def visit(parent_id, depth, breadcrumb, nodes):
-        complete = True
+    async def visit(parent_id, depth, breadcrumb, nodes):
         try:
-            for item in pages(scan, client.get_course_contents, 'contents', course_id, parent_id, refresh=refresh):
+            async for item in pages(scan, client.get_course_contents, 'contents', course_id, parent_id, refresh=refresh):
                 if len(seen) >= max_nodes:
                     raise LimitReached('Content node limit reached; increase max_nodes or browse individual folders.')
                 if item.id in seen:
                     scan.issue('content', 'Repeated or cyclic content ID was not followed again.', course_id, item.id)
-                    complete = False
                     continue
                 seen.add(item.id)
                 node = model(ContentNode, **item.model_dump())
@@ -38,29 +35,31 @@ def walk(client, scan, course_id, max_depth, max_nodes, refresh, roots=None):
                         node.children_complete = False
                         scan.issue('content', 'Folder not opened because max_depth was reached.', course_id, item.id)
                     else:
-                        node.children_complete = yield from visit(item.id, depth + 1, path, node.children)
+                        issue_count = len(scan.issues)
+                        async for child in visit(item.id, depth + 1, path, node.children):
+                            yield child
+                        node.children_complete = len(scan.issues) == issue_count
         except LearnError as error:
             scan.issue('content', error, course_id, parent_id)
-            complete = False
-        return complete
 
-    yield from visit(None, 1, [], roots if roots is not None else [])
+    async for node in visit(None, 1, [], roots if roots is not None else []):
+        yield node
 
 
-def tree(client, scan, course_id, max_depth, max_nodes, refresh):
-    roots = []
-    for _ in walk(client, scan, course_id, max_depth, max_nodes, refresh, roots):
+async def tree(client, scan, course_id, max_depth, max_nodes, refresh):
+    roots: list[ContentNode] = []
+    async for _ in walk(client, scan, course_id, max_depth, max_nodes, refresh, roots):
         pass
     return roots
 
 
-def get_content_tree(client, course_id, max_depth=5, max_nodes=1000, max_requests=100, refresh=False):
+async def get_content_tree(client, course_id, max_depth=5, max_nodes=1000, max_requests=100, refresh=False):
     scan = Scan(max_requests)
-    contents = tree(client, scan, course_id, max_depth, max_nodes, refresh)
+    contents = await tree(client, scan, course_id, max_depth, max_nodes, refresh)
     return model(ContentTree, course_id=identifier(course_id), contents=contents, max_depth=max_depth, **scan.metadata())
 
 
-def search(client, query, selected, max_depth=5, max_nodes=1000, max_results=50, max_requests=100, refresh=False):
+async def search(client, query, selected, max_depth=5, max_nodes=1000, max_results=50, max_requests=100, refresh=False):
     if not isinstance(query, str) or not 1 <= len(query.strip()) <= 200:
         raise LearnError('query must contain 1–200 non-whitespace characters.')
     if type(max_results) is not int or not 1 <= max_results <= 200:
@@ -70,7 +69,7 @@ def search(client, query, selected, max_depth=5, max_nodes=1000, max_results=50,
     scan = Scan(max_requests)
     matches, searched = [], []
     try:
-        courses = course_ids(client, scan, selected, refresh)
+        courses = await course_ids(client, scan, selected, refresh)
     except LearnError as error:
         scan.issue('courses', error)
         courses = []
@@ -80,7 +79,7 @@ def search(client, query, selected, max_depth=5, max_nodes=1000, max_results=50,
             scan.issue('search', 'Search limit reached before all selected courses were visited.')
             break
         searched.append(course)
-        for node, breadcrumb in walk(client, scan, course, max_depth, remaining_nodes, refresh):
+        async for node, breadcrumb in walk(client, scan, course, max_depth, remaining_nodes, refresh):
             remaining_nodes -= 1
             source = '\n'.join(value for value in (node.title, node.body, node.description) if value)
             position = source.casefold().find(query.casefold())

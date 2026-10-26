@@ -4,7 +4,7 @@ Public publication, dataset, and OAI-PMH metadata lookups in the shared `all-abt
 
 ## Tools
 
-All results have `retrieved_at`, `source_url`, and `cached`. Responses are cached in memory for five minutes, with at most 64 entries per REST/OAI client. `refresh: true` refetches the requested response. Each client serializes requests, paces them at least 500 ms apart, limits responses to 8 MB, and uses a 20-second timeout with one retry for transient failures. Longer server retry delays return an error instead of blocking the tool or retrying early.
+All results have `retrieved_at`, `source_url`, and `cached`. Responses are cached in memory for five minutes, with at most 64 entries per REST/OAI client. `refresh: true` refetches the requested response. Each client pools HTTPS connections, permits up to two in-flight reads with 250 ms default request pacing, limits responses to 8 MB, and uses a 20-second timeout. It retries transient failures once and honors short `Retry-After` delays; longer server-requested delays return an error rather than retrying early. Public HTTP settings are documented in the [shared runtime guide](../shared/README.md#public-http-reads).
 
 DSpace listings use zero-based `page` and `page_size` from 1–50. Follow `pagination.next_page` until `null`. Total counts remain `null` when the source omits them, as happens with individual search facets. Malformed records or inconsistent result pages fail rather than silently appearing complete.
 

@@ -1,5 +1,5 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs
 
@@ -9,7 +9,6 @@ from shared.server import mcp
 from stars.client import NTURequestError, search, search_courses
 from stars.client.courses import _fetch_html
 from stars.parser import NTUPageError, parse_course_search
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HTML = (FIXTURES / "search-zz00-2026-1.html").read_text()

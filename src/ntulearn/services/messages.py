@@ -1,23 +1,44 @@
 """Read Blackboard mailbox conversations without marking messages as read."""
 
+import asyncio
+import hashlib
+import json
+
 from ..client.client import PREFIX, identifier, mapping, model, page_parameters
-from ..models import MessageDetail, Messages, MessageSummary, Person
-from ..models import LearnError
+from ..models import LearnError, MessageDetail, Messages, MessageSummary, Person
 from ..parser.response import records, required, text
 from .people import person
-from .scan import LimitReached, Scan, aware
+from .scan import Scan, aware
 
 
-def _rows(client, scan, path, refresh):
+async def _rows(client, scan, path, refresh):
     offset = 0
+    seen_rows = set()
     while True:
-        data = scan.get(client, path, {'limit': 100, 'offset': offset}, refresh)
+        data = await scan.get(client, path, {'limit': 100, 'offset': offset}, refresh)
         rows, next_offset = records(data, path)
-        yield from rows
+        new_rows = []
+        for row in rows:
+            identity = hashlib.sha256(
+                json.dumps(row, sort_keys=True, separators=(',', ':'), default=str).encode()
+            ).digest()
+            if identity not in seen_rows:
+                seen_rows.add(identity)
+                new_rows.append(row)
+        for row in new_rows:
+            yield row
         if next_offset is None:
             return
         if next_offset <= offset:
-            raise LearnError('NTULearn returned a mailbox pagination loop.')
+            scan.issue(
+                'messages',
+                'NTULearn returned a non-advancing mailbox cursor; unique messages were retained and pagination stopped.',
+            )
+            if not new_rows:
+                return
+            next_offset = offset + len(rows)
+            if next_offset <= offset:
+                return
         offset = next_offset
 
 
@@ -39,32 +60,51 @@ def _messages(conversation):
     return rows
 
 
-def _mailbox(client, scan, course_id, refresh):
-    own = scan.get(client, PREFIX + '/users/me', refresh=refresh)
+async def _mailbox(client, scan, course_id, refresh):
+    own = await scan.get(client, PREFIX + '/users/me', refresh=refresh)
     own_id = identifier(required(own, 'id'))
     if course_id:
         courses = [identifier(course_id)]
     else:
-        courses = [identifier(required(row, 'courseId')) for row in _rows(client, scan, '/learn/api/v1/messages/summary', refresh)
-                   if row.get('isCourseMessagesEnabled') is not False]
-    for course in dict.fromkeys(courses):
+        courses = [
+            identifier(required(row, 'courseId'))
+            async for row in _rows(client, scan, '/learn/api/v1/messages/summary', refresh)
+            if row.get('isCourseMessagesEnabled') is not False
+        ]
+
+    async def course_conversations(course):
+        summaries = []
         try:
-            for conversation in _rows(client, scan, f'/learn/api/v1/courses/{course}/conversations', refresh):
+            async for conversation in _rows(client, scan, f'/learn/api/v1/courses/{course}/conversations', refresh):
                 rows = _messages(conversation)
                 if conversation.get('totalCount', len(rows)) > len(rows):
-                    conversation = scan.get(client, f'/learn/api/v1/courses/{course}/conversations/{identifier(required(conversation, "id"))}', refresh=refresh)
+                    conversation = await scan.get(
+                        client,
+                        f'/learn/api/v1/courses/{course}/conversations/{identifier(required(conversation, "id"))}',
+                        refresh=refresh,
+                    )
                     rows = _messages(conversation)
                     if conversation.get('totalCount', len(rows)) > len(rows):
                         scan.issue('messages', 'Only part of this conversation was published; available messages are retained.', course)
                 for row in rows:
-                    yield _summary(row, conversation, course, own_id), row, conversation
+                    summaries.append((_summary(row, conversation, course, own_id), row, conversation))
         except LearnError as error:
             scan.issue('messages', error, course)
-            if isinstance(error, LimitReached):
-                return
+        return summaries
+
+    semaphore = asyncio.Semaphore(4)
+
+    async def bounded_course(course):
+        async with semaphore:
+            return await course_conversations(course)
+
+    results = await asyncio.gather(*(bounded_course(course) for course in dict.fromkeys(courses)))
+    for conversations in results:
+        for item in conversations:
+            yield item
 
 
-def list_messages(client, folder='inbox', course_id=None, since=None, unread_only=False, limit=50, offset=0, max_requests=100, refresh=False):
+async def list_messages(client, folder='inbox', course_id=None, since=None, unread_only=False, limit=50, offset=0, max_requests=100, refresh=False):
     page_parameters(limit, offset)
     if folder not in {'inbox', 'sent'}:
         raise LearnError('folder must be inbox or sent.')
@@ -72,7 +112,7 @@ def list_messages(client, folder='inbox', course_id=None, since=None, unread_onl
     scan = Scan(max_requests)
     messages = []
     try:
-        for summary, _, _ in _mailbox(client, scan, course_id, refresh):
+        async for summary, _, _ in _mailbox(client, scan, course_id, refresh):
             if summary.folder != folder or (unread_only and summary.read is not False):
                 continue
             if since is not None and (summary.created is None or summary.created < since):
@@ -87,23 +127,27 @@ def list_messages(client, folder='inbox', course_id=None, since=None, unread_onl
                  next_offset=offset + limit if offset + limit < len(messages) else None, **scan.metadata())
 
 
-def read_message(client, message_id, course_id=None, conversation_id=None, max_requests=100, refresh=False):
+async def read_message(client, message_id, course_id=None, conversation_id=None, max_requests=100, refresh=False):
     message_id = identifier(message_id)
     if (course_id is None) != (conversation_id is None):
         raise LearnError('Supply course_id and conversation_id together, or omit both to search the mailbox.')
     scan = Scan(max_requests)
     if course_id is not None:
         course_id, conversation_id = identifier(course_id), identifier(conversation_id)
-        own = scan.get(client, PREFIX + '/users/me', refresh=refresh)
-        conversation = scan.get(client, f'/learn/api/v1/courses/{course_id}/conversations/{conversation_id}', refresh=refresh)
+        own, conversation = await asyncio.gather(
+            scan.get(client, PREFIX + '/users/me', refresh=refresh),
+            scan.get(client, f'/learn/api/v1/courses/{course_id}/conversations/{conversation_id}', refresh=refresh),
+        )
         candidates = [(_summary(row, conversation, course_id, required(own, 'id')), row, conversation) for row in _messages(conversation)]
     else:
-        candidates = _mailbox(client, scan, None, refresh)
+        candidates = []
+        async for item in _mailbox(client, scan, None, refresh):
+            candidates.append(item)
     for summary, row, conversation in candidates:
         if summary.id != message_id:
             continue
         if course_id is None:
-            conversation = scan.get(client, f'/learn/api/v1/courses/{summary.course_id}/conversations/{summary.conversation_id}', refresh=refresh)
+            conversation = await scan.get(client, f'/learn/api/v1/courses/{summary.course_id}/conversations/{summary.conversation_id}', refresh=refresh)
             row = next((item for item in _messages(conversation) if item.get('id') == message_id), None)
             if row is None:
                 raise LearnError('The selected message is no longer present in its conversation.')

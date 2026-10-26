@@ -12,7 +12,14 @@ from onestop.models import OneStopError
 from onestop.session import OneStopSession, page_url
 from shared.credentials import delete_credentials, read_credentials, save_credentials
 from tests.credential_fixtures import stored_credentials
-from tests.onestop.fixtures import ARTICLE, CATEGORY, FORM, REQUEST, FixtureSession, list_data
+from tests.onestop.fixtures import (
+    ARTICLE,
+    CATEGORY,
+    FORM,
+    REQUEST,
+    FixtureSession,
+    list_data,
+)
 
 
 class ClientTests(unittest.TestCase):
@@ -186,6 +193,35 @@ class SessionTests(unittest.TestCase):
                     self.session._login(read_credentials())
             self.session._page.locator.assert_not_called()
 
+    def test_recent_password_failure_does_not_block_an_existing_valid_session(self):
+        with stored_credentials():
+            self.session._page = Mock(url="https://ntuadminonestop.service-now.com/ntussp")
+            self.session._page.evaluate.return_value = True
+            self.session._login_not_before = time.monotonic() + 60
+            with patch.object(self.session, "_open"):
+                self.session._login(read_credentials())
+            self.assertTrue(self.session._verified)
+            self.assertEqual(self.session._login_not_before, 0)
+            self.session._page.locator.assert_not_called()
+
+    def test_password_cooldown_blocks_only_another_password_submission(self):
+        with stored_credentials():
+            page = Mock(url="https://loginfs.ntu.edu.sg/adfs/ls/")
+            body = Mock()
+            body.inner_text.return_value = "Sign in"
+            password = Mock()
+            password.count.return_value = 1
+            page.locator.side_effect = lambda selector: {
+                "body": body,
+                "#passwordInput:visible": password,
+            }.get(selector, Mock())
+            self.session._page = page
+            self.session._login_not_before = time.monotonic() + 60
+            with patch.object(self.session, "_open"), self.assertRaisesRegex(OneStopError, "Wait one minute"):
+                self.session._login(read_credentials())
+            page.locator.assert_any_call("body")
+            self.assertFalse(page.locator("#userNameInput").fill.called)
+
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_tool_schemas_read_calls_and_sanitized_errors(self):
@@ -196,7 +232,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             async with Client(server) as client:
                 tools = {tool.name: tool for tool in (await client.list_tools()).tools}
                 self.assertEqual(len(tools), 59)
-                from onestop.workflow_tools import READ_TOOLS, LOCAL_TOOLS, WRITE_TOOLS
+                from onestop.workflow_tools import LOCAL_TOOLS, READ_TOOLS, WRITE_TOOLS
                 for tool in tools.values():
                     name = tool.name.removeprefix("onestop_")
                     self.assertEqual(tool.annotations.read_only_hint, name not in WRITE_TOOLS)

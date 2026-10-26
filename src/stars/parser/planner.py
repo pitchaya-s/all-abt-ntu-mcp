@@ -4,14 +4,35 @@ import re
 
 from .common import NTUPageError
 from .course import _parse_time, parse_teaching_weeks
-from .personal import _COURSE_CODE, _course_status, _parse, _records_with_course_code, _table_status
+from .personal import (
+    _COURSE_CODE,
+    _course_status,
+    _parse,
+    _records_with_course_code,
+    _table_status,
+)
 
 _DAYS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
 _EMPTY_NOTICE = "You have no course registration or course timetable."
 
 
+def _headers(table: dict[str, object]) -> list[str]:
+    values = table.get("headers")
+    return [str(value) for value in values] if isinstance(values, list) else []
+
+
 def _is_calendar(table: dict[str, object]) -> bool:
-    return len(_DAYS.intersection(table["headers"])) >= 2
+    return len(_DAYS.intersection(_headers(table))) >= 2
+
+
+def _looks_like_registration_table(table: dict[str, object]) -> bool:
+    headers = [value.strip().casefold() for value in _headers(table)]
+    has_course = any(
+        "course" in header and "type" not in header
+        for header in headers
+    )
+    has_index = any("index" in header for header in headers)
+    return has_course and has_index and not _is_calendar(table)
 
 
 def parse_stars_planner_page(html: str) -> dict[str, object]:
@@ -25,6 +46,14 @@ def parse_stars_planner_page(html: str) -> dict[str, object]:
             registered.append(table)
         elif in_registration and section == "timetable":
             registered.append(table)
+    selection_page = re.search(r"course selection|select(?:ing)? courses|search for courses", text, re.I)
+    if not registered and "planner" in title.casefold() and not selection_page:
+        candidates = [
+            table for table in tables
+            if _looks_like_registration_table(table) and _records_with_course_code([table])
+        ]
+        if len(candidates) == 1:
+            registered = candidates
     courses = _records_with_course_code([
         table for table in registered
         if not _is_calendar(table) and "index" in " ".join(table["headers"]).casefold()

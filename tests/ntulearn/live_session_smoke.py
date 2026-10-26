@@ -1,8 +1,8 @@
 """Opt-in NTULearn live reads. Save credentials locally with auth save; prints only counts/statuses."""
 
 import asyncio
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from mcp import Client
 
@@ -58,15 +58,15 @@ async def main():
                             print("Live attachment list and temporary file download verified; bytes:", download["bytes_written"], flush=True)
                 if not file_checked:
                     print("Live file download not verified: no attachment found within the bounded sample.", flush=True)
-            previous = session.status().last_verified_at
-            session.run(session._context.clear_cookies)
+            previous = (await session.status()).last_verified_at
+            await session.auth.invalidate()
             refreshed = await call("ntulearn_list_courses", limit=100, refresh=True)
             assert not refreshed["from_cache"]
-            assert session.status().last_verified_at > previous
+            assert (await session.status()).last_verified_at > previous
             assert [c["id"] for c in refreshed["courses"]] == [c["id"] for c in courses["courses"]]
             print("Live cookie expiry followed by automatic fresh login verified.", flush=True)
     finally:
-        session.close()
+        await session.close()
 
 
 if __name__ == "__main__":

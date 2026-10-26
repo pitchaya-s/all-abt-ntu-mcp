@@ -10,7 +10,7 @@ from mcp import Client
 async def main(url):
     async with Client(url) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        assert len(tools) == 44 and all(tool.annotations.read_only_hint for tool in tools.values())
+        assert len(tools) == 45 and all(tool.annotations.read_only_hint for tool in tools.values())
         for name, arguments in [
             ("faculty_list_interests", {"query": "intelligence", "limit": 1}),
             ("news_list_categories", {}),

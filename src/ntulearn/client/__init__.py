@@ -1,6 +1,6 @@
 """Authenticated NTULearn sessions and typed REST requests."""
 
-from .client import LearnClient
-from .session import ID, Session
+from .client import ID, LearnClient
+from .session import Session
 
 __all__ = ["ID", "LearnClient", "Session"]

@@ -1,23 +1,25 @@
 import unittest
+from threading import Barrier
 from unittest.mock import patch
 
 from mcp import Client
 from pydantic import ValidationError
 
+from shared.server import mcp
+from stars.client import teaching
 from stars.domain.models import Course, Session
 from stars.domain.rooms import (
-    build_catalogue,
     available_rooms,
-    room_schedule,
+    build_catalogue,
     normalize_venue,
+    room_schedule,
     room_type,
 )
-from stars.room_schemas import RoomWindow, RoomFilters
-from stars.client import teaching
 from stars.parser import NTUPageError, parse_course_page
 from stars.parser.schedule import parse_teaching_schedule
 from stars.parser.search import parse_course_search
-from shared.server import mcp
+from stars.room_schemas import RoomFilters, RoomWindow
+
 from .room_fixtures import FULL_TIME, PART_TIME, block, page, snapshot
 
 
@@ -189,8 +191,20 @@ class TeachingClientTests(unittest.TestCase):
             self.assertTrue(teaching.get_teaching_snapshot(2030, 1).cached)
             self.assertFalse(teaching.get_teaching_snapshot(2030, 1, True).cached)
             self.assertEqual(fetch.call_count, 4)
-            self.assertEqual([c.kwargs["study_mode"] for c in fetch.call_args_list], ["F", "P", "F", "P"])
+            self.assertEqual(sorted(c.kwargs["study_mode"] for c in fetch.call_args_list), ["F", "F", "P", "P"])
             self.assertTrue(all(c.args[1] == "" for c in fetch.call_args_list))
+
+    def test_study_mode_pages_are_fetched_concurrently(self):
+        both_started = Barrier(2)
+
+        def fetch(term, query, study_mode):
+            both_started.wait(timeout=2)
+            return (FULL_TIME if study_mode == "F" else PART_TIME, "https://example.invalid")
+
+        with patch.object(teaching, "_fetch_html", side_effect=fetch):
+            snapshot = teaching.get_teaching_snapshot(2030, 1)
+
+        self.assertEqual(len(snapshot.courses), 4)
 
     def test_incomplete_mode_is_not_cached_and_errors_are_actionable(self):
         with patch.object(teaching, "_fetch_html", side_effect=[(FULL_TIME, "x"), ("<html>bad</html>", "x")]):

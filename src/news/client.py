@@ -4,9 +4,9 @@ from uuid import UUID
 
 from shared.public_http import PublicHTTPClient
 from shared.sitefinity import form_options, query_text
-from .models import Categories, NewsError
-from . import parser
 
+from . import parser
+from .models import Categories, NewsError
 
 DIRECTORY = "https://www.ntu.edu.sg/news/"
 API = DIRECTORY + "GetStories/"
@@ -33,11 +33,10 @@ class NewsClient:
             category_id = str(UUID(category_id))
             if category_id not in {item.id for item in self.list_categories(refresh).categories}:
                 raise NewsError("Unknown category_id; use news_list_categories for current IDs.")
-        if page > 1:
-            first = self._page(query, category_id, sort, 1, refresh)
-            if page > first.total_pages:
-                raise NewsError(f"This search has {first.total_pages} pages; start at page 1 and follow next_page.")
-        return self._page(query, category_id, sort, page, refresh)
+        result = self._page(query, category_id, sort, page, refresh)
+        if page > max(1, result.total_pages):
+            raise NewsError(f"This search has {result.total_pages} pages; start at page 1 and follow next_page.")
+        return result
 
     def get_article(self, url, offset=0, max_chars=12000, refresh=False):
         if not isinstance(url, str) or re.fullmatch(ARTICLE_URL, url) is None:

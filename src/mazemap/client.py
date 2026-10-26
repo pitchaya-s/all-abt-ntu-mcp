@@ -1,19 +1,22 @@
 """Bounded, cached ordinary HTTPS reads. No university login or cookies."""
 
-from collections import OrderedDict
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
-from http.client import HTTPException
 import json
-from threading import Lock
-import time
-from urllib.error import HTTPError, URLError
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+from shared.public_http import PublicHTTPClient, PublicRequestError
 
 from . import parser
-from .models import Buildings, Campuses, Directions, MapError, PlaceDetails, Places, RouteBuilding, RouteFloor
-
+from .models import (
+    Buildings,
+    Campuses,
+    Directions,
+    MapError,
+    PlaceDetails,
+    Places,
+    RouteBuilding,
+    RouteFloor,
+)
 
 API = "https://api.mazemap.com"
 SEARCH = "https://search.mazemap.com"
@@ -22,62 +25,31 @@ ROUTING = "https://routing.mazemap.com"
 
 class MapClient:
     def __init__(self):
-        self._lock = Lock()
-        self._cache = OrderedDict()
-        self._last_request = 0.0
+        self.http = PublicHTTPClient(
+            "MazeMap", ["api.mazemap.com", "search.mazemap.com", "routing.mazemap.com"], {"application/json"}
+        )
 
     def _get(self, base, path, parameters, refresh=False):
         url = base + path + "?" + urlencode(parameters)
-        # Serializing reads bounds concurrency and avoids duplicate cold requests.
-        with self._lock:
-            now = time.monotonic()
-            cached = self._cache.get(url)
-            if not refresh and cached is not None and now - cached[0] < 300:
-                self._cache.move_to_end(url)
-                return cached[1], dict(retrieved_at=cached[2], source_url=url, cached=True)
-            request = Request(url, headers={"User-Agent": "all-abt-ntu-mcp/0.1 (NTU campus map lookup)", "Accept": "application/json"})
-            for attempt in range(2):
-                time.sleep(max(0, 0.25 - (time.monotonic() - self._last_request)))
-                self._last_request = time.monotonic()
-                try:
-                    with urlopen(request, timeout=20) as response:
-                        if response.headers.get_content_type() != "application/json":
-                            raise MapError("MazeMap returned a non-JSON response; try again later.")
-                        body = response.read(8_000_001)
-                        if len(body) > 8_000_000:
-                            raise MapError("MazeMap response exceeded the 8 MB safety limit.")
-                        data = json.loads(body)
-                    if not isinstance(data, dict):
-                        raise MapError("MazeMap returned an unexpected response format.")
-                    retrieved = datetime.now(timezone.utc)
-                    self._cache[url] = (time.monotonic(), data, retrieved)
-                    self._cache.move_to_end(url)
-                    while len(self._cache) > 128:
-                        self._cache.popitem(last=False)
-                    return data, dict(retrieved_at=retrieved, source_url=url, cached=False)
-                except HTTPError as error:
-                    code = error.code
-                    retry_after = error.headers.get("Retry-After", "1")
-                    error.close()
-                    try:
-                        delay = max(0, float(retry_after))
-                    except ValueError:
-                        try:
-                            delay = max(0, (parsedate_to_datetime(retry_after) - datetime.now(timezone.utc)).total_seconds())
-                        except (ValueError, TypeError, OverflowError):
-                            delay = 1
-                    if not attempt and (code == 429 or 500 <= code <= 599) and delay <= 10:
-                        time.sleep(delay)
-                        continue
-                    if code == 404:
-                        raise MapError("MazeMap could not find this place or route; search again for current IDs.") from None
-                    raise MapError(f"MazeMap request failed with HTTP {code}; try again later.") from None
-                except (URLError, HTTPException, OSError):
-                    if not attempt:
-                        continue
-                    raise MapError("Could not reach MazeMap after two attempts; check your connection and try again.") from None
-                except (ValueError, UnicodeError):
-                    raise MapError("MazeMap returned invalid JSON; no map data was inferred.") from None
+        try:
+            body, metadata = self.http.get(url, refresh)
+        except PublicRequestError as error:
+            if error.status == 404:
+                if base == ROUTING:
+                    raise MapError(
+                        "MazeMap could not calculate a walking route for these verified places and constraint; try different NTU POIs or NO_CONSTRAINT."
+                    ) from None
+                raise MapError("MazeMap could not find this place or route; search again for current IDs.") from None
+            raise MapError(str(error)) from None
+        try:
+            data = json.loads(body)
+        except (ValueError, UnicodeError):
+            self.http.invalidate(url)
+            raise MapError("MazeMap returned invalid JSON; no map data was inferred.") from None
+        if not isinstance(data, dict):
+            self.http.invalidate(url)
+            raise MapError("MazeMap returned an unexpected response format.")
+        return data, metadata
 
     def _campuses(self, refresh=False):
         data, metadata = self._get(API, "/api/campuscollection/ntu-sg/", {"withcampuses": "true"}, refresh)
@@ -135,8 +107,12 @@ class MapClient:
         return PlaceDetails(place=place, **metadata)
 
     def get_directions(self, from_poi_id, to_poi_id, constraint="NO_CONSTRAINT", refresh=False) -> Directions:
-        self.get_place(from_poi_id, refresh)
-        self.get_place(to_poi_id, refresh)
+        self._campuses()
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="mazemap-place") as pool:
+            from_place = pool.submit(self.get_place, from_poi_id, refresh)
+            to_place = pool.submit(self.get_place, to_poi_id, refresh)
+            from_place.result()
+            to_place.result()
         data, metadata = self._get(ROUTING, "/routing/v2/a-to-b/", dict(
             fromPoiId=from_poi_id, toPoiId=to_poi_id, campusCollectionTag="ntu-sg",
             lang="en", units="metric", mode="PEDESTRIAN", constraint=constraint,

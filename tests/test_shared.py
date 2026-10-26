@@ -1,14 +1,14 @@
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
-from shared.credentials import read_credentials
 from ntulearn.client.session import Session
+from shared.credentials import read_credentials
 from stars.wish.session import WishSessionManager
 from tests.credential_fixtures import MemoryKeyring, stored_credentials
 
 
-class CredentialTests(unittest.TestCase):
+class CredentialTests(unittest.IsolatedAsyncioTestCase):
     def test_network_username_derives_student_email(self):
         with stored_credentials("student001", "shared-test-secret"):
             credentials = read_credentials()
@@ -30,27 +30,27 @@ class CredentialTests(unittest.TestCase):
             credentials = read_credentials()
             self.assertFalse(credentials.username or credentials.email or credentials.password)
 
-    def test_both_services_share_opt_in_keyring_without_login(self):
+    async def test_both_services_share_opt_in_keyring_without_login(self):
         with stored_credentials():
             wish, learn = WishSessionManager(), Session()
             try:
                 self.assertTrue(wish.status()["credentials_configured"])
-                self.assertTrue(learn.status().credentials_configured)
+                self.assertTrue((await learn.status()).credentials_configured)
                 self.assertFalse(wish.status()["session_verified"])
-                self.assertFalse(learn.status().session_verified)
-                self.assertNotIn("test-secret", str(wish.status()) + learn.status().model_dump_json())
+                self.assertFalse((await learn.status()).session_verified)
+                self.assertNotIn("test-secret", str(wish.status()) + (await learn.status()).model_dump_json())
             finally:
                 wish.close()
-                learn.close()
+                await learn.close()
 
     def test_server_closes_all_sessions_even_if_one_cleanup_fails(self):
         from shared import server
         from stars.wish.session import wish_session
-        with patch.object(server.mcp, "run"), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.mcp_server.session, "close") as learn, patch.object(server.library_personal.session, "close") as library, patch.object(server.onestop.session, "close") as onestop, patch.object(server.careeraxis_personal.client.session, "close") as careeraxis:
+        with patch.object(server.mcp, "run_stdio_async", new=AsyncMock()), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.mcp_server.session, "close", new=AsyncMock()) as learn, patch.object(server.library_personal.session, "close") as library, patch.object(server.onestop.session, "close") as onestop, patch.object(server.careeraxis_personal.client.session, "close") as careeraxis:
             with self.assertRaisesRegex(RuntimeError, "test cleanup"):
                 server.main()
             wish.assert_called_once()
-            learn.assert_called_once()
+            learn.assert_awaited_once()
             library.assert_called_once()
             onestop.assert_called_once()
             careeraxis.assert_called_once()

@@ -1,12 +1,12 @@
 [project]
 name = "all-abt-ntu-mcp"
 version = "0.1.0-beta.1"
-description = "MCP server for NTU schedules, learning, maps, research, faculty, library, news, campus services, shuttle arrivals, and student administration"
+description = "MCP server for NTU schedules, learning, career opportunities, maps, research, faculty, library, news, campus services, shuttle arrivals, and student administration"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "pitchaya-s" }]
-keywords = ["ntu", "mcp", "stars", "ntulearn", "shuttle", "omnibus"]
+keywords = ["ntu", "mcp", "stars", "ntulearn", "shuttle", "omnibus", "careeraxis"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
@@ -36,7 +36,7 @@ Issues = "https://github.com/pitchaya-s/all-abt-ntu-mcp/issues"
 all-abt-ntu = "shared.cli:main"
 
 [tool.uv.build-backend]
-module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "onestop", "omnibus", "shared"]
+module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "onestop", "omnibus", "careeraxis", "shared"]
 source-exclude = [".env", ".env.*", "*.har", "cookies*.json", "storage_state*.json", "*.log"]
 
 [build-system]

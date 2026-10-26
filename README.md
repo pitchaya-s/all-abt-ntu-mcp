@@ -1,8 +1,8 @@
 # All About NTU MCP
 
-An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, campus services, shuttle arrivals, and student administration.
+An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, career opportunities, news, campus services, shuttle arrivals, and student administration.
 
-[STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md).
+[STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [CareerAxis](src/careeraxis/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md).
 
 Local student administration: [One Stop @ SAC](src/onestop/README.md).
 
@@ -32,7 +32,7 @@ The hosted server provides **public tools only**. No NTU credentials are needed.
 
 ## Chromium
 
-For authenticated STARS, NTULearn, LibFacilities and One Stop tools, install Chromium once:
+For authenticated STARS, NTULearn, LibFacilities, One Stop and CareerAxis tools, install Chromium once:
 
 ```sh
 uvx --from 'playwright>=1.50,<2' playwright install chromium
@@ -48,7 +48,7 @@ uvx --from all-abt-ntu-mcp==0.1.0-beta.1 all-abt-ntu auth save
 
 Your password is hidden while typing and stored encrypted in your OS keyring, rather than in plaintext files. The server never includes it in MCP responses sent to the LLM.
 
-The prompts save one account for STARS, NTULearn, LibFacilities and One Stop and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
+The prompts save one account for STARS, NTULearn, LibFacilities, One Stop and CareerAxis and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
 
 The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [shared credential storage](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/shared/README.md#credential-storage).
 
@@ -136,6 +136,12 @@ src/
 │   ├── client/             Login, sessions, and REST requests
 │   ├── parser/             Response and document parsing
 │   └── services/           Content, files, mailbox, people, and activity
+├── careeraxis/
+│   ├── mcp_server.py        Local authenticated CareerAxis tools
+│   ├── client.py            Section searches and record detail requests
+│   ├── session.py           ADFS login and in-memory browser session
+│   ├── parser.py            Rendered section and record normalization
+│   └── models.py            Search, detail, and auth status responses
 ├── mazemap/
 │   ├── mcp_server.py        Public map tool registration and input schemas
 │   ├── models.py           Typed place and direction responses
@@ -237,6 +243,24 @@ Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `nu
 | `ntulearn_whats_new` | Recent announcements, upcoming events, and grade snapshots | Yes |
 
 Start with `ntulearn_list_courses`, then use the returned IDs. See the [NTULearn guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) for parameters, examples, and sources.
+
+### CareerAxis
+
+CareerAxis tools are local and use the shared NTU OS keyring. They are not exposed by the hosted public server.
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `careeraxis_auth_status` | Report keyring availability and whether this process has verified CareerAxis login | No |
+| `careeraxis_search_opportunities` | Search NTU jobs and internship postings by keyword; follow `has_next_page` | Yes |
+| `careeraxis_get_opportunity` | Read visible posting text and HTTPS application links from a returned CareerAxis URL | Yes |
+| `careeraxis_search_internship_jobs` | Search the Internship workgroup job board | Yes |
+| `careeraxis_search_events` | Search events by keyword | Yes |
+| `careeraxis_search_resources` | Search career guides, training, and downloadable resources | Yes |
+| `careeraxis_search_organisations` | Search employer profiles, optionally requiring current opportunities | Yes |
+| `careeraxis_search_appointment_topics` | Find career coaching topics, including interview practice and resume critique | Yes |
+| `careeraxis_get_record` | Read details for returned events, resources, employers, appointment topics, or Internship postings | Yes |
+
+Search returns visible portal text without guessing fields CareerAxis does not label consistently. External links are returned for review and never followed; tools do not apply, save items, book appointments, or change account data. Results are cached in memory for 60 seconds by default; set `CAREERAXIS_CACHE_TTL_SECONDS=0` to disable caching. If NTU requires interactive MFA, set `CAREERAXIS_HEADLESS=false` and run the MCP in a visible local session. See the [CareerAxis guide](src/careeraxis/README.md).
 
 ### MazeMap
 

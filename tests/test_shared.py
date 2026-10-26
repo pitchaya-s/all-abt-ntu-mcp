@@ -46,10 +46,11 @@ class CredentialTests(unittest.TestCase):
     def test_server_closes_all_sessions_even_if_one_cleanup_fails(self):
         from shared import server
         from stars.wish.session import wish_session
-        with patch.object(server.mcp, "run"), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.mcp_server.session, "close") as learn, patch.object(server.library_personal.session, "close") as library, patch.object(server.onestop.session, "close") as onestop:
+        with patch.object(server.mcp, "run"), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.mcp_server.session, "close") as learn, patch.object(server.library_personal.session, "close") as library, patch.object(server.onestop.session, "close") as onestop, patch.object(server.careeraxis_personal.client.session, "close") as careeraxis:
             with self.assertRaisesRegex(RuntimeError, "test cleanup"):
                 server.main()
             wish.assert_called_once()
             learn.assert_called_once()
             library.assert_called_once()
             onestop.assert_called_once()
+            careeraxis.assert_called_once()

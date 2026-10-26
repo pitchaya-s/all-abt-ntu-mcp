@@ -1,6 +1,6 @@
 # Shared runtime
 
-STARS, NTULearn, LibFacilities, and One Stop use the same credential store in `shared.credentials`. Each service manages its own login session and in-memory cache. See the [main README](../../README.md) for installation and MCP client configuration and the [One Stop guide](../onestop/README.md) for student ServiceNow tools.
+STARS, NTULearn, LibFacilities, One Stop, and CareerAxis use the same credential store in `shared.credentials`. Each service manages its own login session and in-memory cache. See the [main README](../../README.md) for installation and MCP client configuration and the [One Stop guide](../onestop/README.md) for student ServiceNow tools.
 
 ## Hosted public server
 
@@ -62,5 +62,16 @@ Academic data returned through MCP is visible to the AI client. Credentials and 
 Linux requires a running Secret Service or KWallet service. Keyring's direct KWallet backend additionally needs `dbus-python` in the same Python environment; KWallet can also provide a Secret Service interface. Some Linux installations need a keyring provider installed and configured first.
 
 If terminal `auth status` works but the MCP does not, forward `DBUS_SESSION_BUS_ADDRESS` and `XDG_RUNTIME_DIR` through the client's MCP configuration and restart the client from that same terminal. Codex uses `env_vars`, as shown in the main README. Do not hardcode another user's bus address or start a separate D-Bus session for the MCP.
+
+If `busctl --user list` cannot connect, point the current shell at its desktop session bus before checking credentials or launching the MCP client:
+
+```sh
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+busctl --user list
+uv run all-abt-ntu auth status
+```
+
+The keyring service must appear in the bus listing, and `auth status` must report the account as stored. Restart the MCP client from this corrected session so it inherits the same bus address.
 
 In authentication tool results, `credentials_configured` is `true` when the account is readable, `false` when the keyring is readable but has no account, and `null` when storage cannot be read. A keyring error does not establish that credentials are missing.

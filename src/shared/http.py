@@ -52,7 +52,7 @@ async def health(request):
 
 def create_app():
     server = MCPServer(
-        "all-abt-ntu-mcp", version="0.1.0-beta.1", log_level="WARNING",
+        "all-abt-ntu-mcp", version="0.1.0-beta.2", log_level="WARNING",
         instructions=(
             "This hosted server exposes only public, read-only NTU information. "
             "It does not accept credentials, log in, read personal records, or modify plans. "

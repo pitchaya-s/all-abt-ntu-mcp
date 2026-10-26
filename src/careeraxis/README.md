@@ -32,7 +32,7 @@ Reads and status checks revalidate the shared keyring entry. Credential replacem
 
 ## Validation
 
-Synthetic tests exercise all nine MCP tools and schemas, pagination across native page boundaries, append/replace views, unavailable filters, disabled paging controls, safe detail routes, keyring rotation/revocation, login-host checks and sanitized failures. Chromium fixtures intercept all requests; no real applications, saves or bookings occur. Original development verified authenticated searches, details and job pagination; this review uses offline regression checks and does not repeat the stored login that NTU rejected in the One Stop investigation.
+Synthetic tests exercise all nine MCP tools and schemas, pagination across native page boundaries, append/replace views, unavailable filters, disabled paging controls, safe detail routes, keyring rotation/revocation, login-host checks and sanitized failures. Chromium fixtures intercept all requests; no real applications, saves or bookings occur. Original development verified authenticated searches, details and job pagination. The review fixes were validated with offline regression checks; they have not been reverified in a live authenticated session.
 
 ```sh
 uv run python -m unittest discover -s tests/careeraxis -t . -v

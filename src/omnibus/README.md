@@ -2,7 +2,7 @@
 
 Read-only public access to NTU shuttle routes, stop associations, live vehicle positions, arrival estimates, schedules, and service notices. No NTU credentials or extra dependencies are needed.
 
-The client reads NTU Omnibus' current module manifest and JavaScript bundles to discover screen-service paths and version hashes. It caches that endpoint metadata for five minutes and uses a small cookie jar for the app's anonymous CSRF handshake. Live bus, stop, arrival, and status responses are not cached. Requests are serialized and paced at least 250 ms apart, with a 20-second timeout and an 8 MB response limit.
+The client reads NTU Omnibus' current module manifest and JavaScript bundles to discover screen-service paths and version hashes. It caches that endpoint metadata and route-stop associations for five minutes and uses a small cookie jar for the app's anonymous CSRF handshake. The stop cache holds at most eight routes per client and is shared by stop searches and arrival lookups. Live bus positions, arrival estimates, and status responses are not cached. Requests are serialized and paced at least 250 ms apart, with a 20-second timeout and an 8 MB response limit.
 
 ## Tools
 
@@ -20,7 +20,7 @@ Returns the app's campus shuttle routes and published route colors. The route-li
 
 Inputs: optional `query` (stop name or code), `route_code` (campus route or `179`, `179A`, `199`), `limit` (1–100, default 20), and `offset` (default 0).
 
-Returns matching route-stop associations, with `total_count` and `next_offset`. A stop associated with more than one route can appear more than once.
+Returns matching route-stop associations, with `total_count` and `next_offset`. A stop associated with more than one route can appear more than once. `cached` is true when every requested route came from the stop cache; `retrieved_at` is the oldest contributing route snapshot, including when fresh and cached routes are combined.
 
 ### `omnibus_get_arrivals`
 
@@ -48,4 +48,4 @@ Route path geometry is outside the current tool outputs. A missing vehicle or ar
 
 ## Checks
 
-Synthetic tests cover native route IDs and input flags, per-source arrival lookups, missing estimates, result limits, endpoint discovery, CSRF recovery, bounded HTTP reads, schemas and public HTTP integration. Live reads verified all five tools, including shuttle and LTA estimates.
+Synthetic tests cover native route IDs and input flags, stop-cache reuse and expiry, cache isolation and concurrent reads, fresh arrival estimates, per-source arrival lookups, missing estimates, result limits, endpoint discovery, CSRF recovery, bounded HTTP reads, schemas and public HTTP integration. Live reads verified all five tools, including shuttle and LTA estimates.

@@ -19,6 +19,8 @@ from .models import Arrivals, BusPositions, OmnibusError, Routes, ServiceStatus,
 _ORIGIN = "https://apps.ntu.edu.sg"
 _BASE = _ORIGIN + "/NTUOmnibus/"
 _ALLOWED_HOSTS = frozenset({"apps.ntu.edu.sg"})
+_ROUTE_CODES = ("Blue", "Brown", "Green", "Grey", "Red", "179", "179A", "199")
+_STOP_CACHE_TTL_SECONDS = 300
 _ASSETS = (
     "/NTUOmnibus/scripts/CampusShuttle_MUI.controller.js",
     "/NTUOmnibus/scripts/CampusShuttle_MUI.MainFlow.RenderMap.mvc.js",
@@ -58,6 +60,7 @@ class OmnibusClient:
         self._lock = RLock()
         self._metadata_cache = None
         self._metadata_cached_at = 0.0
+        self._stop_cache = {}
         self._last_request_at = 0.0
         self._bootstrapped = False
 
@@ -329,29 +332,44 @@ class OmnibusClient:
         return Routes(retrieved_at=self._now(), source_urls=[route_url, color_url], routes=route_rows, colors=colors)
 
     def _stop_records(self, route_codes=None):
-        records, urls = [], []
-        for code in route_codes or ("Blue", "Brown", "Green", "Grey", "Red", "179", "179A", "199"):
-            is_lta = code in {"179", "179A", "199"}
-            data, url = self._post(
-                "DataActionGetPickupCheckPoints", "MainFlow.Shuttle",
-                screen_variables=dict(self._empty_map_variables(), RouteId=code, IsSBS_Route=is_lta),
-                client_variables=self._client_variables(code),
-            )
-            records.extend(parser.pickup_stops(data, code, is_lta))
-            urls.append(url)
-        return records, list(dict.fromkeys(urls))
+        codes = route_codes or _ROUTE_CODES
+        if any(code not in _ROUTE_CODES for code in codes):
+            raise OmnibusError("Choose a campus shuttle route or service 179, 179A, or 199.")
+        records, urls, retrieved_times = [], [], []
+        all_cached = True
+        for code in codes:
+            # Share stop metadata across lookups without caching live estimates.
+            # The fixed route keys bound this cache to eight entries per client.
+            with self._lock:
+                entry = self._stop_cache.get(code)
+                if entry is None or time.monotonic() - entry[0] >= _STOP_CACHE_TTL_SECONDS:
+                    is_lta = code in {"179", "179A", "199"}
+                    data, url = self._post(
+                        "DataActionGetPickupCheckPoints", "MainFlow.Shuttle",
+                        screen_variables=dict(self._empty_map_variables(), RouteId=code, IsSBS_Route=is_lta),
+                        client_variables=self._client_variables(code),
+                    )
+                    stops = parser.pickup_stops(data, code, is_lta)
+                    entry = (time.monotonic(), self._now(), stops, url)
+                    self._stop_cache[code] = entry
+                    all_cached = False
+                _, retrieved_at, stops, url = entry
+                records.extend(stop.model_copy(deep=True) for stop in stops)
+                urls.append(url)
+                retrieved_times.append(retrieved_at)
+        return records, list(dict.fromkeys(urls)), min(retrieved_times), all_cached
 
     def list_stops(self, query, route_code, limit, offset):
         self._query(query)
         if type(limit) is not int or not 1 <= limit <= 100 or type(offset) is not int or offset < 0:
             raise OmnibusError("Use a limit from 1 to 100 and a nonnegative offset.")
-        records, urls = self._stop_records([route_code] if route_code else None)
+        records, urls, retrieved_at, cached = self._stop_records([route_code] if route_code else None)
         folded_query = query.casefold().strip()
         filtered = [stop for stop in records if not folded_query or folded_query in stop.name.casefold()
                     or folded_query in stop.stop_code.casefold()]
         page = filtered[offset:offset + limit]
         next_offset = offset + len(page) if offset + len(page) < len(filtered) else None
-        return Stops(retrieved_at=self._now(), source_urls=urls, stops=page,
+        return Stops(retrieved_at=retrieved_at, source_urls=urls, cached=cached, stops=page,
                      total_count=len(filtered), next_offset=next_offset)
 
     @staticmethod
@@ -370,7 +388,7 @@ class OmnibusClient:
             if route_filter not in codes:
                 raise OmnibusError("The selected route does not match the arrival source; choose the matching shuttle or lta source.")
             codes = [route_filter]
-        stops, source_urls = self._stop_records(codes)
+        stops, source_urls, _, _ = self._stop_records(codes)
         query = stop_query.strip().casefold()
         stops = [stop for stop in stops if not query or query in stop.name.casefold() or query in stop.stop_code.casefold()]
         if len(stops) > 20:

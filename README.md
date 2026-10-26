@@ -28,6 +28,10 @@ In a cloud AI client that supports custom remote MCP servers:
 
 The hosted server provides **public tools only**. No NTU credentials are needed. Personal tools, such as NTULearn and saving STARS plans, require the local setup below.
 
+For self-hosting, start with [Manual install](#manual-install). To connect a private server to ChatGPT or other supported OpenAI products, we recommend [OpenAI's `tunnel-client` (Secure MCP Tunnel)](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels). It supports the local stdio server without exposing a public HTTP endpoint.
+
+With other methods, use HTTPS and authentication and review how your data is handled. **Do not expose personal tools through an unauthenticated public endpoint**: they can access private NTU data and act through your saved account.
+
 ## Chromium
 
 For authenticated STARS, NTULearn, LibFacilities, One Stop and CareerAxis tools, install Chromium once:
@@ -200,6 +204,7 @@ Public lookups work without credentials. Planner and Degree Audit use the shared
 | --- | --- | --- |
 | `stars_search_courses` | Find undergraduate courses by partial code or title keywords in a published term | No |
 | `stars_get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata | No |
+| `stars_get_prerequisite_tree` | Explore a course's prerequisites and dependent courses with separate depth limits | No |
 | `stars_get_course_indexes` | All indexes with complete schedules, vacancies, and waitlist lengths | No |
 | `stars_get_index` | One index's complete schedule, vacancies, and waitlist length | No |
 | `stars_compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks | No |
@@ -385,7 +390,7 @@ These interoperability checks use offline fixtures and never edit saved plans.
 
 Hosted HTTP checks cover public-only registration, rejected personal calls, output schemas, both modern and legacy Python SDK clients, Host/Origin validation, request-size limits, and independent serverless event loops. See the [HTTP test instructions](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/shared/README.md#http-tests) for the TypeScript client and opt-in live smoke.
 
-Live checks and service-specific testing instructions: [STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md#tests) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md#tests) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md#tests) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md#tests) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md#tests) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md#tests) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md#tests) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md#tests).
+Live checks and service-specific testing instructions: [STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md#tests) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md#tests) · [CareerAxis](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/careeraxis/README.md#validation) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md#tests) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md#tests) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md#tests) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md#tests) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md#tests) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md#tests) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md#checks) · [One Stop @ SAC](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/onestop/README.md#coverage-runtime-and-checks).
 
 ## Limitation
 

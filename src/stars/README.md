@@ -34,6 +34,20 @@ Find scheduled undergraduate offerings by partial code or title words.
 
 **Returns:** course name, AU, prerequisites when published, course description, course notes, term, and source metadata. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`. This tool returns metadata rather than index timetables.
 
+### `stars_get_prerequisite_tree`
+
+Build a tree around one course, with a **before** branch for its prerequisites and an **after** branch for courses that depend on it.
+
+**Inputs:** `course_code`, `academic_year`, `semester`; optional `prerequisite_depth` and `dependent_depth`, each 0–5 with default 2; `completed_courses` (up to 100 course codes); `only_eligible` (default false); `include_corequisites` (default false); and `max_nodes` per branch, 1–100 with default 100. The center course is treated as completed for eligibility evaluation. `only_eligible` requires `completed_courses` and filters the **after** branch.
+
+**Returns:** a nested tree with published prerequisite expressions on each course. Recognized `AND`/`OR` rules preserve their alternative paths; `completed_courses` marks which paths are satisfied. The **before** branch uses NTU course-content metadata for prerequisite courses that are not offered in the selected term. The **after** branch searches scheduled undergraduate offerings in that term across full-time and part-time study modes. `source_urls` lists the official endpoints used, and each expanded course includes its source when available.
+
+Unrecognized expressions, conflicting full-time/part-time records, and unavailable off-term course metadata remain labeled uncertain. Possible text matches are not treated as confirmed prerequisite rules. The tree is bounded by both depth inputs and `max_nodes`; `prerequisites_truncated` and `dependents_truncated` identify a branch cut short. This is not a historical or complete course-catalogue search.
+
+```json
+{"course_code":"ZZ0001","academic_year":2030,"semester":1,"prerequisite_depth":2,"dependent_depth":2,"completed_courses":["MH1812"]}
+```
+
 ### `stars_get_course_indexes`
 
 **Inputs:** `course_code`, `academic_year`, `semester`.

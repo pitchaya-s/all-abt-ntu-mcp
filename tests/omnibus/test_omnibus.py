@@ -1,4 +1,7 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from threading import Event
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
@@ -7,12 +10,109 @@ from mcp import Client
 from mcp.server import MCPServer
 
 from omnibus import mcp_server, parser
-from omnibus.client import OmnibusClient, _ASSETS, _BASE, _ORIGIN
+from omnibus.client import OmnibusClient, _ASSETS, _BASE, _ORIGIN, _STOP_CACHE_TTL_SECONDS
 from omnibus.models import OmnibusError
 from tests.omnibus.fixtures import FixtureClient, RESPONSES
 
 
 class ClientTests(unittest.TestCase):
+    def test_stop_cache_reuses_routes_across_filters_and_preserves_snapshot_time(self):
+        c = FixtureClient()
+        first = c.list_stops("", None, 1, 0)
+        self.assertFalse(first.cached)
+        self.assertEqual(len(c.calls), 8)
+        repeated = c.list_stops("gate", "179", 20, 0)
+        self.assertTrue(repeated.cached)
+        self.assertEqual(len(c.calls), 8)
+        self.assertEqual(repeated.total_count, 1)
+        self.assertEqual(c.list_stops("", None, 1, 1).retrieved_at, first.retrieved_at)
+        self.assertEqual(len(c._stop_cache), 8)
+        with self.assertRaises(OmnibusError):
+            c.list_stops("", "unknown", 20, 0)
+        self.assertEqual(len(c.calls), 8)
+
+    def test_stop_cache_expires_per_route_and_reports_oldest_snapshot(self):
+        c = FixtureClient()
+        now = datetime(2026, 10, 26, tzinfo=timezone.utc)
+        with patch("omnibus.client.time.monotonic", return_value=100), patch.object(c, "_now", return_value=now):
+            first = c.list_stops("", "Blue", 20, 0)
+        with patch("omnibus.client.time.monotonic", return_value=101), patch.object(c, "_now", return_value=now + timedelta(seconds=1)):
+            mixed = c.list_stops("", None, 20, 0)
+        self.assertFalse(mixed.cached)
+        self.assertEqual(mixed.retrieved_at, first.retrieved_at)
+        with patch("omnibus.client.time.monotonic", return_value=100 + _STOP_CACHE_TTL_SECONDS - 1):
+            repeated = c.list_stops("", "Blue", 20, 0)
+        self.assertTrue(repeated.cached)
+        self.assertEqual(repeated.retrieved_at, first.retrieved_at)
+        later = now + timedelta(seconds=_STOP_CACHE_TTL_SECONDS)
+        with patch("omnibus.client.time.monotonic", return_value=100 + _STOP_CACHE_TTL_SECONDS), patch.object(c, "_now", return_value=later):
+            expired = c.list_stops("", "Blue", 20, 0)
+            still_cached = c.list_stops("", "179", 20, 0)
+        self.assertFalse(expired.cached)
+        self.assertEqual(expired.retrieved_at, later)
+        self.assertTrue(still_cached.cached)
+        self.assertEqual(len(c.calls), 9)
+
+    def test_stop_cache_does_not_share_mutable_models_with_callers(self):
+        c = FixtureClient()
+        first = c.list_stops("", "Blue", 20, 0)
+        first.stops[0].name = "changed"
+        first.stops.clear()
+        self.assertEqual(c.list_stops("hall", "Blue", 20, 0).stops[0].name, "Example Hall")
+
+    def test_arrivals_reuse_stop_metadata_but_fetch_each_estimate_live(self):
+        c = FixtureClient()
+        first = c.get_arrivals("Blue", "hall", "shuttle")
+        changed_eta = {"ETA": "8", "NextETA": "15"}
+        with patch.dict(RESPONSES, {"GetETAAndNextETA_FMS": changed_eta}):
+            repeated = c.get_arrivals("Blue", "hall", "shuttle")
+        self.assertEqual(first.shuttle_arrivals[0].eta, "3")
+        self.assertEqual(repeated.shuttle_arrivals[0].eta, "8")
+        self.assertFalse(first.cached)
+        self.assertFalse(repeated.cached)
+        self.assertTrue(c.list_stops("hall", "Blue", 20, 0).cached)
+        self.assertEqual([call[0] for call in c.calls], [
+            "DataActionGetPickupCheckPoints", "GetETAAndNextETA_FMS", "GetETAAndNextETA_FMS"])
+
+    def test_stop_cache_does_not_keep_failed_or_malformed_fetches(self):
+        c = FixtureClient()
+        for failure in [OmnibusError("offline"), ({}, "https://apps.ntu.edu.sg/example")]:
+            kwargs = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}
+            with patch.object(c, "_post", **kwargs):
+                with self.assertRaises(OmnibusError):
+                    c.list_stops("", "Blue", 20, 0)
+            self.assertFalse(c._stop_cache)
+        with patch("omnibus.client.time.monotonic", return_value=100):
+            c.list_stops("", "Blue", 20, 0)
+        with patch("omnibus.client.time.monotonic", return_value=100 + _STOP_CACHE_TTL_SECONDS):
+            with patch.object(c, "_post", side_effect=OmnibusError("offline")):
+                with self.assertRaises(OmnibusError):
+                    c.list_stops("", "Blue", 20, 0)
+            self.assertFalse(c.list_stops("", "Blue", 20, 0).cached)
+        self.assertEqual(len(c.calls), 2)
+
+    def test_concurrent_stop_requests_share_one_fetch(self):
+        c = FixtureClient()
+        entered, release = Event(), Event()
+        fetch = c._post
+
+        def slow_fetch(*args, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("timed out waiting to release fixture")
+            return fetch(*args, **kwargs)
+
+        with patch.object(c, "_post", side_effect=slow_fetch), ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(c.list_stops, "", "Blue", 20, 0)
+            try:
+                self.assertTrue(entered.wait(5))
+                second = pool.submit(c.list_stops, "hall", "Blue", 20, 0)
+            finally:
+                release.set()
+            self.assertFalse(first.result(timeout=5).cached)
+            self.assertTrue(second.result(timeout=5).cached)
+        self.assertEqual(len(c.calls), 1)
+
     def test_positions_placeholder_timestamp_and_filtered_pagination(self):
         c = FixtureClient()
         buses = c.get_live_buses("Blue")
@@ -53,7 +153,7 @@ class ClientTests(unittest.TestCase):
         missing = parser.stop_arrival({"ETA": "0", "NextETA": "0", "IsETA_NotFound": True}, stop)
         self.assertIsNone(missing.eta_minutes)
         self.assertIsNone(missing.next_eta_minutes)
-        with patch.object(c, "_stop_records", return_value=([stop] * 21, [])):
+        with patch.object(c, "_stop_records", return_value=([stop] * 21, [], c._now(), False)):
             with self.assertRaisesRegex(OmnibusError, "More than 20"):
                 c.get_arrivals(None, "", "all")
         for value in (float("nan"), float("inf"), True):

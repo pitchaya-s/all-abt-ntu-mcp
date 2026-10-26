@@ -46,6 +46,53 @@ class CourseMetadataResult(CourseTerm):
     official_source: str | None
 
 
+class PrerequisiteTreeNode(TypedDict):
+    course_code: str
+    course_name: str | None
+    au: float | None
+    offered_this_term: bool
+    course_data_status: Literal["available", "unavailable", "not_loaded"]
+    official_source: str | None
+    retrieved_at: str | None
+    depth: int
+    match_status: Literal["root", "confirmed", "possible"]
+    path_status: Literal["root", "confirmed", "possible"]
+    matched_relations: list[str]
+    prerequisite_status: Literal[
+        "parsed", "unparsed", "not_listed", "conflicting_records", "unavailable", "not_loaded"
+    ]
+    prerequisite_text: str | None
+    prerequisite_texts: list[str | None]
+    prerequisite_expression: dict[str, object] | None
+    eligibility_status: Literal["eligible", "not_eligible", "unknown", "not_evaluated", "not_listed"]
+    prerequisites: list[dict[str, object]]
+    dependents: list[dict[str, object]]
+    cycle_detected: NotRequired[bool]
+    prerequisites_truncated: NotRequired[bool]
+    dependents_truncated: NotRequired[bool]
+
+
+class PrerequisiteTreeResult(TypedDict):
+    course_code: str
+    academic_year: int
+    semester: str
+    prerequisite_depth: int
+    dependent_depth: int
+    include_corequisites: bool
+    only_eligible: bool
+    completed_courses: list[str] | None
+    prerequisite_course_count: int
+    dependent_course_count: int
+    tree_node_count: int
+    prerequisites_truncated: bool
+    dependents_truncated: bool
+    truncated: bool
+    coverage: dict[str, int]
+    root: PrerequisiteTreeNode
+    source_urls: list[str]
+    retrieved_at: str
+
+
 class Lesson(TypedDict):
     lesson_type: str | None
     group: str | None

@@ -46,6 +46,61 @@ def parse_course_description(html: str, expected_code: str) -> str | None:
     description = "\n".join(descriptions).strip()
     return description or None
 
+
+def parse_course_prerequisite_metadata(html: str, expected_code: str) -> dict[str, str | float | None] | None:
+    """Extract a course's published title, AU, and prerequisite text from Content of Courses."""
+    parser = _CourseContentRows()
+    parser.feed(html)
+    header_index = next(
+        (
+            index
+            for index, row in enumerate(parser.rows)
+            if len(row) >= 4
+            and [cell[1].strip().upper() for cell in row[:3]] == ["COURSE CODE", "TITLE", "AU"]
+        ),
+        None,
+    )
+    if header_index is None:
+        raise NTUPageError("NTU returned an unrecognized course-content page; no course table was found.")
+
+    code = expected_code.upper()
+    course_index = next(
+        (
+            index
+            for index, row in enumerate(parser.rows[header_index + 1 :], header_index + 1)
+            if row and row[0][1].strip().upper() == code
+        ),
+        None,
+    )
+    if course_index is None:
+        return None
+
+    course_row = parser.rows[course_index]
+    if len(course_row) < 3:
+        raise NTUPageError("NTU returned an incomplete course-content record.")
+    au_match = re.fullmatch(r"\s*((?:\d+(?:\.\d+)?|\.\d+))\s*", course_row[2][1])
+    au = float(au_match[1]) if au_match else None
+    detail_rows: list[list[str]] = []
+    for row in parser.rows[course_index + 1 :]:
+        is_description = any(
+            text
+            and (
+                ((attrs.get("width") or "").isdigit() and int(attrs["width"]) >= 500)
+                or ((attrs.get("colspan") or "").isdigit() and int(attrs["colspan"]) >= 4)
+            )
+            for attrs, text in row
+        )
+        if is_description:
+            break
+        detail_rows.append([text for _, text in row])
+    details = _course_details(detail_rows)
+    return {
+        "course_code": code,
+        "course_name": course_row[1][1].strip() or None,
+        "au": au,
+        "prerequisite": details.get("prerequisite"),
+    }
+
 def parse_teaching_weeks(remark: str) -> tuple[int, ...] | None:
     """Parse an explicit NTU week range/list; leave unfamiliar remarks untouched."""
     match = re.fullmatch(

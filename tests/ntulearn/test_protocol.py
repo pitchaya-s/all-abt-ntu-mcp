@@ -29,9 +29,12 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(len([t for t in listing.tools if t.name.startswith("ntulearn_")]), 20)
                 by_name = {tool.name: tool for tool in listing.tools}
                 self.assertNotIn("register_courses", by_name)
+                from onestop.workflow_tools import WRITE_TOOLS
+                writes = {"ntulearn_download_file", "ntulearn_download_course", "stars_save_stars_plan"}
+                writes.update("onestop_" + name for name in WRITE_TOOLS)
                 for tool in listing.tools:
                     Draft202012Validator.check_schema(tool.output_schema)
-                    self.assertEqual(tool.annotations.read_only_hint, tool.name not in {"ntulearn_download_file", "ntulearn_download_course", "stars_save_stars_plan"})
+                    self.assertEqual(tool.annotations.read_only_hint, tool.name not in writes)
                 for name, arguments in [
                     ("ntulearn_auth_status", {}), ("ntulearn_list_courses", {"limit": 1}),
                     ("ntulearn_get_course_contents", {"course_id": COURSE}),

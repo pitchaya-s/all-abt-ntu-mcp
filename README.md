@@ -1,8 +1,10 @@
 # All About NTU MCP
 
-An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, and campus services.
+An MCP server for NTU Singapore schedules, learning materials, campus navigation, research, faculty, library discovery, news, campus services, and student administration.
 
 [STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md).
+
+Local student administration: [One Stop @ SAC](src/onestop/README.md).
 
 For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the public tools from PyPI:
 
@@ -30,7 +32,7 @@ The hosted server provides **public tools only**. No NTU credentials are needed.
 
 ## Chromium
 
-For authenticated STARS, NTULearn and LibFacilities tools, install Chromium once:
+For authenticated STARS, NTULearn, LibFacilities and One Stop tools, install Chromium once:
 
 ```sh
 uvx --from 'playwright>=1.50,<2' playwright install chromium
@@ -46,7 +48,7 @@ uvx --from all-abt-ntu-mcp==0.1.0-beta.1 all-abt-ntu auth save
 
 Your password is hidden while typing and stored encrypted in your OS keyring, rather than in plaintext files. The server never includes it in MCP responses sent to the LLM.
 
-The prompts save one account for STARS, NTULearn and LibFacilities and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
+The prompts save one account for STARS, NTULearn, LibFacilities and One Stop and enable automatic login/session recovery. Run `auth save` again to update it, `auth status` to check storage without revealing credentials, or `auth delete` to remove it. Replace `auth save` at the end of the command above with the action you want.
 
 The keyring must be available and unlocked: Secret Service or KWallet on Linux, Keychain on macOS, Credential Manager on Windows. There is no plaintext fallback. Passwords are not accepted through MCP, command arguments, environment variables, `.env`, or client configuration. Remove any credentials left in your old configuration; the server no longer reads them. More details: [shared credential storage](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/shared/README.md#credential-storage).
 
@@ -163,11 +165,12 @@ src/
 │   ├── models.py           Typed story, category, and article responses
 │   ├── client.py           News search and bounded article retrieval
 │   └── parser.py           Story cards and article body extraction
-└── service/
-    ├── mcp_server.py        Public campus service tools and input schemas
-    ├── models.py           Typed location and filter responses
-    ├── client.py           Complete directory collection and local search
-    └── parser.py           Contact, hours, and map normalization
+├── service/
+│   ├── mcp_server.py        Public campus service tools and input schemas
+│   ├── models.py           Typed location and filter responses
+│   ├── client.py           Complete directory collection and local search
+│   └── parser.py           Contact, hours, and map normalization
+└── onestop/                Local ServiceNow reads and native workflows
 tests/
 ├── stars/                  STARS tests and fictionalized fixtures
 ├── ntulearn/               NTULearn tests and synthetic fixtures
@@ -305,6 +308,25 @@ See the [News guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src
 | `service_list_filters` | Official directory type and category filter IDs | No |
 
 See the [Campus services guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) for parameters and directory coverage.
+
+### One Stop @ SAC
+
+59 One Stop tools provide reads and native write workflows through the local server, a saved NTU student account, and Chromium. They are not available on the public hosted endpoint. Core discovery tools:
+
+| Tool | Purpose | Credentials |
+| --- | --- | --- |
+| `onestop_auth_status` | Credential availability and last verified session | No |
+| `onestop_list_catalog_categories` | Visible service categories and subcategories | Yes |
+| `onestop_list_catalog_items` | Catalog search, category browsing, and popular services | Yes |
+| `onestop_get_catalog_item` | Form instructions and fields, excluding personal defaults | Yes |
+| `onestop_search_knowledge` | Search student knowledge articles | Yes |
+| `onestop_get_knowledge_article` | Read article text and links | Yes |
+| `onestop_list_my_requests` | Your open/closed cases and requests, with coverage information | Yes |
+| `onestop_get_my_request` | Visible fields, answers and stages for verified own requests/items | Yes |
+
+Additional tools cover request drafts/submission, replies and offered state actions, attachments, article discussions/feedback/subscriptions, dashboard data, profile/preferences, shopping/saved carts, favourites and appointment availability/booking. Payment preparation returns a native gateway link. Writes perform real account actions and should follow the user's specific request. Draft and checkout previews expose validation before submission and guard against duplicate attempts.
+
+Native lists expand up to 500 records where supported; some catalog/search results remain partial. Inspect `complete` and `coverage`; `next_offset` pages retrieved records only. See the [One Stop guide](src/onestop/README.md) for all 59 tools, setup and limitations, including browser handoffs and unverified appointment cancellation/rescheduling.
 
 ## Tests
 

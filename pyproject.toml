@@ -1,7 +1,7 @@
 [project]
 name = "all-abt-ntu-mcp"
 version = "0.1.0-beta.1"
-description = "MCP server for NTU schedules, learning, maps, research, faculty, library, news, and campus services"
+description = "MCP server for NTU schedules, learning, maps, research, faculty, library, news, campus services, and student administration"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -36,7 +36,7 @@ Issues = "https://github.com/pitchaya-s/all-abt-ntu-mcp/issues"
 all-abt-ntu = "shared.cli:main"
 
 [tool.uv.build-backend]
-module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "shared"]
+module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "onestop", "shared"]
 source-exclude = [".env", ".env.*", "*.har", "cookies*.json", "storage_state*.json", "*.log"]
 
 [build-system]

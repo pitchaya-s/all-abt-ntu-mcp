@@ -138,7 +138,7 @@ class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
         with stored_credentials("example001", "mcp-test-secret") as backend:
             with patch.object(backend, "get_password", side_effect=RuntimeError("secret-backend-detail")):
                 async with Client(mcp) as client:
-                    for name in ("stars_auth_status", "ntulearn_auth_status"):
+                    for name in ("stars_auth_status", "ntulearn_auth_status", "onestop_auth_status"):
                         result = await client.call_tool(name, {})
                         self.assertFalse(result.is_error)
                         self.assertIsNone(result.structured_content["credentials_configured"])
@@ -150,7 +150,7 @@ class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
         from shared.server import mcp
         with stored_credentials("example001", "mcp-test-secret"):
             async with Client(mcp) as client:
-                for name in ("stars_auth_status", "ntulearn_auth_status"):
+                for name in ("stars_auth_status", "ntulearn_auth_status", "onestop_auth_status"):
                     result = await client.call_tool(name, {})
                     self.assertFalse(result.is_error)
                     self.assertTrue(result.structured_content["credentials_configured"])

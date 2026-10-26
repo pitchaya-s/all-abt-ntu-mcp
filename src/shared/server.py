@@ -4,6 +4,7 @@ from mcp.server import MCPServer
 
 from ntulearn import mcp_server
 from library import personal_tools as library_personal
+from onestop import mcp_server as onestop
 from stars import personal_tools as stars_personal
 from . import public_server
 
@@ -21,7 +22,7 @@ mcp = MCPServer(
         "Personal tables omit rows only when headers and records reconstruct them exactly. "
         "stars_save_stars_plan replaces a saved plan's entire course/index list and verifies it by reloading; "
         "it does not register, drop, or swap registered courses. "
-        + mcp_server.INSTRUCTIONS + " " + library_personal.INSTRUCTIONS
+        + mcp_server.INSTRUCTIONS + " " + library_personal.INSTRUCTIONS + " " + onestop.INSTRUCTIONS
     ),
 )
 
@@ -30,6 +31,7 @@ public_server.register_tools(mcp)
 mcp_server.register_tools(mcp)
 stars_personal.register_tools(mcp)
 library_personal.register_tools(mcp)
+onestop.register_tools(mcp)
 
 
 def main() -> None:
@@ -43,4 +45,7 @@ def main() -> None:
             try:
                 mcp_server.session.close()
             finally:
-                library_personal.session.close()
+                try:
+                    library_personal.session.close()
+                finally:
+                    onestop.session.close()

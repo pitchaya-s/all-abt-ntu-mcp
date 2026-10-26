@@ -1,6 +1,6 @@
 # Shared runtime
 
-STARS, NTULearn, and LibFacilities use the same credential store in `shared.credentials`. Each service manages its own login session and in-memory cache. See the [main README](../../README.md) for installation and MCP client configuration.
+STARS, NTULearn, LibFacilities, and One Stop use the same credential store in `shared.credentials`. Each service manages its own login session and in-memory cache. See the [main README](../../README.md) for installation and MCP client configuration and the [One Stop guide](../onestop/README.md) for student ServiceNow tools.
 
 ## Hosted public server
 

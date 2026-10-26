@@ -73,7 +73,8 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
     async def test_personal_requests_are_rejected_before_any_handler_runs(self):
         async with http_client() as http:
             for name in ("stars_auth_status", "stars_get_stars_planner", "stars_save_stars_plan",
-                         "stars_get_degree_audit", "ntulearn_list_courses", "library_get_facility_schedule"):
+                         "stars_get_degree_audit", "ntulearn_list_courses", "library_get_facility_schedule",
+                         "careeraxis_auth_status", "careeraxis_search_opportunities"):
                 response = await http.post("/mcp", headers=HEADERS,
                                            json=payload("tools/call", {"name": name, "arguments": {}}))
                 self.assertEqual(response.status_code, 200)
@@ -120,7 +121,7 @@ import importlib.abc
 import sys
 class RejectPersonal(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname in {"keyring", "shared.credentials", "shared.server", "stars.personal_tools", "library.personal_tools", "library.session"} or fullname.startswith(("ntulearn", "stars.wish", "playwright")):
+        if fullname in {"keyring", "shared.credentials", "shared.server", "stars.personal_tools", "library.personal_tools", "library.session"} or fullname.startswith(("ntulearn", "stars.wish", "playwright", "careeraxis")):
             raise AssertionError("Hosted entrypoint imported a personal module: " + fullname)
 sys.meta_path.insert(0, RejectPersonal())
 from api.index import app

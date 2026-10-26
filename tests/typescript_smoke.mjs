@@ -22,7 +22,7 @@ const client = new Client({ name: "ntu-typescript-test", version: "1.0" });
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 64);
+  assert.equal(tools.length, 73);
   for (const tool of tools) {
     assert.equal(tool.outputSchema.type, "object");
     assert(Object.keys(tool.outputSchema.properties).length > 0);

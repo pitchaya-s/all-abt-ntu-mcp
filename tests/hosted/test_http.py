@@ -17,6 +17,7 @@ from tests.faculty.fixtures import fake_get as faculty_get
 from tests.library.fixtures import fake_get as library_get
 from tests.mazemap.fixtures import fake_get as map_get
 from tests.news.fixtures import ARTICLE_URL, fake_get as news_get
+from tests.omnibus.fixtures import FixtureClient as OmnibusFixtureClient
 from tests.repository.fixtures import fake_get as repository_get
 from tests.repository.oai_fixtures import fake_get as oai_get
 from tests.service.fixtures import fake_get as service_get
@@ -24,7 +25,7 @@ from tests.stars.mcp_fixtures import COURSE
 
 
 HEADERS = {"Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-11-25"}
-COUNTS = {"stars": 10, "mazemap": 5, "drntu": 12, "library": 5, "faculty": 2, "news": 3, "service": 2}
+COUNTS = {"stars": 10, "mazemap": 5, "drntu": 12, "library": 5, "faculty": 2, "news": 3, "service": 2, "omnibus": 5}
 
 
 def payload(method="tools/list", params=None):
@@ -43,6 +44,7 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
                 ("mazemap.mcp_server.client._get", map_get), ("news.mcp_server.client.http.get", news_get),
                 ("drntu.mcp_server.client.get", repository_get), ("service.mcp_server.client.http.get", service_get),
                 ("drntu.mcp_server.oai_client.get", oai_get),
+                ("omnibus.mcp_server.client._post", OmnibusFixtureClient()._post),
             ]:
                 stack.enter_context(patch(target, side_effect=data))
             stack.enter_context(patch("stars.mcp_server.fetch_course", return_value=COURSE))
@@ -63,6 +65,7 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
                             ("library_search", {"query": "algorithms"}), ("faculty_search", {"query": "Example"}),
                             ("news_get_article", {"url": ARTICLE_URL}), ("service_search", {"query": "clinic"}),
                             ("drntu_oai_list_records", {"headers_only": True, "limit": 1}),
+                            ("omnibus_get_arrivals", {"route_filter": "179", "stop_query": "Gate"}),
                         ]:
                             result = await client.call_tool(name, arguments)
                             self.assertFalse(result.is_error, result)

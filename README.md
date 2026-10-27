@@ -7,8 +7,10 @@ An MCP server for NTU Singapore schedules, learning materials, campus navigation
 For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the public tools from PyPI:
 
 ```sh
-uvx --from all-abt-ntu-mcp==0.1.0-beta.2 all-abt-ntu
+uvx --from 'all-abt-ntu-mcp@latest' all-abt-ntu
 ```
+
+`@latest` refreshes uvx's cached package version on each launch rather than reusing an older cached release.
 
 The client examples below include the `personal` extra for authenticated tools.
 
@@ -45,7 +47,7 @@ uvx --from 'playwright>=1.50,<2' playwright install chromium
 Public tools need no credentials. For personal tools, opt into native OS keyring storage by running this **yourself in a local terminal**:
 
 ```sh
-uvx --from all-abt-ntu-mcp==0.1.0-beta.2 all-abt-ntu auth save
+uvx --from 'all-abt-ntu-mcp@latest' all-abt-ntu auth save
 ```
 
 Your password is hidden while typing and stored encrypted in your OS keyring, rather than in plaintext files. The server never includes it in MCP responses sent to the LLM.
@@ -63,7 +65,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
-args = ["--from", "all-abt-ntu-mcp[personal]==0.1.0-beta.2", "all-abt-ntu"]
+args = ["--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"]
 env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
@@ -77,7 +79,7 @@ Register for your user:
 
 ```sh
 claude mcp add --scope user all-abt-ntu-mcp \
-  -- uvx --from 'all-abt-ntu-mcp[personal]==0.1.0-beta.2' all-abt-ntu
+  -- uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu
 claude mcp list
 ```
 
@@ -93,7 +95,7 @@ Add to `~/.config/opencode/opencode.json`:
   "mcp": {
     "all-abt-ntu-mcp": {
       "type": "local",
-      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]==0.1.0-beta.2", "all-abt-ntu"],
+      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"],
       "enabled": true,
       "timeout": 240000
     }

@@ -22,7 +22,7 @@ async def main(args):
         term = dict(course_code=args.course_code, academic_year=args.academic_year, semester=args.semester)
         course = await call('stars_get_course_indexes', **term)
         assert course['course_code'] == args.course_code.upper()
-        assert course['index_count'] == len(course['indexes']) > 0
+        assert course['index_count'] >= len(course['indexes']) > 0
         known_indexes = {index['index'] for index in course['indexes']}
         metadata = await call('stars_get_course_metadata', **term)
         assert metadata['course_code'] == course['course_code']

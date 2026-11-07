@@ -92,7 +92,7 @@ def get_map_availability(
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (
         search,
         get_record,

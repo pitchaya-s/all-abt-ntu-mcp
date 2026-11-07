@@ -8,9 +8,12 @@ from unittest.mock import patch
 from jsonschema import Draft202012Validator
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
+from mcp.types import ElicitResult
 
 from ntulearn import mcp_server
-from shared.server import mcp
+from shared.server import create_server
+
+mcp = create_server("workflows", check_dependencies=False)
 from ntulearn.models import LearnError
 from .fixtures import CONTENT, COURSE, SECRET
 
@@ -21,17 +24,20 @@ SERVER = Path(__file__).with_name("protocol_server.py")
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_stdio_discovery_schemas_calls_and_errors(self):
+        async def approve(context, params):
+            return ElicitResult(action="accept", content={"confirm": True})
         with tempfile.TemporaryDirectory() as cwd:
             params = StdioServerParameters(command=sys.executable, args=[str(SERVER)], cwd=cwd,
                                            env={"PYTHONPATH": str(ROOT / "src"), "PYTHON_KEYRING_BACKEND": "keyring.backends.null.Keyring"})
-            async with Client(params) as client:
+            async with Client(params, elicitation_callback=approve) as client:
                 listing = await client.list_tools()
                 self.assertEqual(len([t for t in listing.tools if t.name.startswith("ntulearn_")]), 20)
                 by_name = {tool.name: tool for tool in listing.tools}
                 self.assertNotIn("register_courses", by_name)
-                from onestop.workflow_tools import WRITE_TOOLS
+                from onestop.workflow_tools import LOCAL_TOOLS, WRITE_TOOLS
                 writes = {"ntulearn_download_file", "ntulearn_download_course", "stars_save_stars_plan"}
                 writes.update("onestop_" + name for name in WRITE_TOOLS)
+                writes.update("onestop_" + name for name in LOCAL_TOOLS)
                 for tool in listing.tools:
                     Draft202012Validator.check_schema(tool.output_schema)
                     self.assertEqual(tool.annotations.read_only_hint, tool.name not in writes)

@@ -63,6 +63,6 @@ class CredentialCLITests(unittest.TestCase):
     def test_no_command_runs_stdio_server_without_credential_prompts(self):
         with patch("shared.server.main") as server, patch("builtins.input") as prompt, patch("shared.cli.getpass") as password:
             self.assertEqual(self.call(), "")
-            server.assert_called_once()
+            server.assert_called_once_with("public")
             prompt.assert_not_called()
             password.assert_not_called()

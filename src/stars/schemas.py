@@ -135,6 +135,8 @@ class CourseIndex(IndexVacancies):
 
 class CourseIndexesResult(CourseTerm):
     index_count: int
+    offset: int
+    next_offset: int | None
     vacancy_metadata: VacancyMetadata
     indexes: list[CourseIndex]
 

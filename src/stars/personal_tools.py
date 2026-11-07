@@ -6,6 +6,7 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
+from shared.confirmation import confirmed_tool
 
 from .compact import personal_fields, saved_plan_fields
 from .client import NTURequestError
@@ -16,6 +17,7 @@ from .wish import (
     ntu_auth_status as fetch_ntu_auth_status,
     save_stars_plan as persist_stars_plan,
 )
+from .wish.models import SavedPlan
 
 
 class PlannedIndex(BaseModel):
@@ -45,7 +47,7 @@ def save_stars_plan(
     """Replace saved Plan 1, 2, or 3 with the complete supplied course/index list for the current Planner term. Omitted courses are removed from that plan. Verifies persistence by loading the saved plan. Does not perform course registration, dropping, or index swapping."""
     try:
         result = persist_stars_plan(plan_number, [course.model_dump() for course in courses], academic_year, semester)
-        return {**result, "saved_plan": saved_plan_fields(result["saved_plan"])}
+        return {**result, "saved_plan": cast(SavedPlan, saved_plan_fields(result["saved_plan"]))}
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
@@ -58,11 +60,12 @@ def get_degree_audit() -> DegreeAuditResult:
         raise ToolError(str(error)) from error
 
 
-def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+def register_tools(mcp: MCPServer, *, workflows: bool = True) -> None:
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     mcp.tool(name="stars_auth_status", annotations=read)(ntu_auth_status)
     mcp.tool(name="stars_get_stars_planner", annotations=read)(get_stars_planner)
     mcp.tool(name="stars_get_degree_audit", annotations=read)(get_degree_audit)
-    mcp.tool(name="stars_save_stars_plan", annotations=ToolAnnotations(
-        readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True,
-    ))(save_stars_plan)
+    if workflows:
+        mcp.tool(name="stars_save_stars_plan", annotations=ToolAnnotations(
+            read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True,
+        ))(confirmed_tool(save_stars_plan, "stars_save_stars_plan"))

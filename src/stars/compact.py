@@ -1,19 +1,28 @@
 """Lossless reductions at the MCP boundary; cached/parser data stays unchanged."""
 
 from fractions import Fraction
+from collections.abc import Mapping
 import re
-from typing import Any
+from typing import Any, cast
+
+from .schemas import CompactSession, TimetableResult
 
 
-def session_fields(session: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in session.items()
+def session_fields(session: dict[str, Any]) -> CompactSession:
+    return cast(CompactSession, {key: value for key, value in session.items()
             if key not in {"course_code", "index", "shared_by"}
-            and not (key in {"raw_day", "raw_time"} and value is None)}
+            and not (key in {"raw_day", "raw_time"} and value is None)})
 
 
-def timetable_fields(result: dict[str, Any]) -> dict[str, Any]:
+def timetable_fields(result: dict[str, Any]) -> TimetableResult:
     """Comparison/search results need timetable provenance, not course descriptions."""
-    return {key: result[key] for key in ("course_code", "academic_year", "semester", "retrieved_at", "official_source")}
+    return {
+        "course_code": result["course_code"],
+        "academic_year": result["academic_year"],
+        "semester": result["semester"],
+        "retrieved_at": result["retrieved_at"],
+        "official_source": result["official_source"],
+    }
 
 
 def graduate_fields(result: dict[str, Any]) -> dict[str, Any]:
@@ -38,7 +47,7 @@ def exam_fields(result: dict[str, Any]) -> dict[str, Any]:
     ]}
 
 
-def table_fields(table: dict[str, Any]) -> dict[str, Any]:
+def table_fields(table: Mapping[str, Any]) -> dict[str, Any]:
     headers, rows, records = table["headers"], table["rows"], table["records"]
     reconstructible = (
         bool(headers) and all(headers) and len(set(headers)) == len(headers)
@@ -48,7 +57,7 @@ def table_fields(table: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in table.items() if key != "rows" or not reconstructible}
 
 
-def saved_plan_fields(plan: dict[str, Any]) -> dict[str, Any]:
+def saved_plan_fields(plan: Mapping[str, Any]) -> dict[str, Any]:
     indexes = {course["course_code"]: course["index"] for course in plan["courses"]}
     return {**plan, "sessions": [
         {key: value for key, value in session.items()
@@ -58,7 +67,7 @@ def saved_plan_fields(plan: dict[str, Any]) -> dict[str, Any]:
     ]}
 
 
-def personal_fields(result: dict[str, Any]) -> dict[str, Any]:
+def personal_fields(result: Mapping[str, Any]) -> dict[str, Any]:
     tables = {"planner_tables", "timetable_tables", "requirements", "examination_results", "courses_registered"}
     return {
         key: [table_fields(table) for table in value] if key in tables else

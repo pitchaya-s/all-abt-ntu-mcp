@@ -38,4 +38,4 @@ if __name__ == "__main__":
             stack.enter_context(patch(f"stars.personal_tools.{target}", side_effect=NTURequestError("Personal actions are disabled in protocol fixtures.")))
         stack.enter_context(patch("shared.credentials.keyring.get_keyring", side_effect=RuntimeError("Offline test has no keyring")))
         stack.enter_context(patch("stars.client.http._request_html", side_effect=AssertionError("Offline test attempted HTTP")))
-        main()
+        main("workflows", check_dependencies=False)

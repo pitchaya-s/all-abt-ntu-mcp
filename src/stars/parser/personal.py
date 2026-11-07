@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 import re
+from typing_extensions import TypedDict
 
 from .common import NTUPageError
 
@@ -13,6 +14,13 @@ _HEADER_WORDS = {
     "semester", "start time", "time", "venue", "week", "study year", "course code",
     "course title", "index no.", "mon", "tue", "wed", "thu", "fri", "sat", "sun",
 }
+
+
+class _TableData(TypedDict):
+    section: str | None
+    headers: list[str]
+    rows: list[list[str]]
+    records: list[dict[str, str]]
 
 @dataclass
 class _Table:
@@ -123,7 +131,7 @@ class _PersonalPage(HTMLParser):
 def _clean(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split())
 
-def _table_data(table: _Table) -> dict[str, object]:
+def _table_data(table: _Table) -> _TableData:
     expanded: list[list[tuple[str, bool]]] = []
     pending: dict[int, tuple[str, bool, int]] = {}
     for source in table.rows:
@@ -159,8 +167,8 @@ def _table_data(table: _Table) -> dict[str, object]:
         if not any(row):
             continue
         record: dict[str, str] = {}
-        for column, value in zip(headers, row):
-            key = _clean(column)
+        for header_name, value in zip(headers, row):
+            key = _clean(header_name)
             if key:
                 record[key] = value
         if record:
@@ -172,7 +180,7 @@ def _table_data(table: _Table) -> dict[str, object]:
         "records": records,
     }
 
-def _parse(html: str) -> tuple[str, str, list[dict[str, object]]]:
+def _parse(html: str) -> tuple[str, str, list[_TableData]]:
     parser = _PersonalPage()
     parser.feed(html)
     parser.close()
@@ -180,7 +188,7 @@ def _parse(html: str) -> tuple[str, str, list[dict[str, object]]]:
     tables = [_table_data(table) for _, table in sorted(parser.tables)]
     return parser.title, text, tables
 
-def _records_with_course_code(tables: list[dict[str, object]]) -> list[dict[str, str]]:
+def _records_with_course_code(tables: list[_TableData]) -> list[dict[str, str]]:
     courses: list[dict[str, str]] = []
     for table in tables:
         for record in table["records"]:
@@ -194,7 +202,7 @@ def _records_with_course_code(tables: list[dict[str, object]]) -> list[dict[str,
                 courses.append({"course_code": match.group().upper(), **record})
     return courses
 
-def _table_status(tables: list[dict[str, object]]) -> str:
+def _table_status(tables: list[_TableData]) -> str:
     if not tables:
         return "not_present"
     if any(table["records"] for table in tables):
@@ -203,7 +211,7 @@ def _table_status(tables: list[dict[str, object]]) -> str:
         return "unparsed"
     return "empty"
 
-def _course_status(tables: list[dict[str, object]], courses: list[dict[str, str]]) -> str:
+def _course_status(tables: list[_TableData], courses: list[dict[str, str]]) -> str:
     if courses:
         return "parsed"
     status = _table_status(tables)
@@ -219,9 +227,9 @@ def parse_degree_audit_page(html: str) -> dict[str, object]:
     if not marker_present:
         raise NTUPageError("NTU's Degree Audit response was not recognizable; refusing to return an empty result.")
 
-    requirements: list[dict[str, object]] = []
-    results: list[dict[str, object]] = []
-    registered: list[dict[str, object]] = []
+    requirements: list[_TableData] = []
+    results: list[_TableData] = []
+    registered: list[_TableData] = []
     for table in tables:
         headers = " ".join(str(value) for value in table["headers"]).casefold()
         section = str(table["section"] or "").casefold()

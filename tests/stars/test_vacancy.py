@@ -138,6 +138,18 @@ class VacancyClientTests(unittest.TestCase):
 
 
 class VacancyMCPTests(unittest.IsolatedAsyncioTestCase):
+    async def test_missing_term_does_not_request_or_infer_vacancies(self) -> None:
+        course = parse_course_page((FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252"), "ZZ0001")
+        with patch("stars.mcp_server.fetch_course", return_value=course), patch("stars.mcp_server.fetch_course_vacancies") as fetch:
+            async with Client(mcp) as client:
+                result = await client.call_tool("stars_get_course_indexes", {
+                    "course_code": "ZZ0001", "academic_year": 2026, "semester": 1,
+                })
+        self.assertFalse(result.is_error)
+        self.assertEqual(result.structured_content["vacancy_metadata"]["status"], "unavailable")
+        self.assertTrue(all(item["vacancy_status"] == "unavailable" for item in result.structured_content["indexes"]))
+        fetch.assert_not_called()
+
     async def test_counts_and_degraded_responses_for_both_tools(self) -> None:
         course = parse_course_page((FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252"), "ZZ0001")
         course = replace(course, academic_year=2026, semester="2", indexes={

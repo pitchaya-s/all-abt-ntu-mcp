@@ -22,11 +22,14 @@ from .schemas import (
     CourseIndexesResult,
     CourseMetadataResult,
     GraduateCourseResult,
+    IndexVacancies,
     IndexResult,
     MatchingIndexesResult,
+    MatchingIndex,
     PrerequisiteTreeResult,
     SearchCoursesResult,
     UndergraduateExamResult,
+    VacancyMetadata,
 )
 from .client import (
     NTURequestError,
@@ -111,7 +114,7 @@ class TimeSlot(BaseModel):
         return self
 
 
-_read_only = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+_read_only = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
 
 def _load_course(course_code: str, academic_year: int, semester: Semester) -> Course:
     try:
@@ -128,14 +131,16 @@ def _schedule_complete(sessions: tuple[Any, ...] | list[Any]) -> bool:
         for session in sessions
     )
 
-def _load_vacancies(course: Course) -> tuple[dict[str, Any], dict[str, Any]]:
+def _load_vacancies(course: Course) -> tuple[VacancyMetadata, dict[str, Any]]:
+    if course.academic_year is None or course.semester is None:
+        return {"status": "unavailable", "retrieved_at": None, "message": "Course term metadata is unavailable."}, {}
     try:
         result = fetch_course_vacancies(course.course_code, course.academic_year, course.semester)
     except NTURequestError as error:
         return {"status": "unavailable", "retrieved_at": None, "message": str(error)}, {}
-    return {key: value for key, value in result.items() if key != "indexes"}, result["indexes"]
+    return cast(VacancyMetadata, {key: value for key, value in result.items() if key != "indexes"}), result["indexes"]
 
-def _index_vacancies(index: str, metadata: dict[str, Any], indexes: dict[str, Any]) -> dict[str, Any]:
+def _index_vacancies(index: str, metadata: VacancyMetadata, indexes: dict[str, Any]) -> IndexVacancies:
     counts = indexes.get(index)
     return {
         "vacancy_status": metadata["status"] if metadata["status"] != "available" else (
@@ -267,15 +272,22 @@ def get_prerequisite_tree(
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
-def get_course_indexes(course_code: str, academic_year: int, semester: Semester) -> CourseIndexesResult:
-    """List all indexes with complete timetable details and matching-term vacancies/waitlists. Sessions inherit course_code and index from their enclosing result; null raw_day/raw_time are omitted."""
+def get_course_indexes(course_code: str, academic_year: int, semester: Semester,
+                       limit: Annotated[int, Field(ge=1, le=50, strict=True)] = 10,
+                       offset: Annotated[int, Field(ge=0, strict=True)] = 0) -> CourseIndexesResult:
+    """List a page of indexes with timetable details and matching-term vacancies/waitlists. Follow next_offset to see the rest. Sessions inherit course_code and index from their enclosing result; null raw_day/raw_time are omitted."""
+    if type(limit) is not int or not 1 <= limit <= 50 or type(offset) is not int or offset < 0:
+        raise ToolError("Use limit 1–50 and a non-negative offset.")
     course = _load_course(course_code, academic_year, semester)
     vacancy_metadata, vacancies = _load_vacancies(course)
+    index_page = list(course.indexes.items())[offset:offset + limit]
     return {
         "course_code": course.course_code,
         "academic_year": course.academic_year,
         "semester": course.semester,
         "index_count": len(course.indexes),
+        "offset": offset,
+        "next_offset": offset + len(index_page) if offset + len(index_page) < len(course.indexes) else None,
         "vacancy_metadata": vacancy_metadata,
         "indexes": [
             {
@@ -284,7 +296,7 @@ def get_course_indexes(course_code: str, academic_year: int, semester: Semester)
                 "schedule_complete": _schedule_complete(sessions),
                 "sessions": [session_fields(session.to_dict()) for session in sessions],
             }
-            for index, sessions in course.indexes.items()
+            for index, sessions in index_page
         ],
     }
 
@@ -384,7 +396,7 @@ def find_matching_indexes(
     return {
         **timetable_fields(result), "constraints": result["constraints"],
         "against_session_count": result["against_session_count"], "match_count": result["match_count"],
-        "matches": [{**match, "sessions": [session_fields(session) for session in match["sessions"]]}
+        "matches": [cast(MatchingIndex, {**match, "sessions": [session_fields(session) for session in match["sessions"]]})
                     for match in result["matches"]],
     }
 

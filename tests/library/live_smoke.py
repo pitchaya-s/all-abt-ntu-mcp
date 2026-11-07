@@ -18,9 +18,10 @@ async def main(personal=False):
         for key in ("DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR")
         if personal and key in os.environ
     }
-    params = StdioServerParameters(
-        command=sys.executable, args=["-c", "from shared.cli import main; main()"], env=env
-    )
+    args = ["-c", "from shared.cli import main; main()"]
+    if personal:
+        args.extend(["--profile", "personal-read"])
+    params = StdioServerParameters(command=sys.executable, args=args, env=env)
     async with Client(params) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 

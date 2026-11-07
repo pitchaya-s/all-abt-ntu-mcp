@@ -52,6 +52,6 @@ def get_article(url: Annotated[str, Field(pattern="^" + ARTICLE_URL + "$", max_l
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (search, list_categories, get_article):
         mcp.tool(name="news_" + function.__name__, annotations=read)(function)

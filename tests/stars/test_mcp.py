@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from mcp import Client
 
-from shared.server import mcp
+from shared.server import create_server
+
+mcp = create_server("workflows", check_dependencies=False)
 from stars.client.teaching import TeachingSnapshot
 from stars.domain import Course
 
@@ -69,6 +71,14 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertFalse(indexes_result.is_error)
                 self.assertEqual(indexes_result.structured_content["index_count"], 36)
+                self.assertEqual(len(indexes_result.structured_content["indexes"]), 10)
+                self.assertEqual(indexes_result.structured_content["next_offset"], 10)
+                last = await client.call_tool("stars_get_course_indexes", {
+                    "course_code": "ZZ0001", "academic_year": 2026, "semester": 1, "offset": 30,
+                })
+                self.assertFalse(last.is_error)
+                self.assertEqual(len(last.structured_content["indexes"]), 6)
+                self.assertIsNone(last.structured_content["next_offset"])
                 self.assertEqual(indexes_result.structured_content["indexes"][0]["index"], "00001")
                 self.assertNotIn("course_description", indexes_result.structured_content)
                 self.assertIsNone(indexes_result.structured_content["indexes"][0]["waitlist_length"])

@@ -16,13 +16,19 @@ class LocalParser(argparse.ArgumentParser):
 
 def main() -> None:
     parser = LocalParser(description="NTU MCP server and opt-in local keyring credentials.")
+    parser.add_argument("--profile", choices=("public", "personal-read", "workflows"), default="public",
+                        help="Select the local tool set (default: public)")
     commands = parser.add_subparsers(dest="command")
     auth = commands.add_parser("auth", help="Manage shared credentials in your native OS keyring")
     auth.add_argument("action", choices=("save", "status", "delete"))
     args = parser.parse_args()
     if args.command is None:
         from .server import main as run_server
-        run_server()
+        try:
+            run_server(args.profile)
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
+            raise SystemExit(1) from None
         return
     try:
         if args.action == "save":

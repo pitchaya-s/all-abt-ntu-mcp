@@ -1,6 +1,7 @@
 """Pooled, bounded public HTTPS reads shared by NTU services."""
 
 import os
+import logging
 import time
 import weakref
 from collections import OrderedDict
@@ -23,9 +24,11 @@ REQUEST_INTERVAL_SECONDS = 0.25
 REQUEST_TIMEOUT_SECONDS = 20.0
 CACHE_TTL_SECONDS = 300.0
 MAX_CACHE_ENTRIES = 64
+MAX_CACHE_BYTES = 16_000_000
 _RETRYABLE = {429, 500, 502, 503, 504}
 _REDIRECTS = {301, 302, 303, 307, 308}
 _SCHEDULERS_LOCK = Lock()
+logger = logging.getLogger(__name__)
 
 
 def _setting(name, default, cast, minimum, maximum):
@@ -75,8 +78,9 @@ class _NoCookies(DefaultCookiePolicy):
 class _HostScheduler:
     """Share concurrency and pacing between clients that call the same host."""
 
-    def __init__(self):
+    def __init__(self, interval=REQUEST_INTERVAL_SECONDS):
         self._slots = BoundedSemaphore(REQUEST_CONCURRENCY)
+        self._interval = interval
         self._pace_lock = Lock()
         self._last_request = 0.0
         self._defer_until = 0.0
@@ -89,7 +93,7 @@ class _HostScheduler:
                 now = time.monotonic()
                 ready_at = max(
                     self._defer_until,
-                    self._last_request + REQUEST_INTERVAL_SECONDS,
+                    self._last_request + self._interval,
                 )
                 delay = max(0.0, ready_at - now)
                 if delay:
@@ -119,7 +123,14 @@ def _scheduler_for(url):
     with _SCHEDULERS_LOCK:
         scheduler = _SCHEDULERS.get(host)
         if scheduler is None:
-            scheduler = _HostScheduler()
+            # DR-NTU (Data) publishes a 60-second crawl delay. Be conservative
+            # for API requests too, including calls from different clients.
+            interval = (
+                max(REQUEST_INTERVAL_SECONDS, 60.0)
+                if host == "researchdata.ntu.edu.sg"
+                else REQUEST_INTERVAL_SECONDS
+            )
+            scheduler = _HostScheduler(interval)
             _SCHEDULERS[host] = scheduler
         return scheduler
 
@@ -186,6 +197,8 @@ class PublicHTTPClient:
         self._lock = Lock()
         self._cache: OrderedDict[str, tuple[float, bytes, datetime]] = OrderedDict()
         self._inflight: dict[tuple[str, bool], Future[tuple[bytes, datetime]]] = {}
+        self._latest_started: dict[str, int] = {}
+        self._next_sequence = 0
         self._closed = False
         self._finalizer = weakref.finalize(self, self.client.close)
 
@@ -210,6 +223,9 @@ class PublicHTTPClient:
             if owner:
                 flight = Future()
                 self._inflight[key] = flight
+                self._next_sequence += 1
+                sequence = self._next_sequence
+                self._latest_started[url] = sequence
 
         if not owner:
             body, retrieved = flight.result()
@@ -217,20 +233,32 @@ class PublicHTTPClient:
 
         try:
             body, retrieved = self._fetch(url)
-        except Exception as error:
+        except BaseException as error:
             with self._lock:
                 if self._inflight.get(key) is flight:
                     del self._inflight[key]
+                if (url, False) not in self._inflight and (
+                    url,
+                    True,
+                ) not in self._inflight:
+                    self._latest_started.pop(url, None)
                 flight.set_exception(error)
             raise
 
         with self._lock:
-            self._cache[url] = (time.monotonic(), body, retrieved)
-            self._cache.move_to_end(url)
-            while len(self._cache) > MAX_CACHE_ENTRIES:
-                self._cache.popitem(last=False)
+            if self._latest_started.get(url) == sequence:
+                self._cache[url] = (time.monotonic(), body, retrieved)
+                self._cache.move_to_end(url)
+                while (
+                    len(self._cache) > MAX_CACHE_ENTRIES
+                    or sum(len(entry[1]) for entry in self._cache.values())
+                    > MAX_CACHE_BYTES
+                ):
+                    self._cache.popitem(last=False)
             if self._inflight.get(key) is flight:
                 del self._inflight[key]
+            if (url, False) not in self._inflight and (url, True) not in self._inflight:
+                self._latest_started.pop(url, None)
             flight.set_result((body, retrieved))
         return body, self._snapshot(url, retrieved, cached=False)
 
@@ -238,9 +266,23 @@ class PublicHTTPClient:
     def _snapshot(url, retrieved, *, cached):
         return dict(retrieved_at=retrieved, source_url=url, cached=cached)
 
-    def invalidate(self, url):
+    @contextmanager
+    def parsed_response(self, url, refresh=False):
+        """Evict this response if validation inside the block fails."""
+        body, snapshot = self.get(url, refresh)
+        try:
+            yield body, snapshot
+        except Exception:
+            self.invalidate(url, retrieved_at=snapshot.get("retrieved_at"))
+            raise
+
+    def invalidate(self, url, *, retrieved_at=None):
         with self._lock:
-            self._cache.pop(url, None)
+            cached = self._cache.get(url)
+            if cached is not None and (
+                retrieved_at is None or cached[2] == retrieved_at
+            ):
+                self._cache.pop(url, None)
 
     def _fetch(self, url):
         current_url = url
@@ -259,6 +301,8 @@ class PublicHTTPClient:
                     f"{self.service} returned an invalid HTTP response; retrieval stopped."
                 ) from None
 
+            if status == 429:
+                logger.warning("%s upstream returned HTTP 429", self.service)
             if status in _RETRYABLE and attempt + 1 < MAX_ATTEMPTS:
                 delay = self._retry_delay(headers.get("retry-after"))
                 if delay <= MAX_RETRY_DELAY_SECONDS:

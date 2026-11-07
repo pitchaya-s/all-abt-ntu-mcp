@@ -4,7 +4,7 @@ STARS, NTULearn, LibFacilities, One Stop, and CareerAxis use the same credential
 
 ## Hosted public server
 
-The Vercel entrypoint is the file-based function `api/index.py`. `vercel.json` selects the **Other** framework preset and rewrites requests to that function, which creates `shared.http`'s ASGI app. `shared.public_server` explicitly registers public tool modules, while `shared.server` adds personal tools for local stdio. The hosted import path does not load keyring access, authenticated sessions, personal handlers, or NTULearn.
+The Vercel entrypoint is the file-based function `api/index.py`. `vercel.json` selects the **Other** framework preset and rewrites requests to that function, which creates `shared.http`'s ASGI app. `shared.public_server` explicitly registers public tool modules. Local stdio defaults to the same public surface; `--profile personal-read` and `--profile workflows` opt into authenticated tools. The public import path does not load authenticated sessions, personal handlers, or NTULearn.
 
 The HTTP endpoint is `/mcp`, using stateless Streamable HTTP with JSON responses and a 1 MB request limit. Each request manages its own SDK lifecycle, so it works when the host omits ASGI lifespan events or changes event loops between requests. No server session identifier, sticky routing, database, or credentials are required. GET/DELETE on `/mcp` return 405 because there is no persistent event stream or session to delete. `/` and `/health` return public status information.
 
@@ -13,6 +13,10 @@ The HTTP endpoint is `/mcp`, using stateless Streamable HTTP with JSON responses
 Use a publicly accessible deployment URL. Vercel Deployment Protection can require platform sign-in independently of this app.
 
 `.vercelignore` excludes local secrets, browser artifacts, tests, caches, and build output from uploads. No keyring entry or NTU account should be configured on Vercel. Public source caches and request pacing remain bounded per process; caches may disappear on cold starts and are not a shared rate limit across replicas. Configure platform traffic controls if exposing the endpoint to substantial public traffic.
+
+The hosted process also limits each high-fan-out tool to 10 calls per minute across all callers handled by that process. This is an additional upstream safeguard, not a per-client or deployment-wide limit: cold starts and replicas have independent counters. A gateway rule must provide the deployment-wide per-client limit. A Vercel draft rule for `POST /mcp` was prepared at 60 requests per IP per minute; verify its published state and adjust it to actual traffic before relying on it.
+
+Public HTTP clients log a warning containing the service name when an upstream returns HTTP 429; no request URL or query is included in that warning. Configure a log alert on `upstream returned HTTP 429` and investigate sustained rate limiting. On 6 November 2026 the Vercel team was on the Hobby plan and had no custom monitor for this project. Vercel's CLI reports that custom metric alerts require Observability Plus. It lists `vercel.external_api_request.count` with an `httpStatus` dimension, but coverage of this Python HTTP client has not been verified. An external log alert or an appropriate paid plan still needs to be configured and verified; the warning alone is not an alert. Vercel's gateway and alert settings must be verified in the deployed project; local tests cannot establish them.
 
 ## HTTP tests
 
@@ -59,7 +63,9 @@ Academic data returned through MCP is visible to the AI client. Credentials and 
 
 ## Public HTTP reads
 
-Faculty, news, campus services, OneSearch, MazeMap, and DR-NTU use a pooled HTTP client for public HTTPS reads. Each service keeps a bounded five-minute response cache, reuses connections, limits concurrent requests, and spaces request starts. The client follows only HTTPS redirects to that service's allowlisted hosts, rejects cookies, bounds responses to 8 MB, and makes at most one retry for transient network errors, HTTP 429, or selected 5xx responses. It honors short `Retry-After` delays and returns an error rather than retrying before a longer delay.
+Faculty, news, campus services, OneSearch, MazeMap, and DR-NTU use a pooled HTTP client for public HTTPS reads. Each service keeps a five-minute response cache bounded to 64 entries and 16 MB, reuses connections, limits concurrent requests, and spaces request starts. The client follows only HTTPS redirects to that service's allowlisted hosts, rejects cookies, bounds responses to 8 MB, and makes at most one retry for transient network errors, HTTP 429, or selected 5xx responses. It honors short `Retry-After` delays and returns an error rather than retrying before a longer delay.
+
+For context when choosing the 16 MB cap, bounded public reads sampled on 6 November 2026 were about 12 KB for a Faculty page, 143 KB for News filters, 34 KB for five OneSearch results, and 137 KB for Service filters. This small sample is not a distribution or a peak measurement; responses can be much larger. The cap allows at most two maximum-size responses per client while retaining many responses of the sampled sizes.
 
 Set these variables before starting the server to tune the public-read scheduler:
 

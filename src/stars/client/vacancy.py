@@ -41,7 +41,7 @@ def get_course_vacancies(course_code: str, academic_year: int, semester: int | s
         cached = _cache.get(code)
         age = time.monotonic() - cached[0] if cached else 0.0
         from_cache = bool(VACANCY_CACHE_TTL_SECONDS and cached and age < VACANCY_CACHE_TTL_SECONDS)
-        if from_cache:
+        if from_cache and cached is not None:
             result = deepcopy(cached[1])
         else:
             request = Request(

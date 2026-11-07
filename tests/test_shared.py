@@ -9,6 +9,30 @@ from tests.credential_fixtures import MemoryKeyring, stored_credentials
 
 
 class CredentialTests(unittest.IsolatedAsyncioTestCase):
+    async def test_profile_boundaries_and_missing_dependency(self):
+        from mcp import Client
+        from shared.server import create_server
+
+        names = {}
+        for profile in ("public", "personal-read", "workflows"):
+            async with Client(create_server(profile, check_dependencies=False)) as client:
+                names[profile] = {tool.name for tool in (await client.list_tools()).tools}
+        self.assertIn("stars_search_courses", names["public"])
+        self.assertNotIn("ntulearn_list_courses", names["public"])
+        self.assertIn("ntulearn_list_courses", names["personal-read"])
+        for name in ("stars_save_stars_plan", "ntulearn_download_file", "onestop_upload_attachment", "onestop_prepare_request"):
+            self.assertNotIn(name, names["personal-read"])
+            self.assertIn(name, names["workflows"])
+        self.assertLess(names["public"], names["personal-read"])
+        self.assertLess(names["personal-read"], names["workflows"])
+        with patch("shared.server.find_spec", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "Playwright"):
+                create_server("personal-read")
+            create_server("public")
+        with patch("shared.server.find_spec", return_value=object()), patch("shared.server._chromium_installed", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "Chromium"):
+                create_server("workflows")
+
     def test_network_username_derives_student_email(self):
         with stored_credentials("student001", "shared-test-secret"):
             credentials = read_credentials()
@@ -45,12 +69,17 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
 
     def test_server_closes_all_sessions_even_if_one_cleanup_fails(self):
         from shared import server
+        from careeraxis import mcp_server as careeraxis
+        from library import personal_tools as library
+        from ntulearn import mcp_server as learn
+        from onestop import mcp_server as onestop
         from stars.wish.session import wish_session
-        with patch.object(server.mcp, "run_stdio_async", new=AsyncMock()), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(server.mcp_server.session, "close", new=AsyncMock()) as learn, patch.object(server.library_personal.session, "close") as library, patch.object(server.onestop.session, "close") as onestop, patch.object(server.careeraxis_personal.client.session, "close") as careeraxis:
+        instance = server.create_server("workflows", check_dependencies=False)
+        with patch.object(server, "create_server", return_value=instance), patch.object(instance, "run_stdio_async", new=AsyncMock()), patch.object(wish_session, "close", side_effect=RuntimeError("test cleanup")) as wish, patch.object(learn.session, "close", new=AsyncMock()) as learn_close, patch.object(library.session, "close") as library_close, patch.object(onestop.session, "close") as onestop_close, patch.object(careeraxis.client.session, "close") as careeraxis_close:
             with self.assertRaisesRegex(RuntimeError, "test cleanup"):
-                server.main()
+                server.main("workflows")
             wish.assert_called_once()
-            learn.assert_awaited_once()
-            library.assert_called_once()
-            onestop.assert_called_once()
-            careeraxis.assert_called_once()
+            learn_close.assert_awaited_once()
+            library_close.assert_called_once()
+            onestop_close.assert_called_once()
+            careeraxis_close.assert_called_once()

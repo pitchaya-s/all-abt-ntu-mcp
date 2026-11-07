@@ -17,7 +17,7 @@ RouteFilter = Literal["Blue", "Brown", "Green", "Grey", "Red", "179", "179A", "1
 ArrivalSource = Literal["all", "shuttle", "lta"]
 Query = Annotated[str, Field(max_length=120)]
 INSTRUCTIONS = (
-    "omnibus_ tools read public NTU Omnibus shuttle and bus data without credentials. "
+    "omnibus_ tools experimentally read public NTU Omnibus shuttle and bus data without credentials, using undocumented app endpoints that may change. "
     "Use omnibus_get_live_buses for current campus shuttle positions, omnibus_list_routes and omnibus_list_stops "
     "for route and stop discovery, omnibus_get_arrivals for NTU shuttle or LTA bus estimates, and "
     "omnibus_get_service_status for campus shuttle schedules and service notices. Arrival data is a live snapshot "
@@ -67,6 +67,6 @@ def get_service_status(route_code: CampusRoute = "Blue") -> ServiceStatus:
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (get_live_buses, list_routes, list_stops, get_arrivals, get_service_status):
         mcp.tool(name="omnibus_" + function.__name__, annotations=read)(function)

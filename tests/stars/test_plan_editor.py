@@ -5,7 +5,9 @@ from unittest.mock import Mock, patch
 from mcp import Client
 
 from shared.credentials import delete_credentials
-from shared.server import mcp
+from shared.server import create_server
+
+mcp = create_server("workflows", check_dependencies=False)
 from stars.parser import NTUPageError
 from stars.wish import plan_editor as editor
 from stars.wish.models import NTUAuthError, NTUPersonalDataError
@@ -151,7 +153,9 @@ class PlanEditorTests(unittest.TestCase):
 
 class PlanSessionTests(unittest.TestCase):
     def setUp(self):
-        self.enterContext(stored_credentials())
+        credentials = stored_credentials()
+        credentials.__enter__()
+        self.addCleanup(credentials.__exit__, None, None, None)
         self.manager = WishSessionManager()
         self.addCleanup(self.manager.close)
         self.manager._page = Mock()
@@ -238,10 +242,15 @@ class PlanSessionTests(unittest.TestCase):
 
 class PlanMCPTests(unittest.IsolatedAsyncioTestCase):
     async def test_tool_schema_annotations_and_call(self):
+        from mcp.types import ElicitResult
+        async def approve(context, params):
+            self.assertIn("stars_save_stars_plan", params.message)
+            return ElicitResult(action="accept", content={"confirm": True})
+
         reply = {"status": "saved", "academic_year": 2026, "semester": 2, "saved_plan": saved_plan(),
                  "verified_at": "2026-10-21T00:00:00+00:00", "source_url": SAVE_PLAN_URL}
         with patch("stars.personal_tools.persist_stars_plan", return_value=reply) as save:
-            async with Client(mcp) as client:
+            async with Client(mcp, elicitation_callback=approve) as client:
                 tool = next(t for t in (await client.list_tools()).tools if t.name == "stars_save_stars_plan")
                 self.assertFalse(tool.annotations.read_only_hint)
                 self.assertTrue(tool.annotations.destructive_hint)

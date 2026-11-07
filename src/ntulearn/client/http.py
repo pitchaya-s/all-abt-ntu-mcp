@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import re
 import time
 from contextlib import asynccontextmanager
@@ -11,6 +12,11 @@ from typing import Any, AsyncIterator
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+
+# HTTPX's INFO messages include complete URLs, including signed file-download
+# query strings. HTTPCore's debug logs can include request headers and cookies.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from ..models import LearnError
 from .browser_cookies import BASE_URL, NTULEARN_HOST, SessionCookie, install_cookies
@@ -88,6 +94,7 @@ class LearnHTTP:
             follow_redirects=False,
             limits=limits,
             transport=transport,
+            trust_env=False,
         )
         # File delivery hosts never receive NTULearn cookies or inherited auth.
         self.external_client = httpx.AsyncClient(

@@ -129,7 +129,7 @@ def oai_get_record(identifier: OAIIdentifier, metadata_prefix: MetadataPrefix = 
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (search, get_item, browse, get_facets, list_bundles, list_files, get_dataset,
                      oai_identify, oai_list_metadata_formats, oai_list_sets, oai_list_records, oai_get_record):
         mcp.tool(name="drntu_" + function.__name__, annotations=read)(function)

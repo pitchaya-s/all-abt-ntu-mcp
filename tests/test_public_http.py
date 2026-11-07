@@ -46,6 +46,38 @@ class PublicHTTPTests(unittest.TestCase):
             self.assertNotIn("cookie", request.headers)
             self.assertNotIn("authorization", request.headers)
 
+    def test_cache_evicts_least_recently_used_entries_by_bytes(self):
+        client = self.make_client(lambda request: httpx.Response(
+            200, headers={"content-type": "application/json"}, content=b"1234", request=request,
+        ))
+        with patch("shared.public_http.MAX_CACHE_BYTES", 8), patch("shared.public_http.time.sleep"):
+            client.get(URL + "?1")
+            client.get(URL + "?2")
+            client.get(URL + "?1")
+            client.get(URL + "?3")
+        self.assertEqual(list(client._cache), [URL + "?1", URL + "?3"])
+
+    def test_research_data_host_has_conservative_shared_pacing(self):
+        from shared.public_http import _scheduler_for
+        scheduler = _scheduler_for("https://researchdata.ntu.edu.sg/api/datasets")
+        self.assertGreaterEqual(scheduler._interval, 60.0)
+        self.assertIs(scheduler, _scheduler_for("https://researchdata.ntu.edu.sg/other"))
+
+    def test_parse_failure_evicts_only_the_response_that_failed(self):
+        client = self.make_client(lambda request: httpx.Response(
+            200, headers={"content-type": "application/json"}, content=b"{}", request=request,
+        ))
+        with patch("shared.public_http.time.sleep"):
+            with self.assertRaises(ValueError):
+                with client.parsed_response(URL):
+                    raise ValueError("bad response")
+            self.assertNotIn(URL, client._cache)
+            with self.assertRaises(ValueError):
+                with client.parsed_response(URL):
+                    client.get(URL, refresh=True)
+                    raise ValueError("old response")
+            self.assertIn(URL, client._cache)
+
     def test_only_allowed_https_redirects_are_followed(self):
         for url in [
             "http://example.org/feed", "https://evil.example/feed",

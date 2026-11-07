@@ -2,14 +2,46 @@
 
 import os
 import re
+import time
+from collections import deque
+from threading import Lock
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from . import public_server
+from .version import VERSION
+
+EXPENSIVE_TOOLS = frozenset({
+    "stars_find_available_rooms", "stars_get_room_schedule", "service_search",
+    "omnibus_list_stops", "omnibus_get_arrivals", "drntu_oai_list_records", "drntu_oai_list_sets",
+})
+
+
+class PublicServer(MCPServer):
+    """Additional per-process protection for calls that fan out upstream."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._expensive_calls = {name: deque() for name in EXPENSIVE_TOOLS}
+        self._rate_lock = Lock()
+        self._clock = time.monotonic
+
+    async def call_tool(self, name, arguments, context=None):
+        if name in self._expensive_calls:
+            now = self._clock()
+            with self._rate_lock:
+                calls = self._expensive_calls[name]
+                while calls and calls[0] <= now - 60:
+                    calls.popleft()
+                if len(calls) >= 10:
+                    raise ToolError("This public tool is temporarily rate-limited; try again in a minute.")
+                calls.append(now)
+        return await super().call_tool(name, arguments, context)
 
 
 def transport_security():
@@ -51,8 +83,8 @@ async def health(request):
 
 
 def create_app():
-    server = MCPServer(
-        "all-abt-ntu-mcp", version="0.1.0-beta.2", log_level="WARNING",
+    server = PublicServer(
+        "all-abt-ntu-mcp", version=VERSION, log_level="WARNING",
         instructions=(
             "This hosted server exposes only public, read-only NTU information. "
             "It does not accept credentials, log in, read personal records, or modify plans. "

@@ -85,8 +85,8 @@ def parse_course_prerequisite_metadata(html: str, expected_code: str) -> dict[st
         is_description = any(
             text
             and (
-                ((attrs.get("width") or "").isdigit() and int(attrs["width"]) >= 500)
-                or ((attrs.get("colspan") or "").isdigit() and int(attrs["colspan"]) >= 4)
+                ((attrs.get("width") or "").isdigit() and int(attrs.get("width") or "") >= 500)
+                or ((attrs.get("colspan") or "").isdigit() and int(attrs.get("colspan") or "") >= 4)
             )
             for attrs, text in row
         )

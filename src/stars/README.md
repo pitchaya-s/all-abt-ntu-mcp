@@ -30,7 +30,7 @@ Find scheduled undergraduate offerings by partial code or title words.
 
 ### `stars_get_course_metadata`
 
-**Inputs:** `course_code`, `academic_year`, `semester`.
+**Inputs:** `course_code`, `academic_year`, `semester`, optional `limit` (1–50, default 10) and non-negative `offset`.
 
 **Returns:** course name, AU, prerequisites when published, course description, course notes, term, and source metadata. `course_description_status` distinguishes `available`, `not_listed`, and `unavailable`. This tool returns metadata rather than index timetables.
 
@@ -52,7 +52,7 @@ Unrecognized expressions, conflicting full-time/part-time records, and unavailab
 
 **Inputs:** `course_code`, `academic_year`, `semester`.
 
-**Returns:** every index, its complete associated sessions, schedule completeness, vacancies, waitlist length, and vacancy metadata. Shared lectures remain attached to each applicable index. Sessions include lesson type, group, day, times, venue, teaching weeks, and remarks.
+**Returns:** one page of indexes, their associated sessions, schedule completeness, vacancies, waitlist length, and vacancy metadata. `index_count` is the total; follow `next_offset` until it is null. Shared lectures remain attached to each applicable index. Sessions include lesson type, group, day, times, venue, teaching weeks, and remarks.
 
 ### `stars_get_index`
 
@@ -199,6 +199,8 @@ Only NTU endpoints supply timetable and academic records. Forms are followed wit
 | Graduate timetable | [GSLink/PGR entry](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.mmenu), [class timetable](https://wish.wis.ntu.edu.sg/pls/webexe/pgr%24subrs_timetable.examTimetable) | Currently published graduate groups and sessions |
 | Undergraduate exams | [General Access entry](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.main), [selection](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.MainSubmit), [term page](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.query_page), [exam response](https://wis.ntu.edu.sg/webexe/owa/exam_timetable_und.Get_detail) | Published exam dates/times through the public form workflow |
 | STARS Planner | [Authenticated entry](https://wish.wis.ntu.edu.sg/pls/webexe/aus_stars_planner.main), [selection](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.time_table), [Planner view](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.planner), [load plan](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.load_time_table), [save plan](https://wish.wis.ntu.edu.sg/pls/webexe/AUS_STARS_PLANNER.save_time_table) | Registered courses and saved plans; saving is limited to the chosen saved plan |
+
+On 6 November 2026, the public Class Schedule form contained the hidden `staff_access=true` field. The client reproduces that public form value and sends no credentials to this endpoint; the field name alone does not establish that the caller is staff.
 | Degree Audit | [Authenticated audit](https://wish.wis.ntu.edu.sg/pls/webexe/DARS_RESULT_RO.main_display) | The student's published degree requirements and academic tables |
 
 WISH authentication follows NTU's [login workflow](https://wish.wis.ntu.edu.sg/pls/webexe/ldap_login.login). Credentials come from the [shared credential store](../shared/README.md#credential-storage), also used by NTULearn and LibFacilities; access restrictions and challenges are respected. Manage it locally with `all-abt-ntu auth save`, `auth status`, and `auth delete`. Passwords are never accepted as MCP arguments or read from environment variables/config files.

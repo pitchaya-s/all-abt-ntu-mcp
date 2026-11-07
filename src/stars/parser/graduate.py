@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 import re
+from typing_extensions import TypedDict
 
 from .common import CourseUnavailable, NTUPageError
+
+
+class _GraduateGroup(TypedDict):
+    class_group: str | None
+    coordinator: str | None
+    sessions: list[dict[str, str | None]]
+    schedule_remarks: list[str]
+    schedule_text: str | None
 
 class _GraduateRows(HTMLParser):
     def __init__(self) -> None:
@@ -137,7 +146,7 @@ def parse_graduate_course_page(html: str, expected_code: str) -> dict[str, objec
     course_lines = _lines(matched_rows[0][0])
     course_name = " ".join(line for line in course_lines[1:] if not re.fullmatch(r"\[Class Group[^]]+\]", line, re.I))
     au_match = re.search(r"\d+(?:\.\d+)?", matched_rows[0][7])
-    groups: list[dict[str, object]] = []
+    groups: list[_GraduateGroup] = []
     for row in matched_rows:
         group_match = re.search(r"\[Class Group\s+([^\]]+)\]", row[0], re.IGNORECASE)
         schedule_text = "\n".join(_lines(row[2]))

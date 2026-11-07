@@ -11,18 +11,47 @@ assert(prefix, "Pass the npm installation prefix containing @modelcontextprotoco
 const require = createRequire(join(resolve(prefix), "package.json"));
 const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio.js");
+const { ElicitRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
 const tests = dirname(fileURLToPath(import.meta.url));
+for (const profile of ["public", "personal-read"]) {
+  const profileCwd = await mkdtemp(join(tmpdir(), "ntu-profile-client-"));
+  const profileClient = new Client({ name: "ntu-profile-test", version: "1.0" });
+  try {
+    await profileClient.connect(new StdioClientTransport({
+      command: "python",
+      args: ["-c", `from shared.server import main; main('${profile}', check_dependencies=False)`],
+      cwd: profileCwd,
+      env: { PYTHONPATH: join(tests, "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
+    }));
+    const names = new Set((await profileClient.listTools()).tools.map(tool => tool.name));
+    assert(names.has("stars_search_courses"));
+    assert.equal(names.has("ntulearn_list_courses"), profile === "personal-read");
+    for (const name of ["stars_save_stars_plan", "ntulearn_download_file", "onestop_upload_attachment"]) {
+      assert(!names.has(name), `${profile} must not expose ${name}`);
+    }
+  } finally {
+    await profileClient.close();
+    await rm(profileCwd, { recursive: true, force: true });
+  }
+}
 const cwd = await mkdtemp(join(tmpdir(), "ntu-mcp-client-"));
 const transport = new StdioClientTransport({
   command: "python",
   args: [join(tests, "stars", "protocol_server.py")], cwd,
   env: { PYTHONPATH: join(tests, "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
 });
-const client = new Client({ name: "ntu-typescript-test", version: "1.0" });
+const client = new Client({ name: "ntu-typescript-test", version: "1.0" }, { capabilities: { elicitation: { form: {} } } });
+let confirmations = 0;
+client.setRequestHandler(ElicitRequestSchema, async request => {
+  assert(request.params.message.includes("stars_save_stars_plan"));
+  confirmations++;
+  return { action: "accept", content: { confirm: true } };
+});
 try {
   await client.connect(transport);
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 137);
+  assert(tools.some(tool => tool.name === "stars_search_courses"));
+  assert(tools.some(tool => tool.name === "stars_get_index"));
   for (const tool of tools) {
     assert.equal(tool.outputSchema.type, "object");
     assert(Object.keys(tool.outputSchema.properties).length > 0);
@@ -48,6 +77,12 @@ try {
   }
   const error = await client.callTool({ name: "stars_get_index", arguments: { ...args, index: "missing" } });
   assert(error.isError);
+  const simulatedWrite = await client.callTool({ name: "stars_save_stars_plan", arguments: {
+    academic_year: 2026, semester: 1, plan_number: 1, courses: [{ course_code: "ZZ0001", index: "00001" }],
+  } });
+  assert(simulatedWrite.isError);
+  assert(simulatedWrite.content[0].text.includes("Personal actions are disabled"));
+  assert.equal(confirmations, 1);
   assert.deepEqual((await client.listResources()).resources, []);
   assert.deepEqual((await client.listResourceTemplates()).resourceTemplates, []);
 } finally {

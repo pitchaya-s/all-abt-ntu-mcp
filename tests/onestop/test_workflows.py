@@ -451,7 +451,7 @@ class AttachmentTests(unittest.TestCase):
         self.context = FileContext(self.session._page, BASE, "sc_req_item", ITEM, [self.file], True, True, 1000)
 
     def test_upload_size_and_absolute_path_are_checked_before_http(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}):
             f = Path(directory) / "example.txt"
             f.write_bytes(b"content")
             with self.assertRaisesRegex(OneStopError, "size limit"):
@@ -462,11 +462,25 @@ class AttachmentTests(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "Named pipes are not supported")
     def test_upload_named_pipe_is_refused_without_waiting_for_a_writer(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}):
             path = Path(directory) / "pipe"
             os.mkfifo(path)
             with self.assertRaisesRegex(OneStopError, "not a regular file"):
                 upload_file(str(path))
+
+    def test_upload_requires_approved_directory_and_rejects_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            secret = Path(outside) / "secret.txt"
+            secret.write_text("private")
+            link = Path(directory) / "link.txt"
+            link.symlink_to(secret)
+            with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(OneStopError, "disabled"):
+                upload_file(str(secret))
+            with patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}):
+                with self.assertRaisesRegex(OneStopError, "approved"):
+                    upload_file(str(secret))
+                with self.assertRaises(OneStopError):
+                    upload_file(str(link))
 
     def test_delete_rename_require_target_membership_and_edit_permission(self):
         with patch.object(self.service, "context", return_value=self.context), patch("onestop.attachments.evaluate") as native:

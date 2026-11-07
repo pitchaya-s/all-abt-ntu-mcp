@@ -1,9 +1,11 @@
 """Optional, transient discovery of authenticated NTULearn browser cookies."""
 
 import http.cookiejar
+from importlib import import_module
 import re
 import time
 from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 BASE_URL = "https://ntulearn.ntu.edu.sg"
@@ -66,7 +68,7 @@ def _from_browser_cookie(cookie: Any) -> SessionCookie | None:
     return value if _is_safe(value) else None
 
 
-def _from_playwright_cookie(cookie: dict[str, Any]) -> SessionCookie | None:
+def _from_playwright_cookie(cookie: Mapping[str, Any]) -> SessionCookie | None:
     try:
         raw_expiry = cookie.get("expires")
         expires = int(raw_expiry) if isinstance(raw_expiry, (int, float)) and raw_expiry > 0 else None
@@ -113,14 +115,13 @@ def read_browser_cookie_sets(
     """Return isolated cookie sets, one per browser, without persisting values."""
     if module is None:
         try:
-            import browser_cookie3
+            module = import_module("browser_cookie3")
         except ImportError:
             return []
-        module = browser_cookie3
     return _read_from_module(module, browsers)
 
 
-def playwright_cookies(cookies: list[dict[str, Any]]) -> tuple[SessionCookie, ...]:
+def playwright_cookies(cookies: Sequence[Mapping[str, Any]]) -> tuple[SessionCookie, ...]:
     """Keep all valid cookies applicable to NTULearn, not only BbRouter."""
     result = tuple(
         value

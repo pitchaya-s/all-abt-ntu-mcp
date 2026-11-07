@@ -6,6 +6,7 @@ from .common import NTUPageError
 from .course import _parse_time, parse_teaching_weeks
 from .personal import (
     _COURSE_CODE,
+    _TableData,
     _course_status,
     _parse,
     _records_with_course_code,
@@ -16,16 +17,16 @@ _DAYS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
 _EMPTY_NOTICE = "You have no course registration or course timetable."
 
 
-def _headers(table: dict[str, object]) -> list[str]:
+def _headers(table: _TableData) -> list[str]:
     values = table.get("headers")
     return [str(value) for value in values] if isinstance(values, list) else []
 
 
-def _is_calendar(table: dict[str, object]) -> bool:
+def _is_calendar(table: _TableData) -> bool:
     return len(_DAYS.intersection(_headers(table))) >= 2
 
 
-def _looks_like_registration_table(table: dict[str, object]) -> bool:
+def _looks_like_registration_table(table: _TableData) -> bool:
     headers = [value.strip().casefold() for value in _headers(table)]
     has_course = any(
         "course" in header and "type" not in header

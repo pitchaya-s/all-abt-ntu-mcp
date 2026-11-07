@@ -47,6 +47,6 @@ def list_interests(query: Query = "", limit: Annotated[int, Field(ge=1, le=100, 
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (search, list_interests):
         mcp.tool(name="faculty_" + function.__name__, annotations=read)(function)

@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
+from shared.confirmation import confirmed_tool
 
 from .appointments import AppointmentService
 from .attachments import AttachmentService
@@ -180,7 +181,7 @@ class WorkflowTools:
         return self.files.list(target)
 
     def upload_attachment(self, target: AttachmentTarget, file_path: str) -> ActionResult:
-        """Upload the explicitly selected local file to the verified target when its native upload control permits it. Requires an absolute path and obeys the smaller of the source limit and 20 MB. Article-comment uploads are visible to the article audience. Never chooses files automatically."""
+        """Upload the explicitly selected file from NTU_ONESTOP_UPLOAD_DIR to the verified target when its native upload control permits it. Requires an absolute path and obeys the smaller of the source limit and 20 MB. Article-comment uploads are visible to the article audience. Never chooses files automatically."""
         return self.files.upload(target, file_path)
 
     def download_attachment(self, target: AttachmentTarget, attachment_id: ID, destination: str) -> FileDownload:
@@ -279,10 +280,15 @@ IDEMPOTENT_WRITES = {
 DESTRUCTIVE_TOOLS = {"delete_article_comment", "delete_attachment", "update_cart", "update_favourite", "take_request_action"}
 
 
-def register_tools(mcp, session, reader):
-    workflows = WorkflowTools(session, reader)
-    for name in (*READ_TOOLS, *LOCAL_TOOLS, *WRITE_TOOLS):
-        function = getattr(workflows, name)
+def register_tools(mcp, session, reader, *, workflows=True):
+    handlers = WorkflowTools(session, reader)
+    # Draft-dependent reads require the workflow profile's draft creation tools.
+    names = (*READ_TOOLS, *LOCAL_TOOLS, *WRITE_TOOLS) if workflows else tuple(
+        name for name in READ_TOOLS
+        if name not in {"get_request_draft", "search_form_references", "get_appointment_configuration", "get_appointment_slots"}
+    )
+    for name in names:
+        function = getattr(handlers, name)
 
         def checked(*args, _function=function, _writes=name in WRITE_TOOLS, **kwargs):
             try:
@@ -297,8 +303,10 @@ def register_tools(mcp, session, reader):
         # Preserve the actual bound method's contract for MCP schema generation.
         from functools import wraps
         checked = wraps(function)(checked)
-        annotations = ToolAnnotations(readOnlyHint=name not in WRITE_TOOLS,
-                                      idempotentHint=name in READ_TOOLS or name in IDEMPOTENT_WRITES,
-                                      destructiveHint=name in DESTRUCTIVE_TOOLS, openWorldHint=True)
-        mcp.tool(name="onestop_" + name, annotations=annotations)(checked)
-    return workflows
+        annotations = ToolAnnotations(read_only_hint=name in READ_TOOLS,
+                                      idempotent_hint=name in READ_TOOLS or name in IDEMPOTENT_WRITES,
+                                      destructive_hint=name in DESTRUCTIVE_TOOLS, open_world_hint=True)
+        mcp.tool(name="onestop_" + name, annotations=annotations)(
+            confirmed_tool(checked, "onestop_" + name) if name in WRITE_TOOLS else checked
+        )
+    return handlers

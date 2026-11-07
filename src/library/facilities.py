@@ -127,16 +127,17 @@ class FacilitiesClient:
         self.http = PublicHTTPClient("NTU LibFacilities", ["libcalendar.ntu.edu.sg"], {"text/html"})
 
     def list_facilities(self, refresh=False):
-        return directory(*self.http.get(BASE + "/", refresh))
+        with self.http.parsed_response(BASE + "/", refresh) as (body, snapshot):
+            return directory(body, snapshot)
 
     def get_map_availability(self, map_slug, day, time, refresh=False):
         if not re.fullmatch(r"[a-f0-9]{12}", map_slug):
             raise LibraryError("Use map_slug exactly as returned by library_list_facilities.")
         at = requested_time(day, time)
-        body, _ = self.http.get(BASE + "/map/" + map_slug, refresh)
-        map_id = script_json(body.decode("utf-8"), "mapId")
-        if type(map_id) is not int or map_id <= 0:
-            raise LibraryError("LibFacilities returned an invalid map ID.")
+        with self.http.parsed_response(BASE + "/map/" + map_slug, refresh) as (body, _):
+            map_id = script_json(body.decode("utf-8"), "mapId")
+            if type(map_id) is not int or map_id <= 0:
+                raise LibraryError("LibFacilities returned an invalid map ID.")
         url = (
             BASE
             + "/maps/search/spaces?"
@@ -150,7 +151,7 @@ class FacilitiesClient:
                 }
             )
         )
-        body, snapshot = self.http.get(url, refresh)
-        if script_json(body.decode("utf-8"), "mapId") != map_id:
-            raise LibraryError("LibFacilities returned a different map.")
-        return map_availability(body, map_slug, at, snapshot)
+        with self.http.parsed_response(url, refresh) as (body, snapshot):
+            if script_json(body.decode("utf-8"), "mapId") != map_id:
+                raise LibraryError("LibFacilities returned a different map.")
+            return map_availability(body, map_slug, at, snapshot)

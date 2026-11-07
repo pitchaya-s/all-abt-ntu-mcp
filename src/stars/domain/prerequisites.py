@@ -266,7 +266,7 @@ def _course_prerequisite_summary(
     completed: set[str] | None,
 ) -> dict[str, Any]:
     if len(raw_texts) > 1:
-        expression = {
+        conflicting_expression = {
             "type": "conflicting_records",
             "raw_texts": raw_texts,
             "mentioned_course_codes": sorted(
@@ -278,7 +278,7 @@ def _course_prerequisite_summary(
             "status": "conflicting_records",
             "text": None,
             "texts": raw_texts,
-            "expression": expression,
+            "expression": conflicting_expression,
             "eligibility": "unknown" if completed is not None else "not_evaluated",
         }
 
@@ -416,7 +416,7 @@ def build_prerequisite_tree(
         record = records.get(course_code)
         if record is None:
             data_status = "unavailable" if course_code in unavailable else "not_loaded"
-            prerequisite = {
+            prerequisite: dict[str, Any] = {
                 "status": data_status,
                 "text": None,
                 "texts": [],

@@ -6,20 +6,20 @@ from .parser import NS, datestamp, pagination, record, required, xml
 
 
 def identify(client, refresh=False):
-    data, response_date, snapshot = client.request("Identify", refresh=refresh)
-    return OAIIdentify(**snapshot, response_date=response_date, repository_name=required(data, "repositoryName"),
-                       base_url=required(data, "baseURL"), protocol_version=required(data, "protocolVersion"),
-                       admin_emails=[value.text.strip() for value in data.findall(NS + "adminEmail") if (value.text or "").strip()],
-                       earliest_datestamp=datestamp(required(data, "earliestDatestamp")),
-                       deleted_record=required(data, "deletedRecord"), granularity=required(data, "granularity"),
-                       descriptions_xml=[xml(value) for value in data.findall(NS + "description")])
+    with client.validated("Identify", refresh=refresh) as (data, response_date, snapshot):
+        return OAIIdentify(**snapshot, response_date=response_date, repository_name=required(data, "repositoryName"),
+                           base_url=required(data, "baseURL"), protocol_version=required(data, "protocolVersion"),
+                           admin_emails=[value.text.strip() for value in data.findall(NS + "adminEmail") if (value.text or "").strip()],
+                           earliest_datestamp=datestamp(required(data, "earliestDatestamp")),
+                           deleted_record=required(data, "deletedRecord"), granularity=required(data, "granularity"),
+                           descriptions_xml=[xml(value) for value in data.findall(NS + "description")])
 
 
 def formats(client, identifier=None, refresh=False):
-    data, response_date, snapshot = client.request("ListMetadataFormats", {"identifier": identifier} if identifier else None, refresh)
-    return OAIFormats(**snapshot, response_date=response_date,
-                      formats=[OAIMetadataFormat(metadata_prefix=required(value, "metadataPrefix"), schema_url=required(value, "schema"),
-                                                 metadata_namespace=required(value, "metadataNamespace")) for value in data.findall(NS + "metadataFormat")])
+    with client.validated("ListMetadataFormats", {"identifier": identifier} if identifier else None, refresh) as (data, response_date, snapshot):
+        return OAIFormats(**snapshot, response_date=response_date,
+                          formats=[OAIMetadataFormat(metadata_prefix=required(value, "metadataPrefix"), schema_url=required(value, "schema"),
+                                                     metadata_namespace=required(value, "metadataNamespace")) for value in data.findall(NS + "metadataFormat")])
 
 
 def selection(metadata_prefix, set_spec, from_date, until_date, resumption_token):
@@ -40,30 +40,30 @@ def selection(metadata_prefix, set_spec, from_date, until_date, resumption_token
 
 
 def sets(client, resumption_token=None, limit=20, offset=0, refresh=False):
-    data, response_date, snapshot = client.request("ListSets", {"resumptionToken": resumption_token} if resumption_token else None, refresh)
-    values = data.findall(NS + "set")
-    page = pagination(data, len(values), limit, offset)
-    return OAISets(**snapshot, response_date=response_date, pagination=page,
-                   sets=[OAISet(set_spec=required(value, "setSpec"), name=required(value, "setName"),
-                                descriptions_xml=[xml(part) for part in value.findall(NS + "setDescription")]) for value in values[offset:offset + limit]])
+    with client.validated("ListSets", {"resumptionToken": resumption_token} if resumption_token else None, refresh) as (data, response_date, snapshot):
+        values = data.findall(NS + "set")
+        page = pagination(data, len(values), limit, offset)
+        return OAISets(**snapshot, response_date=response_date, pagination=page,
+                       sets=[OAISet(set_spec=required(value, "setSpec"), name=required(value, "setName"),
+                                    descriptions_xml=[xml(part) for part in value.findall(NS + "setDescription")]) for value in values[offset:offset + limit]])
 
 
 def records(client, metadata_prefix=None, set_spec=None, from_date=None, until_date=None, resumption_token=None,
             headers_only=False, limit=10, offset=0, refresh=False):
     parameters = selection(metadata_prefix, set_spec, from_date, until_date, resumption_token)
-    data, response_date, snapshot = client.request("ListIdentifiers" if headers_only else "ListRecords", parameters, refresh)
-    values = data.findall(NS + ("header" if headers_only else "record"))
-    page = pagination(data, len(values), limit, offset)
-    return OAIRecords(**snapshot, response_date=response_date, headers_only=headers_only, pagination=page,
-                      records=[record(value, headers_only) for value in values[offset:offset + limit]])
+    with client.validated("ListIdentifiers" if headers_only else "ListRecords", parameters, refresh) as (data, response_date, snapshot):
+        values = data.findall(NS + ("header" if headers_only else "record"))
+        page = pagination(data, len(values), limit, offset)
+        return OAIRecords(**snapshot, response_date=response_date, headers_only=headers_only, pagination=page,
+                          records=[record(value, headers_only) for value in values[offset:offset + limit]])
 
 
 def get_record(client, identifier, metadata_prefix="oai_dc", refresh=False):
-    data, response_date, snapshot = client.request("GetRecord", {"identifier": identifier, "metadataPrefix": metadata_prefix}, refresh)
-    values = data.findall(NS + "record")
-    if len(values) != 1:
-        raise RepositoryError("DR-NTU returned an unexpected number of OAI records.")
-    result = record(values[0])
-    if result.identifier != identifier:
-        raise RepositoryError("DR-NTU returned a different OAI identifier; no record was inferred.")
-    return OAIRecordResult(**snapshot, response_date=response_date, metadata_prefix=metadata_prefix, record=result)
+    with client.validated("GetRecord", {"identifier": identifier, "metadataPrefix": metadata_prefix}, refresh) as (data, response_date, snapshot):
+        values = data.findall(NS + "record")
+        if len(values) != 1:
+            raise RepositoryError("DR-NTU returned an unexpected number of OAI records.")
+        result = record(values[0])
+        if result.identifier != identifier:
+            raise RepositoryError("DR-NTU returned a different OAI identifier; no record was inferred.")
+        return OAIRecordResult(**snapshot, response_date=response_date, metadata_prefix=metadata_prefix, record=result)

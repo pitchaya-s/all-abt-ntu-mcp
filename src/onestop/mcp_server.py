@@ -96,10 +96,10 @@ def get_my_request(request_id: ID, refresh: bool = False) -> RequestDetails:
     return _call(client.get_my_request, request_id, refresh)
 
 
-def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+def register_tools(mcp: MCPServer, *, workflows: bool = True) -> None:
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (auth_status, list_catalog_categories, list_catalog_items, get_catalog_item,
                      search_knowledge, get_knowledge_article, list_my_requests, get_my_request):
         mcp.tool(name="onestop_" + function.__name__, annotations=read)(function)
     from .workflow_tools import register_tools as register_workflows
-    register_workflows(mcp, session, client)
+    register_workflows(mcp, session, client, workflows=workflows)

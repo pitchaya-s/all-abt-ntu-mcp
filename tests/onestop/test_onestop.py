@@ -235,7 +235,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 from onestop.workflow_tools import LOCAL_TOOLS, READ_TOOLS, WRITE_TOOLS
                 for tool in tools.values():
                     name = tool.name.removeprefix("onestop_")
-                    self.assertEqual(tool.annotations.read_only_hint, name not in WRITE_TOOLS)
+                    self.assertEqual(tool.annotations.read_only_hint, name not in (*LOCAL_TOOLS, *WRITE_TOOLS))
                     if name in READ_TOOLS:
                         self.assertTrue(tool.annotations.idempotent_hint)
                     if name in LOCAL_TOOLS:

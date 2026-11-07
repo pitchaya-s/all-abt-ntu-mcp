@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 async def main() -> None:
     async with Client(StdioServerParameters(
         command="uvx",
-        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "all-abt-ntu"],
-        env={key: os.environ[key] for key in ("NTU_PERSONAL_CACHE_TTL_SECONDS",) if key in os.environ},
+        args=["--no-cache", "--from", str(ROOT), "--with", "playwright>=1.50,<2", "all-abt-ntu", "--profile", "personal-read"],
+        env={key: os.environ[key] for key in ("NTU_PERSONAL_CACHE_TTL_SECONDS", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR") if key in os.environ},
         cwd=str(ROOT),
     )) as client:
         listing = await client.list_tools()

@@ -13,7 +13,7 @@ from mcp.client.stdio import StdioServerParameters
 
 async def main():
     env = {key: os.environ[key] for key in ("DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR") if key in os.environ}
-    params = StdioServerParameters(command=sys.executable, args=["-c", "from shared.cli import main; main()"], env=env)
+    params = StdioServerParameters(command=sys.executable, args=["-c", "from shared.cli import main; main()", "--profile", "workflows"], env=env)
     async with Client(params) as client:
         tools = {t.name: t for t in (await client.list_tools()).tools if t.name.startswith("onestop_")}
         assert len(tools) == 59

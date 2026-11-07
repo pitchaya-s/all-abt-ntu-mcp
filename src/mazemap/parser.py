@@ -16,7 +16,9 @@ class _Text(HTMLParser):
 
 def text(value):
     if not isinstance(value, str):
-        raise MapError("MazeMap returned an unexpected text field; no place data was inferred.")
+        raise MapError(
+            "MazeMap returned an unexpected text field; no place data was inferred."
+        )
     parser = _Text()
     parser.feed(value)
     return "".join(parser.parts).strip()
@@ -24,7 +26,9 @@ def text(value):
 
 def records(value):
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
-        raise MapError("MazeMap returned an unexpected collection format; try again later.")
+        raise MapError(
+            "MazeMap returned an unexpected collection format; try again later."
+        )
     return value
 
 
@@ -40,19 +44,29 @@ def point(value):
 
 
 def campus(value) -> Campus:
-    return Campus(campus_id=value["campusId"], name=text(value["name"]), center=point(value["center"]))
+    return Campus(
+        campus_id=value["campusId"],
+        name=text(value["name"]),
+        center=point(value["center"]),
+    )
 
 
 def building(value) -> Building:
     return Building(
-        building_id=value["id"], name=text(value["name"]) if value.get("name") else None,
-        floors=[Floor(floor_id=f["id"], name=f.get("name"), level=f.get("z")) for f in records(value["floors"])],
+        building_id=value["id"],
+        name=text(value["name"]) if value.get("name") else None,
+        floors=[
+            Floor(floor_id=f["id"], name=f.get("name"), level=f.get("z"))
+            for f in records(value["floors"])
+        ],
     )
 
 
 def place(value) -> Place:
     if value.get("deleted"):
-        raise MapError("This MazeMap place has been deleted; search again for its current location.")
+        raise MapError(
+            "This MazeMap place has been deleted; search again for its current location."
+        )
     names = value.get("poiNames")
     if names is None:
         names = [item["name"] for item in records(value.get("infos", []))]
@@ -71,12 +85,18 @@ def place(value) -> Place:
             raise MapError("MazeMap returned invalid building names.")
         building_name = ", ".join(text(n) for n in names_of_building) or None
     return Place(
-        poi_id=value["poiId"], campus_id=value["campusId"], name=name,
-        identifier=value.get("identifier"), aliases=list(dict.fromkeys(text(n) for n in names if text(n) != name)),
-        building_id=value.get("buildingId") or value.get("bldId"), building_name=building_name,
-        floor_id=value.get("floorId"), floor_name=value.get("floorName") or value.get("zName"),
+        poi_id=value["poiId"],
+        campus_id=value["campusId"],
+        name=name,
+        identifier=value.get("identifier"),
+        aliases=list(dict.fromkeys(text(n) for n in names if text(n) != name)),
+        building_id=value.get("buildingId") or value.get("bldId"),
+        building_name=building_name,
+        floor_id=value.get("floorId"),
+        floor_name=value.get("floorName") or value.get("zName"),
         level=value.get("z") if value.get("z") is not None else value.get("zValue"),
-        categories=list(dict.fromkeys(text(n) for n in categories)), point=point(value.get("point")),
+        categories=list(dict.fromkeys(text(n) for n in categories)),
+        point=point(value.get("point")),
         description=text(value["description"]) if value.get("description") else None,
         capacity=value.get("peopleCapacity"),
         map_url=f"https://use.mazemap.com/?config=ntu-sg&sharepoitype=poi&sharepoi={value['poiId']}",
@@ -87,7 +107,8 @@ def route(value) -> Route:
     legs = records(value["legs"])
     if not legs:
         raise MapError("MazeMap returned a route without any legs.")
-    steps, instructions, issues = [], [], []
+    steps, issues = [], []
+    instructions: list[str] = []
     instructions_available = True
     for leg in legs:
         steps.extend(records(leg["basic"]["steps"]))
@@ -108,9 +129,20 @@ def route(value) -> Route:
     if any(v is not None and type(v) is not bool for v in accessibility + uncertainty):
         raise MapError("MazeMap returned invalid route accessibility flags.")
     return Route(
-        distance_metres=sum(distances) if all(d is not None for d in distances) else None,
+        distance_metres=sum(distances)
+        if all(d is not None for d in distances)
+        else None,
         duration_seconds=value["properties"].get("timeEstimateSeconds"),
-        accessible=False if False in accessibility else True if all(v is True for v in accessibility) else None,
-        uncertain=True if True in uncertainty else False if all(v is False for v in uncertainty) else None,
-        instructions=instructions if instructions_available else None, issues=list(dict.fromkeys(issues)),
+        accessible=False
+        if False in accessibility
+        else True
+        if all(v is True for v in accessibility)
+        else None,
+        uncertain=True
+        if True in uncertainty
+        else False
+        if all(v is False for v in uncertainty)
+        else None,
+        instructions=instructions if instructions_available else None,
+        issues=list(dict.fromkeys(issues)),
     )

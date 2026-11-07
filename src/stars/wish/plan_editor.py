@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import urljoin
 
@@ -36,7 +37,7 @@ def validate_course_selection(courses: list[dict[str, str]], academic_year: int,
     return normalized
 
 
-def course_assignments(courses: list[dict[str, Any]]) -> dict[str, str | None]:
+def course_assignments(courses: Sequence[Mapping[str, Any]]) -> dict[str, str | None]:
     return {course["course_code"]: course["index"] for course in courses}
 
 

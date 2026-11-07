@@ -1,6 +1,7 @@
 """Pooled public HTML requests for STARS data endpoints."""
 
 import atexit
+import logging
 import time
 from concurrent.futures import Future
 from datetime import datetime, timezone
@@ -262,6 +263,8 @@ def _fetch_html_request_once(
             )
             if status < 400:
                 return _decode_html(body, response_headers)
+            if status == 429:
+                logging.getLogger(__name__).warning("STARS upstream returned HTTP 429")
             retryable = status == 429 or 500 <= status <= 599
             last_error = f"HTTP {status} {reason}"
         except httpx.RequestError:

@@ -1,8 +1,15 @@
 from datetime import datetime
 from html.parser import HTMLParser
 import re
+from typing_extensions import TypedDict
 
 from .common import CourseUnavailable, NTUPageError, _Rows
+
+
+class _ExamPlan(TypedDict):
+    plan_number: str
+    academic_year: int
+    semester: str
 
 class _ExamPlans(HTMLParser):
     def __init__(self) -> None:
@@ -19,7 +26,7 @@ class _ExamPlans(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
-        if tag == "input" and attributes.get("type", "").lower() == "radio" and attributes.get("name") == "p_plan_no":
+        if tag == "input" and (attributes.get("type") or "").lower() == "radio" and attributes.get("name") == "p_plan_no":
             self._finish_option()
             self._value = attributes.get("value")
         elif tag == "br":
@@ -39,7 +46,7 @@ def parse_undergraduate_exam_plan(
     """Choose the latest public undergraduate exam term, or a requested available term."""
     parser = _ExamPlans()
     parser.feed(html)
-    plans = []
+    plans: list[_ExamPlan] = []
     for plan_number, label in parser.options:
         match = re.search(r"AY(\d{4})-\d{2}\s+SEM\s*([12])", label, re.IGNORECASE)
         if match and plan_number:
@@ -55,6 +62,7 @@ def parse_undergraduate_exam_plan(
             raise CourseUnavailable("NTU has not published a public undergraduate exam timetable yet.")
         raise NTUPageError("NTU returned an unrecognized undergraduate exam-term page.")
 
+    selected: _ExamPlan | None
     if academic_year is None:
         selected = max(plans, key=lambda plan: (plan["academic_year"], plan["semester"]))
     else:

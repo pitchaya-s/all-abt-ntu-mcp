@@ -5,6 +5,7 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
+from shared.confirmation import confirmed_tool
 
 from .client import ID, LearnClient, Session
 from .models import (
@@ -42,7 +43,7 @@ INSTRUCTIONS = (
     "Read attachment text with ntulearn_read_file_content; ntulearn_download_file and ntulearn_download_course save local copies without modifying NTULearn. "
     "Collection results with complete=false have explicit issues; do not present them as full coverage."
 )
-_read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+_read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
 PageSize = Annotated[int, Field(ge=1, le=100, strict=True)]
 Offset = Annotated[int, Field(ge=0, strict=True)]
 LearnID = Annotated[str, Field(pattern=f"^{ID}$", description="NTULearn ID returned by another tool")]
@@ -178,11 +179,13 @@ async def whats_new(since: datetime | None = None, until: datetime | None = None
     return await _call(overview.whats_new, client, since, until, course_ids, max_items, max_requests, refresh)
 
 
-def register_tools(server: MCPServer) -> None:
+def register_tools(server: MCPServer, *, workflows: bool = True) -> None:
     for function in (ntulearn_auth_status, list_courses, get_course_contents, get_announcements,
                      get_calendar, get_gradebook, get_content_attachments, get_upcoming, read_file_content,
                      list_messages, read_message, list_course_users, list_course_groups, get_group_members,
                      search_course_content, search_all_courses, get_content_tree, whats_new):
         server.tool(name=f"ntulearn_{function.__name__.removeprefix('ntulearn_')}", annotations=_read)(function)
-    for function in (download_file, download_course):
-        server.tool(name=f"ntulearn_{function.__name__.removeprefix('ntulearn_')}", annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True))(function)
+    if workflows:
+        for download_function in (download_file, download_course):
+            name = f"ntulearn_{download_function.__name__.removeprefix('ntulearn_')}"
+            server.tool(name=name, annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True))(confirmed_tool(download_function, name))

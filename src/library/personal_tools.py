@@ -30,5 +30,5 @@ def get_facility_schedule(
 
 def register_tools(mcp: MCPServer) -> None:
     mcp.tool(name="library_get_facility_schedule", annotations=ToolAnnotations(
-        readOnlyHint=True, idempotentHint=True, openWorldHint=True,
+        read_only_hint=True, idempotent_hint=True, open_world_hint=True,
     ))(get_facility_schedule)

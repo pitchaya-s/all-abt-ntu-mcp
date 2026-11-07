@@ -16,7 +16,7 @@ Optional inputs: `query`, `interest_id`, `page`, and `refresh`.
 
 Returns `profiles`, `page`, `total_pages`, `total_count`, and `next_page`. Each profile contains its published name, school, email, appointments, research interests, biography summary, and profile URL. Missing information stays `null`; summaries may be abbreviated by NTU. Profile URLs often point to DR-NTU person pages; their readable slugs are not item UUIDs accepted by `drntu_get_item`.
 
-For pages after the first, the client checks the first page's totals, using the cache when available. NTU otherwise reports zero totals for out-of-range pages, which could be mistaken for a search with no matches. Out-of-range requests return an error.
+For pages after the first, the client checks the first page's totals, using the cache when available, and rejects pages beyond the reported range. It also rejects inconsistent totals between the two pages rather than presenting a changed result set as complete.
 
 ### `faculty_list_interests`
 

@@ -50,7 +50,20 @@ class FacultyTests(unittest.TestCase):
         self.assertIsNone(empty.next_page)
         with self.assertRaisesRegex(FacultyError, "Page exceeds"):
             self.client.search(page=3)
-        self.assertEqual(parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["3"])
+        self.assertEqual(parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["1"])
+
+    def test_inconsistent_totals_across_pages_are_rejected(self):
+        def changed(url, refresh=False):
+            body, snapshot = fake_get(url, refresh)
+            if parse_qs(urlsplit(url).query).get("page") == ["2"]:
+                data = json.loads(body)
+                data["totalItems"] = 12
+                data["items"].append({**PROFILE, "url": PROFILE["url"] + "extra"})
+                body = json.dumps(data).encode()
+            return body, snapshot
+        self.fetch.side_effect = changed
+        with self.assertRaisesRegex(FacultyError, "changed between pages"):
+            self.client.search(page=2)
 
     def test_interest_discovery_deduplication_and_filtering(self):
         result = self.client.list_interests(limit=1)
@@ -113,3 +126,14 @@ class FacultyTests(unittest.TestCase):
             with patch.object(mcp_server.client, "search", side_effect=error), self.assertRaises(ToolError) as caught:
                 mcp_server.search()
             self.assertNotIn("raw provider detail", str(caught.exception))
+
+    def test_malformed_page_is_not_reused_after_a_parse_error(self):
+        client = FacultyClient()
+        url = API + "?interests=all&page=1&searchFaculty=Example"
+        body, _ = fake_get(url)
+        now = datetime.now(timezone.utc)
+        with patch.object(client.http, "_fetch", side_effect=[(b"{}", now), (body, now)]) as fetch:
+            with self.assertRaises(FacultyError):
+                client.search("Example")
+            self.assertEqual(client.search("Example").total_count, 11)
+            self.assertEqual(fetch.call_count, 2)

@@ -1,5 +1,6 @@
 """Offline public HTTP app; the same ASGI entrypoint as Vercel with synthetic data."""
 
+from contextlib import nullcontext
 from unittest.mock import patch
 
 from shared.http import create_app
@@ -17,7 +18,10 @@ PATCHES = [
     patch("stars.mcp_server.fetch_course", return_value=COURSE),
     patch("faculty.mcp_server.client.http.get", side_effect=faculty_get),
     patch("library.mcp_server.client.http.get", side_effect=library_get),
-    patch("mazemap.mcp_server.client._get", side_effect=map_get),
+    patch(
+        "mazemap.mcp_server.client._get",
+        side_effect=lambda *args, **kwargs: nullcontext(map_get(*args, **kwargs)),
+    ),
     patch("news.mcp_server.client.http.get", side_effect=news_get),
     patch("drntu.mcp_server.client.get", side_effect=repository_get),
     patch("drntu.mcp_server.oai_client.get", side_effect=oai_get),

@@ -12,4 +12,4 @@ if __name__ == "__main__":
     asyncio.run(mcp_server.session.close())
     mcp_server.session = FixtureSession()
     mcp_server.client = LearnClient(mcp_server.session)
-    main()
+    main("workflows", check_dependencies=False)

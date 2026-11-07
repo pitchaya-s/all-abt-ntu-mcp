@@ -101,6 +101,6 @@ def get_room_schedule(
 
 
 def register_tools(mcp):
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (find_available_rooms, get_room_schedule):
         mcp.tool(name="stars_" + function.__name__, annotations=read)(function)

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 import json
 import re
 import sys
+from typing import Literal
 from uuid import uuid4
 
 import keyring
@@ -44,7 +45,7 @@ class Credentials:
 
 class CredentialStatus(TypedDict):
     credentials_configured: bool | None
-    credential_storage: str
+    credential_storage: Literal["os_keyring"]
     credential_error: str | None
 
 

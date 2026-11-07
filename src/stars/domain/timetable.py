@@ -33,7 +33,7 @@ def clash_status(first: Session | dict[str, Any], second: Session | dict[str, An
     first_end = _minutes(_value(first, "end_time"))
     second_start = _minutes(_value(second, "start_time"))
     second_end = _minutes(_value(second, "end_time"))
-    if None in (first_start, first_end, second_start, second_end):
+    if first_start is None or first_end is None or second_start is None or second_end is None:
         return None
     if not (first_start < second_end and second_start < first_end):
         return False

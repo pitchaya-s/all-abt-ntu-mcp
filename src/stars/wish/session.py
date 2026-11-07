@@ -281,8 +281,9 @@ class WishSessionManager:
             try:
                 for attempt in range(2):
                     html = self._fetch_authenticated(url, f"NTU {service.replace('_', ' ')}")
-                    result = read_stars_planner(self._page) if service == "stars_planner" else parse_degree_audit_page(html)
-                    if result is not None:
+                    candidate = read_stars_planner(self._page) if service == "stars_planner" else parse_degree_audit_page(html)
+                    if candidate is not None:
+                        result = candidate
                         break
                     self._authenticated = False
                     self._last_verified_at = None
@@ -338,7 +339,7 @@ class WishSessionManager:
         self, plan_number: int, courses: list[dict[str, str]], academic_year: int, semester: int
     ) -> SavePlanResult:
         with self._lock:
-            before = self._get_personal_data("stars_planner", PLANNER_URL, refresh=True)
+            before = cast(StarsPlannerResult, self._get_personal_data("stars_planner", PLANNER_URL, refresh=True))
             if (before["academic_year"], before["semester"]) != (academic_year, semester):
                 raise NTUPersonalDataError("The requested term differs from NTU's current Planner term; no plan was saved.")
             selected = next(plan for plan in before["saved_plans"] if plan["plan_number"] == plan_number)
@@ -354,7 +355,7 @@ class WishSessionManager:
                 self._cache.pop("stars_planner", None)
                 submit_stars_plan(self._page, fields, plan_number)
                 try:
-                    after = self._get_personal_data("stars_planner", PLANNER_URL, refresh=True)
+                    after = cast(StarsPlannerResult, self._get_personal_data("stars_planner", PLANNER_URL, refresh=True))
                 except Exception as error:
                     raise NTUPersonalDataError("The save was submitted but read-back verification failed. Refresh the Planner before retrying; no automatic save retry was attempted.") from error
                 if (after["academic_year"], after["semester"]) != (academic_year, semester):

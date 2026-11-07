@@ -1,6 +1,7 @@
 """Read public routes, stops and arrival data from NTU Omnibus."""
 
 import json
+import logging
 import re
 import time
 import weakref
@@ -118,6 +119,8 @@ class OmnibusClient:
                     "NTU Omnibus returned an invalid HTTP response; retrieval stopped."
                 ) from None
 
+            if status == 429:
+                logging.getLogger(__name__).warning("NTU Omnibus upstream returned HTTP 429")
             if status in _RETRYABLE and attempt + 1 < _MAX_ATTEMPTS:
                 delay = self._retry_delay(response_headers.get("retry-after"), attempt)
                 if delay <= _MAX_RETRY_DELAY_SECONDS:

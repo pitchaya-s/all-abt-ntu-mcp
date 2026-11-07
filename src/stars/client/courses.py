@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from threading import Lock
 import time
+from typing import Literal
 from urllib.parse import urlencode
 from urllib.request import Request
 
@@ -98,7 +99,7 @@ def get_course(course_code: str, academic_year: int, semester: int | str) -> Cou
         raise NTURequestError(f"Could not safely parse NTU's response for {code}: {error}") from error
 
     description: str | None = None
-    description_status = "unavailable"
+    description_status: Literal["available", "not_listed", "unavailable"] = "unavailable"
     description_source = COURSE_CONTENT_URL
     try:
         content_html, description_source = _fetch_course_content_html(year, semester_text, code)

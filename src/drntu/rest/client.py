@@ -1,6 +1,7 @@
 """Public DSpace and Dataverse reads using the shared bounded HTTP client."""
 
 import json
+from contextlib import contextmanager
 from urllib.parse import urlencode
 
 from shared.public_http import PublicHTTPClient, PublicRequestError
@@ -14,8 +15,10 @@ DATA = "https://researchdata.ntu.edu.sg"
 class RepositoryClient:
     def __init__(self, *, transport=None):
         self.http = PublicHTTPClient(
-            "DR-NTU", ["dr.ntu.edu.sg", "researchdata.ntu.edu.sg"],
-            {"application/json", "application/hal+json"}, transport=transport,
+            "DR-NTU",
+            ["dr.ntu.edu.sg", "researchdata.ntu.edu.sg"],
+            {"application/json", "application/hal+json"},
+            transport=transport,
         )
 
     def get(self, path, parameters=None, *, dataset=False, refresh=False):
@@ -34,7 +37,12 @@ class RepositoryClient:
                 raise RepositoryError(
                     f"{service} could not find this record, file bundle, or dataset version (HTTP 404)."
                 ) from None
-            if dataset and error.content_type and error.content_type not in {"application/json", "application/hal+json"}:
+            if (
+                dataset
+                and error.content_type
+                and error.content_type
+                not in {"application/json", "application/hal+json"}
+            ):
                 raise RepositoryError(
                     "DR-NTU (Data) returned a non-JSON page, possibly a CAPTCHA. Open the dataset site manually; automated retrieval cannot continue."
                 ) from None
@@ -46,9 +54,22 @@ class RepositoryClient:
         try:
             data = json.loads(body)
         except (ValueError, UnicodeError):
-            self.http.invalidate(url)
-            raise RepositoryError(f"{service} returned invalid JSON; no repository data was inferred.") from None
+            self.http.invalidate(url, retrieved_at=snapshot.get("retrieved_at"))
+            raise RepositoryError(
+                f"{service} returned invalid JSON; no repository data was inferred."
+            ) from None
         if not isinstance(data, dict):
-            self.http.invalidate(url)
+            self.http.invalidate(url, retrieved_at=snapshot.get("retrieved_at"))
             raise RepositoryError(f"{service} returned an unexpected response format.")
         return data, snapshot
+
+    @contextmanager
+    def validated(self, *args, **kwargs):
+        data, snapshot = self.get(*args, **kwargs)
+        try:
+            yield data, snapshot
+        except Exception:
+            url = snapshot.get("source_url")
+            if url:
+                self.http.invalidate(url, retrieved_at=snapshot.get("retrieved_at"))
+            raise

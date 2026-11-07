@@ -5,9 +5,12 @@ import tempfile
 from pathlib import Path
 
 from mcp import Client
+from mcp.types import ElicitResult
 
 from ntulearn import mcp_server
-from shared.server import mcp
+from shared.server import create_server
+
+mcp = create_server("workflows")
 
 
 def flatten(nodes):
@@ -17,8 +20,12 @@ def flatten(nodes):
 
 
 async def main():
+    async def approve_temp_download(context, params):
+        if "ntulearn_download_course" not in params.message:
+            return ElicitResult(action="decline")
+        return ElicitResult(action="accept", content={"confirm": True})
     try:
-        async with Client(mcp) as client:
+        async with Client(mcp, elicitation_callback=approve_temp_download) as client:
             async def call(name, **arguments):
                 result = await client.call_tool(name, arguments)
                 if result.is_error:

@@ -58,6 +58,7 @@ class UndergraduateExamParserTests(unittest.TestCase):
 
     def test_selects_latest_or_requested_published_term(self) -> None:
         html = (
+            '<input type name="unrelated">'
             '<input type="radio" name="p_plan_no" value="105">AY2025-26 SEM 2<br>'
             '<input type="radio" name="p_plan_no" value="115">AY2026-27 SEM 1<br>'
         )

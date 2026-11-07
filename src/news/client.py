@@ -18,12 +18,14 @@ class NewsClient:
         self.http = PublicHTTPClient("NTU news", ["www.ntu.edu.sg"], {"application/json", "text/html"})
 
     def list_categories(self, refresh=False):
-        body, snapshot = self.http.get(DIRECTORY, refresh)
-        return Categories(categories=form_options(body, "categories"), **snapshot)
+        with self.http.parsed_response(DIRECTORY, refresh) as (body, snapshot):
+            return Categories(categories=form_options(body, "categories"), **snapshot)
 
     def _page(self, query, category_id, sort, page, refresh):
         params = {"categories": category_id or "all", "page": page, "listingKeyword": query, "sort": sort}
-        return parser.search_results(*self.http.get(API + "?" + urlencode(params), refresh), page)
+        url = API + "?" + urlencode(params)
+        with self.http.parsed_response(url, refresh) as (body, snapshot):
+            return parser.search_results(body, snapshot, page)
 
     def search(self, query="", category_id=None, sort="latest", page=1, refresh=False):
         query = query_text(query)
@@ -43,4 +45,5 @@ class NewsClient:
             raise NewsError("Use an https://www.ntu.edu.sg/news/detail/ article URL returned by news_search.")
         if (type(offset) is not int or offset < 0 or type(max_chars) is not int or not 1 <= max_chars <= 50000):
             raise NewsError("Use a non-negative offset and max_chars 1–50000.")
-        return parser.article(*self.http.get(url, refresh), offset, max_chars)
+        with self.http.parsed_response(url, refresh) as (body, snapshot):
+            return parser.article(body, snapshot, offset, max_chars)

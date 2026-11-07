@@ -1,6 +1,8 @@
 # One Stop @ SAC
 
-59 tools for NTU's student ServiceNow portal, available in the **local stdio server only**. They use the shared OS keyring account, the `personal` extra and Playwright Chromium. Capabilities depend on the native controls and permissions offered to the signed-in student. MCP marks 32 tools as read-only (including five that only change local draft state) and 27 as writes, including local file downloads. Use writes only for the user's requested effect.
+The server defaults to public tools. Choose `--profile personal-read` for One Stop reads or `--profile workflows` to enable drafts, downloads and portal actions. Each portal action and download asks the MCP host for form confirmation and fails if the host cannot provide it. Configure the host to show these requests to you; an agent host may otherwise answer automatically. Draft preparation changes local browser state and is marked non-read-only but does not request a second confirmation.
+
+59 tools for NTU's student ServiceNow portal, available in the **local stdio workflow profile only**. They use the shared OS keyring account, the `personal` extra and Playwright Chromium. Capabilities depend on the native controls and permissions offered to the signed-in student. MCP marks 27 tools as read-only, five as local draft changes, and 27 as writes, including local file downloads. The personal-read profile excludes draft-dependent reads and all local or portal changes. Use writes only for the user's requested effect.
 
 ## Setup
 
@@ -61,7 +63,7 @@ Attachment targets are discriminated objects:
 {"kind":"article_comment","article_id":"<32 hex characters>","comment_id":"<visible comment ID>"}
 ```
 
-Article assets are read-only. Comment files are editable only when the native menu permits it. Uploads obey the smaller of the native limit and 20 MB; downloads are capped at 20 MB and refuse existing files or symbolic-link destinations. Tools never choose upload files automatically. Discarding a draft does not delete uploaded server files; remove editable temporary attachments explicitly when needed.
+Article assets are read-only. Comment files are editable only when the native menu permits it. Uploads, including profile pictures, are disabled unless `NTU_ONESTOP_UPLOAD_DIR` is set to an approved absolute directory at startup. Files must be regular files directly inside it; the approved directory and upload file cannot be symbolic links. Uploads obey the smaller of the native limit and 20 MB; downloads are capped at 20 MB and refuse existing files or symbolic-link destinations. Tools never choose upload files automatically. Discarding a draft does not delete uploaded server files; remove editable temporary attachments explicitly when needed.
 
 ## Knowledge
 
@@ -141,3 +143,5 @@ uv run --extra personal python -m tests.onestop.live_smoke
 ```
 
 Development checked the native hydrated widgets and controller/service contracts in an authenticated session. New dashboard/profile/cart/favourite/knowledge/payment reads and appointment availability/local selection were checked there. The expanded authenticated end-to-end stdio check was not completed. Real write actions were tested with simulated responses rather than changes to a real account. Source changes or different permissions may require updates.
+
+On 6 November 2026, a subsequent live check reached credential status but the One Stop sign-in reported that NTU rejected the login; authenticated portal reads were not verified in that check. A failed login is not retried automatically. Other NTU services accepting the same account do not establish that this student portal accepts it.

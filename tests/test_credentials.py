@@ -174,7 +174,8 @@ class SessionCredentialTests(unittest.IsolatedAsyncioTestCase):
 
 class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
     async def test_inaccessible_saved_credentials_are_reported_as_unknown_over_mcp(self):
-        from shared.server import mcp
+        from shared.server import create_server
+        mcp = create_server("workflows", check_dependencies=False)
         with stored_credentials("example001", "mcp-test-secret") as backend:
             with patch.object(backend, "get_password", side_effect=RuntimeError("secret-backend-detail")):
                 async with Client(mcp) as client:
@@ -187,7 +188,8 @@ class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
                         self.assertNotIn("secret-backend-detail", result.model_dump_json())
 
     async def test_status_and_credential_errors_never_expose_keyring_secrets(self):
-        from shared.server import mcp
+        from shared.server import create_server
+        mcp = create_server("workflows", check_dependencies=False)
         with stored_credentials("example001", "mcp-test-secret"):
             async with Client(mcp) as client:
                 for name in ("stars_auth_status", "ntulearn_auth_status", "onestop_auth_status"):

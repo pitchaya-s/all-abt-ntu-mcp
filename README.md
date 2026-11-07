@@ -12,7 +12,9 @@ uvx --from 'all-abt-ntu-mcp@latest' all-abt-ntu
 
 `@latest` refreshes uvx's cached package version on each launch rather than reusing an older cached release.
 
-The client examples below include the `personal` extra for authenticated tools.
+The local server defaults to public tools. Select `--profile personal-read` for authenticated reads, or `--profile workflows` for portal actions and local file downloads. Profiles are fixed until the server restarts. The client examples below install the `personal` extra and select personal reads; switch to `workflows` only when needed. Portal actions and downloads require MCP host confirmation; clients without form elicitation cannot execute them. Configure your client to show these requests to you: an agent host can choose to answer automatically.
+
+One Stop uploads are disabled until you set `NTU_ONESTOP_UPLOAD_DIR` to an absolute directory when starting the workflow server. Only regular files directly in that directory can be uploaded; the directory itself and the file cannot be symbolic links. Place only files you are willing to make available to the MCP client in that directory. On platforms that cannot enforce this boundary, use the portal's own file picker instead.
 
 ## Custom MCP for Cloud AI
 
@@ -36,11 +38,13 @@ With other methods, use HTTPS and authentication and review how your data is han
 
 ## Chromium
 
-For authenticated STARS, NTULearn SSO fallback, LibFacilities, One Stop and CareerAxis tools, install Chromium once. NTULearn can optionally reuse an existing browser session without launching Chromium; see its guide for setup:
+The personal profiles require Playwright and its matching Chromium build at startup. If you use the PyPI `uvx` setup, install Chromium from the same package environment as the server:
 
 ```sh
-uvx --from 'playwright>=1.50,<2' playwright install chromium
+uvx --from 'all-abt-ntu-mcp[personal]@latest' playwright install chromium
 ```
+
+For a repository checkout, run `uv sync --extra personal` followed by `uv run --no-sync playwright install chromium`. Playwright versions can require different Chromium builds, so repeat the matching command after upgrading. NTULearn can optionally reuse an existing browser session without launching Chromium, although the shared personal profiles still require Chromium for their other tools.
 
 ## Credentials
 
@@ -65,7 +69,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
-args = ["--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"]
+args = ["--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu", "--profile", "personal-read"]
 env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
@@ -79,7 +83,7 @@ Register for your user:
 
 ```sh
 claude mcp add --scope user all-abt-ntu-mcp \
-  -- uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu
+  -- uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu --profile personal-read
 claude mcp list
 ```
 
@@ -95,7 +99,7 @@ Add to `~/.config/opencode/opencode.json`:
   "mcp": {
     "all-abt-ntu-mcp": {
       "type": "local",
-      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"],
+      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu", "--profile", "personal-read"],
       "enabled": true,
       "timeout": 240000
     }
@@ -116,7 +120,7 @@ uv sync
 uv run all-abt-ntu
 ```
 
-For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu auth save` in your own terminal. Use `uv run all-abt-ntu auth status` or `auth delete` to inspect storage status or remove the account. These commands manage credentials; starting the server still uses `uv run all-abt-ntu`.
+For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu auth save` in your own terminal. Use `uv run all-abt-ntu auth status` or `auth delete` to inspect storage status or remove the account. Start authenticated reads with `uv run all-abt-ntu --profile personal-read`, or choose `--profile workflows` for writes and file downloads.
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
 
@@ -217,7 +221,7 @@ Public lookups work without credentials. Planner and Degree Audit use the shared
 | `stars_search_courses` | Find undergraduate courses by partial code or title keywords in a published term | No |
 | `stars_get_course_metadata` | Course name, AUs, prerequisites, description, and term metadata | No |
 | `stars_get_prerequisite_tree` | Explore a course's prerequisites and dependent courses with separate depth limits | No |
-| `stars_get_course_indexes` | All indexes with complete schedules, vacancies, and waitlist lengths | No |
+| `stars_get_course_indexes` | Paginated indexes with schedules, vacancies, and waitlist lengths | No |
 | `stars_get_index` | One index's complete schedule, vacancies, and waitlist length | No |
 | `stars_compare_indexes` | Shared sessions, index-specific sessions, and optional clash checks | No |
 | `stars_find_matching_indexes` | Filter by days, times, lesson types, teaching weeks, and supplied schedule clashes | No |
@@ -231,6 +235,8 @@ Public lookups work without credentials. Planner and Degree Audit use the shared
 | `stars_get_degree_audit` | Your AU requirements, results, and registered courses | Yes |
 
 Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `null`. Saving a plan replaces its entire course/index list. See the [STARS guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) for parameters, examples, and sources.
+
+`stars_get_course_indexes` returns 10 indexes by default. Follow `next_offset` to retrieve subsequent pages, or supply `limit` up to 50. Use `stars_get_index` for one index's full schedule.
 
 ### NTULearn
 

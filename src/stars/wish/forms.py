@@ -93,6 +93,7 @@ def _is_login_page(html: str) -> bool:
 
 def _allowed_form_url(url: str) -> bool:
     parsed = urlparse(url)
-    return parsed.scheme == "https" and bool(parsed.hostname) and (
-        parsed.hostname == "ntu.edu.sg" or parsed.hostname.endswith(".ntu.edu.sg")
+    host = parsed.hostname
+    return parsed.scheme == "https" and host is not None and (
+        host == "ntu.edu.sg" or host.endswith(".ntu.edu.sg")
     )

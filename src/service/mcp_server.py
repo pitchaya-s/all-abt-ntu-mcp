@@ -47,6 +47,6 @@ def list_filters(refresh: bool = False) -> Filters:
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=True)
+    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
     for function in (search, list_filters):
         mcp.tool(name="service_" + function.__name__, annotations=read)(function)

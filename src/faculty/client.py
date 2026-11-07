@@ -21,8 +21,8 @@ class FacultyClient:
         self.http = PublicHTTPClient("NTU faculty directory", ["www.ntu.edu.sg"], {"application/json", "text/html"})
 
     def _interests(self, refresh):
-        body, snapshot = self.http.get(DIRECTORY, refresh)
-        return parser.interest_options(body), snapshot
+        with self.http.parsed_response(DIRECTORY, refresh) as (body, snapshot):
+            return parser.interest_options(body), snapshot
 
     def list_interests(self, query="", limit=50, offset=0, refresh=False):
         query = query_text(query).casefold()
@@ -36,7 +36,8 @@ class FacultyClient:
 
     def _page(self, query, interest_id, page, refresh):
         url = API + "?" + urlencode({"interests": interest_id or "all", "page": page, "searchFaculty": query})
-        return parser.search_results(*self.http.get(url, refresh), page)
+        with self.http.parsed_response(url, refresh) as (body, snapshot):
+            return parser.search_results(body, snapshot, page)
 
     def search(self, query="", interest_id=None, page=1, refresh=False):
         query = query_text(query)
@@ -50,7 +51,14 @@ class FacultyClient:
             options, _ = self._interests(refresh)
             if interest_id not in {item.interest_id for item in options}:
                 raise FacultyError("Unknown interest_id; use faculty_list_interests to find current filter IDs.")
+        first = self._page(query, interest_id, 1, refresh)
+        if page == 1:
+            return first
+        if page > first.total_pages:
+            raise FacultyError(f"Page exceeds this search's {first.total_pages} pages; start at page 1 and follow next_page.")
         result = self._page(query, interest_id, page, refresh)
-        if page > 1 and page > result.total_pages:
-            raise FacultyError(f"Page exceeds this search's {result.total_pages} pages; start at page 1 and follow next_page.")
+        if (result.total_count, result.total_pages) != (first.total_count, first.total_pages):
+            self.http.invalidate(first.source_url, retrieved_at=first.retrieved_at)
+            self.http.invalidate(result.source_url, retrieved_at=result.retrieved_at)
+            raise FacultyError("NTU faculty results changed between pages; retry with refresh=true.")
         return result

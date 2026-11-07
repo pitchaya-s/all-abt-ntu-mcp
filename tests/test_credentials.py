@@ -54,7 +54,12 @@ class KeyringTests(unittest.TestCase):
             read_credentials().require_login()
 
     def test_invalid_inputs_and_corrupt_records_never_return_secrets(self):
-        for user, password in [("", "secret"), ("student@other.invalid", "secret"), ("user\nname", "secret"), ("student001", "")]:
+        for user, password in [
+            ("", "secret"),
+            ("student@other.invalid", "secret"),
+            ("user\nname", "secret"),
+            ("student001", ""),
+        ]:
             with self.assertRaises(CredentialError):
                 save_credentials(user, password)
         self.assertEqual(self.backend.entries, {})
@@ -67,7 +72,11 @@ class KeyringTests(unittest.TestCase):
         delete_credentials()  # Corrupt entries can still be removed.
 
     def test_locked_keyring_and_unconfirmed_changes_fail_without_secret_details(self):
-        with patch.object(self.backend, "get_password", side_effect=RuntimeError("secret-backend-detail")):
+        with patch.object(
+            self.backend,
+            "get_password",
+            side_effect=RuntimeError("secret-backend-detail"),
+        ):
             status = credential_status()
             self.assertIsNone(status["credentials_configured"])
             self.assertNotIn("secret-backend-detail", json.dumps(status))
@@ -84,7 +93,11 @@ class BackendSelectionTests(unittest.TestCase):
     def test_only_native_backend_selected_from_chain(self):
         native, unsafe = SecretService(), Mock()
         chain = ChainerBackend()
-        with patch.object(sys, "platform", "linux"), patch.object(type(chain), "backends", [unsafe, native]), patch("shared.credentials.keyring.get_keyring", return_value=chain):
+        with (
+            patch.object(sys, "platform", "linux"),
+            patch.object(type(chain), "backends", [unsafe, native]),
+            patch("shared.credentials.keyring.get_keyring", return_value=chain),
+        ):
             self.assertIs(_backend(), native)
             unsafe.get_password.assert_not_called()
 
@@ -93,7 +106,10 @@ class BackendSelectionTests(unittest.TestCase):
             with patch("shared.credentials.keyring.get_keyring", return_value=backend):
                 with self.assertRaisesRegex(CredentialError, "No plaintext fallback"):
                     _backend()
-        with patch("shared.credentials.keyring.get_keyring", side_effect=RuntimeError("secret-detail")):
+        with patch(
+            "shared.credentials.keyring.get_keyring",
+            side_effect=RuntimeError("secret-detail"),
+        ):
             with self.assertRaises(CredentialError) as error:
                 _backend()
             self.assertNotIn("secret-detail", str(error.exception))
@@ -106,21 +122,31 @@ class SessionCredentialTests(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, json={"id": "_900_1"}, request=request)
             return httpx.Response(200, json={"results": []}, request=request)
 
-        with patch.dict(os.environ, {
-            "NTULEARN_BROWSER_COOKIES": "false",
-            "NTULEARN_REQUEST_INTERVAL_SECONDS": "0",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "NTULEARN_BROWSER_COOKIES": "false",
+                "NTULEARN_REQUEST_INTERVAL_SECONDS": "0",
+            },
+        ):
             return Session(sso_login=sso_login, transport=httpx.MockTransport(handle))
 
-    async def test_deleting_credentials_blocks_both_services_even_with_cached_data(self):
+    async def test_deleting_credentials_blocks_both_services_even_with_cached_data(
+        self,
+    ):
         with stored_credentials():
             wish = WishSessionManager()
 
             async def login(credentials, *, headless):
-                return (SessionCookie(
-                    "BbRouter", "expires:1,id:synthetic", ".ntu.edu.sg",
-                    secure=True, domain_specified=True,
-                ),)
+                return (
+                    SessionCookie(
+                        "BbRouter",
+                        "expires:1,id:synthetic",
+                        ".ntu.edu.sg",
+                        secure=True,
+                        domain_specified=True,
+                    ),
+                )
 
             learn = self.make_learn_session(login)
             try:
@@ -128,7 +154,10 @@ class SessionCredentialTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(learn.cache._entries)
                 self.assertIsNotNone(learn.auth.state)
                 delete_credentials()
-                with self.assertRaises(NTUAuthError), patch.object(wish, "_browser_page") as wish_browser:
+                with (
+                    self.assertRaises(NTUAuthError),
+                    patch.object(wish, "_browser_page") as wish_browser,
+                ):
                     wish.get_degree_audit()
                 with self.assertRaises(LearnError):
                     await learn.get("/learn/api/public/v1/users/me/courses")
@@ -148,10 +177,15 @@ class SessionCredentialTests(unittest.IsolatedAsyncioTestCase):
 
             async def login(credentials, *, headless):
                 login_revisions.append(credentials.revision)
-                return (SessionCookie(
-                    "BbRouter", f"expires:1,id:{credentials.revision}", ".ntu.edu.sg",
-                    secure=True, domain_specified=True,
-                ),)
+                return (
+                    SessionCookie(
+                        "BbRouter",
+                        f"expires:1,id:{credentials.revision}",
+                        ".ntu.edu.sg",
+                        secure=True,
+                        domain_specified=True,
+                    ),
+                )
 
             learn = self.make_learn_session(login)
             try:
@@ -173,30 +207,52 @@ class SessionCredentialTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
-    async def test_inaccessible_saved_credentials_are_reported_as_unknown_over_mcp(self):
+    async def test_inaccessible_saved_credentials_are_reported_as_unknown_over_mcp(
+        self,
+    ):
         from shared.server import create_server
-        mcp = create_server("workflows", check_dependencies=False)
+
+        mcp = create_server("personal", check_dependencies=False)
         with stored_credentials("example001", "mcp-test-secret") as backend:
-            with patch.object(backend, "get_password", side_effect=RuntimeError("secret-backend-detail")):
+            with patch.object(
+                backend,
+                "get_password",
+                side_effect=RuntimeError("secret-backend-detail"),
+            ):
                 async with Client(mcp) as client:
-                    for name in ("stars_auth_status", "ntulearn_auth_status", "onestop_auth_status"):
+                    for name in (
+                        "stars_auth_status",
+                        "ntulearn_auth_status",
+                        "onestop_auth_status",
+                    ):
                         result = await client.call_tool(name, {})
                         self.assertFalse(result.is_error)
-                        self.assertIsNone(result.structured_content["credentials_configured"])
+                        self.assertIsNone(
+                            result.structured_content["credentials_configured"]
+                        )
                         self.assertFalse(result.structured_content["session_verified"])
                         self.assertTrue(result.structured_content["credential_error"])
-                        self.assertNotIn("secret-backend-detail", result.model_dump_json())
+                        self.assertNotIn(
+                            "secret-backend-detail", result.model_dump_json()
+                        )
 
     async def test_status_and_credential_errors_never_expose_keyring_secrets(self):
         from shared.server import create_server
-        mcp = create_server("workflows", check_dependencies=False)
+
+        mcp = create_server("personal", check_dependencies=False)
         with stored_credentials("example001", "mcp-test-secret"):
             async with Client(mcp) as client:
-                for name in ("stars_auth_status", "ntulearn_auth_status", "onestop_auth_status"):
+                for name in (
+                    "stars_auth_status",
+                    "ntulearn_auth_status",
+                    "onestop_auth_status",
+                ):
                     result = await client.call_tool(name, {})
                     self.assertFalse(result.is_error)
                     self.assertTrue(result.structured_content["credentials_configured"])
-                    self.assertEqual(result.structured_content["credential_storage"], "os_keyring")
+                    self.assertEqual(
+                        result.structured_content["credential_storage"], "os_keyring"
+                    )
                     self.assertNotIn("mcp-test-secret", result.model_dump_json())
                     self.assertNotIn("example001", result.model_dump_json())
                 delete_credentials()

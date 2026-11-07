@@ -1,8 +1,8 @@
 # One Stop @ SAC
 
-The server defaults to public tools. Choose `--profile personal-read` for One Stop reads or `--profile workflows` to enable drafts, downloads and portal actions. Each portal action and download asks the MCP host for form confirmation and fails if the host cannot provide it. Configure the host to show these requests to you; an agent host may otherwise answer automatically. Draft preparation changes local browser state and is marked non-read-only but does not request a second confirmation.
+The server defaults to public tools. Choose the personal profile and the One Stop family during setup. Drafts, downloads and portal actions are disabled by default; enable individual tools with the CLI when needed. Each portal action and download asks the MCP host for form confirmation and fails if the host cannot provide it. Configure the host to show these requests to you; an agent host may otherwise answer automatically. Draft preparation changes local browser state and is marked non-read-only but does not request a second confirmation.
 
-59 tools for NTU's student ServiceNow portal, available in the **local stdio workflow profile only**. They use the shared OS keyring account, the `personal` extra and Playwright Chromium. Capabilities depend on the native controls and permissions offered to the signed-in student. MCP marks 27 tools as read-only, five as local draft changes, and 27 as writes, including local file downloads. The personal-read profile excludes draft-dependent reads and all local or portal changes. Use writes only for the user's requested effect.
+59 tools for NTU's student ServiceNow portal, available through the **local stdio personal profile**. They use the shared OS keyring account, the `personal` extra and Playwright Chromium. Capabilities depend on the native controls and permissions offered to the signed-in student. MCP marks 27 tools as read-only, five as local draft changes, and 27 as writes, including local file downloads. Use writes only for the user's requested effect.
 
 ## Setup
 
@@ -63,7 +63,7 @@ Attachment targets are discriminated objects:
 {"kind":"article_comment","article_id":"<32 hex characters>","comment_id":"<visible comment ID>"}
 ```
 
-Article assets are read-only. Comment files are editable only when the native menu permits it. Uploads, including profile pictures, are disabled unless `NTU_ONESTOP_UPLOAD_DIR` is set to an approved absolute directory at startup. Files must be regular files directly inside it; the approved directory and upload file cannot be symbolic links. Uploads obey the smaller of the native limit and 20 MB; downloads are capped at 20 MB and refuse existing files or symbolic-link destinations. Tools never choose upload files automatically. Discarding a draft does not delete uploaded server files; remove editable temporary attachments explicitly when needed.
+Article assets are read-only. Comment files are editable only when the native menu permits it. Uploads, including profile pictures, use the dedicated `onestop-uploads` folder under the app configuration directory by default. Set `NTU_ONESTOP_UPLOAD_DIR` to an absolute directory to override it, or to an empty string to disable uploads. Files must be regular files directly inside the approved directory; the directory and upload file cannot be symbolic links. Uploads require host confirmation and obey the smaller of the native limit and 20 MB; downloads are capped at 20 MB and refuse existing files or symbolic-link destinations. Tools never choose upload files automatically. Discarding a draft does not delete uploaded server files; remove editable temporary attachments explicitly when needed.
 
 ## Knowledge
 

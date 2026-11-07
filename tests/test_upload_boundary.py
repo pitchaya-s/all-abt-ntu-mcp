@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from onestop.attachments import upload_file
+from onestop.attachments import upload_directory, upload_file
 from onestop.models import OneStopError
 
 
@@ -15,6 +15,34 @@ from onestop.models import OneStopError
     "Safe directory-relative open is not available",
 )
 class UploadBoundaryTests(unittest.TestCase):
+    def test_default_directory_is_dedicated_and_can_read_selected_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": root, "APPDATA": root}):
+                os.environ.pop("NTU_ONESTOP_UPLOAD_DIR", None)
+                directory = upload_directory()
+                self.assertEqual(
+                    directory, Path(root) / "all-abt-ntu" / "onestop-uploads"
+                )
+                self.assertTrue(directory.is_dir())
+                (directory / "file.txt").write_text("permitted")
+                self.assertEqual(
+                    upload_file(str(directory / "file.txt"))[2], b"permitted"
+                )
+                secret = directory.parent / "tools.json"
+                secret.write_text("not uploadable")
+                with self.assertRaisesRegex(OneStopError, "approved"):
+                    upload_file(str(secret))
+
+    def test_default_directory_refuses_symlink(self):
+        with tempfile.TemporaryDirectory() as root:
+            parent = Path(root) / "all-abt-ntu"
+            parent.mkdir()
+            (parent / "onestop-uploads").symlink_to(root, target_is_directory=True)
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": root, "APPDATA": root}):
+                os.environ.pop("NTU_ONESTOP_UPLOAD_DIR", None)
+                with self.assertRaisesRegex(OneStopError, "symbolic link"):
+                    upload_directory()
+
     def test_replaced_approved_directory_cannot_redirect_upload(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)

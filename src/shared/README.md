@@ -4,7 +4,7 @@ STARS, NTULearn, LibFacilities, One Stop, and CareerAxis use the same credential
 
 ## Hosted public server
 
-The Vercel entrypoint is the file-based function `api/index.py`. `vercel.json` selects the **Other** framework preset and rewrites requests to that function, which creates `shared.http`'s ASGI app. `shared.public_server` explicitly registers public tool modules. Local stdio defaults to the same public surface; `--profile personal-read` and `--profile workflows` opt into authenticated tools. The public import path does not load authenticated sessions, personal handlers, or NTULearn.
+The Vercel entrypoint is the file-based function `api/index.py`. `vercel.json` selects the **Other** framework preset and rewrites requests to that function, which creates `shared.http`'s ASGI app. `shared.public_server` explicitly registers public tool modules. Local stdio defaults to the same public surface; the `personal` profile opts into authenticated tools. The public import path does not load authenticated sessions, personal handlers, or NTULearn.
 
 The HTTP endpoint is `/mcp`, using stateless Streamable HTTP with JSON responses and a 1 MB request limit. Each request manages its own SDK lifecycle, so it works when the host omits ASGI lifespan events or changes event loops between requests. No server session identifier, sticky routing, database, or credentials are required. GET/DELETE on `/mcp` return 405 because there is no persistent event stream or session to delete. `/` and `/health` return public status information.
 

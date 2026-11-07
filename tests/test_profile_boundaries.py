@@ -17,7 +17,7 @@ from shared.server import create_server
 
 class ProfileBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_read_profiles_only_advertise_read_only_tools(self):
-        for profile in ("public", "personal-read"):
+        for profile in ("public",):
             async with Client(
                 create_server(profile, check_dependencies=False)
             ) as client:
@@ -43,7 +43,7 @@ class ProfileBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     self.assertNotIn(name, names)
 
     async def test_one_stop_submission_requires_host_confirmation(self):
-        server = create_server("workflows", check_dependencies=False)
+        server = create_server("personal", check_dependencies=False)
         args = {"draft_id": "a" * 16, "action": "submit"}
         result_value = action_result(
             "submit_request", "https://example.org", verified=True
@@ -83,7 +83,7 @@ class ProfileBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(args["draft_id"] in message for message in requests))
 
     async def test_confirmation_rejects_non_boolean_values(self):
-        server = create_server("workflows", check_dependencies=False)
+        server = create_server("personal", check_dependencies=False)
 
         async def malformed(context, request):
             return ElicitResult(action="accept", content={"confirm": "yes"})

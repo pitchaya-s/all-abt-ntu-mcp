@@ -1,6 +1,6 @@
 [project]
 name = "all-abt-ntu-mcp"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 description = "MCP server for NTU schedules, learning, career opportunities, maps, research, faculty, library, news, campus services, shuttle arrivals, and student administration"
 readme = "README.md"
 license = "MIT"
@@ -23,6 +23,7 @@ dependencies = [
     "keyring>=25.6,<27",
     "httpx>=0.27,<1",
     "tzdata>=2025.1",
+    "questionary>=2.1,<3",
 ]
 
 [project.optional-dependencies]
@@ -36,10 +37,10 @@ Documentation = "https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/README.
 Issues = "https://github.com/pitchaya-s/all-abt-ntu-mcp/issues"
 
 [project.scripts]
-all-abt-ntu = "shared.cli:main"
+all-abt-ntu = "cli.cli:main"
 
 [tool.uv.build-backend]
-module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "onestop", "omnibus", "careeraxis", "shared"]
+module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "onestop", "omnibus", "careeraxis", "shared", "cli"]
 source-exclude = [".env", ".env.*", "*.har", "cookies*.json", "storage_state*.json", "*.log"]
 
 [build-system]

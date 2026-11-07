@@ -13,19 +13,19 @@ const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
 const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio.js");
 const { ElicitRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
 const tests = dirname(fileURLToPath(import.meta.url));
-for (const profile of ["public", "personal-read"]) {
+for (const profile of ["public", "personal"]) {
   const profileCwd = await mkdtemp(join(tmpdir(), "ntu-profile-client-"));
   const profileClient = new Client({ name: "ntu-profile-test", version: "1.0" });
   try {
     await profileClient.connect(new StdioClientTransport({
       command: "python",
-      args: ["-c", `from shared.server import main; main('${profile}', check_dependencies=False)`],
+      args: ["-c", `from cli.tools.commands import effective_disabled; from shared.server import main; main('${profile}', check_dependencies=False, disabled_tools=effective_disabled({'tools': {'enabled': [], 'disabled': [], 'families': {'enabled': [], 'disabled': []}}}, '${profile}'))`],
       cwd: profileCwd,
       env: { PYTHONPATH: join(tests, "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
     }));
     const names = new Set((await profileClient.listTools()).tools.map(tool => tool.name));
     assert(names.has("stars_search_courses"));
-    assert.equal(names.has("ntulearn_list_courses"), profile === "personal-read");
+    assert.equal(names.has("ntulearn_list_courses"), profile === "personal");
     for (const name of ["stars_save_stars_plan", "ntulearn_download_file", "onestop_upload_attachment"]) {
       assert(!names.has(name), `${profile} must not expose ${name}`);
     }

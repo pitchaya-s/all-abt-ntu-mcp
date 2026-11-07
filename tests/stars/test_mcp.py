@@ -5,7 +5,7 @@ from mcp import Client
 
 from shared.server import create_server
 
-mcp = create_server("workflows", check_dependencies=False)
+mcp = create_server("personal", check_dependencies=False)
 from stars.client.teaching import TeachingSnapshot
 from stars.domain import Course
 
@@ -16,14 +16,24 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_discover_and_call_over_mcp_client(self) -> None:
         with (
             patch("stars.mcp_server.fetch_course", return_value=COURSE) as fetch,
-            patch("stars.mcp_server.fetch_course_vacancies", return_value={
-                "status": "term_mismatch", "academic_year": 2026, "semester": "2",
-                "retrieved_at": "2026-10-21T00:00:00+00:00", "indexes": {},
-            }),
+            patch(
+                "stars.mcp_server.fetch_course_vacancies",
+                return_value={
+                    "status": "term_mismatch",
+                    "academic_year": 2026,
+                    "semester": "2",
+                    "retrieved_at": "2026-10-21T00:00:00+00:00",
+                    "indexes": {},
+                },
+            ),
         ):
             async with Client(mcp) as client:
                 listing = await client.list_tools()
-                names = {tool.name for tool in listing.tools if tool.name.startswith("stars_")}
+                names = {
+                    tool.name
+                    for tool in listing.tools
+                    if tool.name.startswith("stars_")
+                }
                 self.assertEqual(
                     names,
                     {
@@ -46,14 +56,21 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 )
                 result = await client.call_tool(
                     "stars_get_index",
-                    {"course_code": "ZZ0001", "index": "00001", "academic_year": 2026, "semester": 1},
+                    {
+                        "course_code": "ZZ0001",
+                        "index": "00001",
+                        "academic_year": 2026,
+                        "semester": 1,
+                    },
                 )
                 self.assertFalse(result.is_error)
                 self.assertEqual(result.structured_content["course_code"], "ZZ0001")
                 self.assertEqual(result.structured_content["index"], "00001")
                 self.assertNotIn("course_name", result.structured_content)
                 self.assertEqual(len(result.structured_content["sessions"]), 4)
-                self.assertEqual(result.structured_content["vacancy_status"], "term_mismatch")
+                self.assertEqual(
+                    result.structured_content["vacancy_status"], "term_mismatch"
+                )
                 self.assertIsNone(result.structured_content["vacancies_available"])
 
                 metadata_result = await client.call_tool(
@@ -61,8 +78,14 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     {"course_code": "ZZ0001", "academic_year": 2026, "semester": 1},
                 )
                 self.assertFalse(metadata_result.is_error)
-                self.assertEqual(metadata_result.structured_content["course_description_status"], "available")
-                self.assertIn("example course one", metadata_result.structured_content["course_description"])
+                self.assertEqual(
+                    metadata_result.structured_content["course_description_status"],
+                    "available",
+                )
+                self.assertIn(
+                    "example course one",
+                    metadata_result.structured_content["course_description"],
+                )
                 self.assertNotIn("indexes", metadata_result.structured_content)
 
                 indexes_result = await client.call_tool(
@@ -73,15 +96,27 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(indexes_result.structured_content["index_count"], 36)
                 self.assertEqual(len(indexes_result.structured_content["indexes"]), 10)
                 self.assertEqual(indexes_result.structured_content["next_offset"], 10)
-                last = await client.call_tool("stars_get_course_indexes", {
-                    "course_code": "ZZ0001", "academic_year": 2026, "semester": 1, "offset": 30,
-                })
+                last = await client.call_tool(
+                    "stars_get_course_indexes",
+                    {
+                        "course_code": "ZZ0001",
+                        "academic_year": 2026,
+                        "semester": 1,
+                        "offset": 30,
+                    },
+                )
                 self.assertFalse(last.is_error)
                 self.assertEqual(len(last.structured_content["indexes"]), 6)
                 self.assertIsNone(last.structured_content["next_offset"])
-                self.assertEqual(indexes_result.structured_content["indexes"][0]["index"], "00001")
-                self.assertNotIn("course_description", indexes_result.structured_content)
-                self.assertIsNone(indexes_result.structured_content["indexes"][0]["waitlist_length"])
+                self.assertEqual(
+                    indexes_result.structured_content["indexes"][0]["index"], "00001"
+                )
+                self.assertNotIn(
+                    "course_description", indexes_result.structured_content
+                )
+                self.assertIsNone(
+                    indexes_result.structured_content["indexes"][0]["waitlist_length"]
+                )
 
                 with patch(
                     "stars.mcp_server.fetch_graduate_course_schedule",
@@ -91,9 +126,14 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "stars_get_graduate_course_schedule", {"course_code": "EE6102"}
                     )
                 self.assertFalse(graduate_result.is_error)
-                self.assertEqual(graduate_result.structured_content["academic_year"], 2026)
                 self.assertEqual(
-                    [group["class_group"] for group in graduate_result.structured_content["class_groups"]],
+                    graduate_result.structured_content["academic_year"], 2026
+                )
+                self.assertEqual(
+                    [
+                        group["class_group"]
+                        for group in graduate_result.structured_content["class_groups"]
+                    ],
                     ["A", "B"],
                 )
 
@@ -102,11 +142,16 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                     return_value=EXAM_COURSE,
                 ):
                     exam_result = await client.call_tool(
-                        "stars_get_undergraduate_exam_schedule", {"course_code": "ZZ0001"}
+                        "stars_get_undergraduate_exam_schedule",
+                        {"course_code": "ZZ0001"},
                     )
                 self.assertFalse(exam_result.is_error)
-                self.assertEqual(exam_result.structured_content["exams"][0]["date"], "2026-11-23")
-                self.assertEqual(exam_result.structured_content["exams"][0]["start_time"], "13:00")
+                self.assertEqual(
+                    exam_result.structured_content["exams"][0]["date"], "2026-11-23"
+                )
+                self.assertEqual(
+                    exam_result.structured_content["exams"][0]["start_time"], "13:00"
+                )
 
                 comparison = await client.call_tool(
                     "stars_compare_indexes",
@@ -116,13 +161,27 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         "academic_year": 2026,
                         "semester": 1,
                         "against_sessions": [
-                            {"day": "TUE", "start_time": "16:30", "end_time": "17:20", "teaching_weeks": [2]}
+                            {
+                                "day": "TUE",
+                                "start_time": "16:30",
+                                "end_time": "17:20",
+                                "teaching_weeks": [2],
+                            }
                         ],
                     },
                 )
                 self.assertFalse(comparison.is_error)
-                self.assertEqual(len(comparison.structured_content["common_sessions"]), 2)
-                self.assertGreater(len(comparison.structured_content["clash_check"]["clashes_by_index"]["00001"]), 0)
+                self.assertEqual(
+                    len(comparison.structured_content["common_sessions"]), 2
+                )
+                self.assertGreater(
+                    len(
+                        comparison.structured_content["clash_check"][
+                            "clashes_by_index"
+                        ]["00001"]
+                    ),
+                    0,
+                )
 
                 filtered = await client.call_tool(
                     "stars_find_matching_indexes",
@@ -188,7 +247,12 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                 fetch.reset_mock()
                 invalid = await client.call_tool(
                     "stars_compare_indexes",
-                    {"course_code": "ZZ0001", "indexes": ["00001"], "academic_year": 2026, "semester": 1},
+                    {
+                        "course_code": "ZZ0001",
+                        "indexes": ["00001"],
+                        "academic_year": 2026,
+                        "semester": 1,
+                    },
                 )
                 self.assertTrue(invalid.is_error)
                 fetch.assert_not_called()
@@ -230,8 +294,12 @@ class MCPClientTests(unittest.IsolatedAsyncioTestCase):
                         },
                     )
                     self.assertFalse(result.is_error)
-                    self.assertEqual(result.structured_content["course_code"], course_code)
-                    self.assertEqual(result.structured_content["root"]["course_code"], course_code)
+                    self.assertEqual(
+                        result.structured_content["course_code"], course_code
+                    )
+                    self.assertEqual(
+                        result.structured_content["root"]["course_code"], course_code
+                    )
 
 
 if __name__ == "__main__":

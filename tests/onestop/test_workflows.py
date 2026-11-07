@@ -33,8 +33,18 @@ class LocalSession:
         self._cache = {"old": "data"}
         self._drafts, self._checkouts = {}, {}
         self.before_write = Mock()
-        self.snapshot = PortalPage({"article": {"isValid": True, "knowledgeExists": True,
-                                  "article_sys_id": ITEM}}, datetime.now(timezone.utc), BASE + "/ntussp", "revision")
+        self.snapshot = PortalPage(
+            {
+                "article": {
+                    "isValid": True,
+                    "knowledgeExists": True,
+                    "article_sys_id": ITEM,
+                }
+            },
+            datetime.now(timezone.utc),
+            BASE + "/ntussp",
+            "revision",
+        )
 
     def workflow(self, fn, *args):
         return fn(self, "revision", *args)
@@ -64,7 +74,11 @@ class SubmissionTests(unittest.TestCase):
         with stored_credentials():
             s._run(s._credentials)
             s._verified = True
-            result = s.workflow(lambda session, revision: session.workflow(lambda same, rev: rev == revision))
+            result = s.workflow(
+                lambda session, revision: session.workflow(
+                    lambda same, rev: rev == revision
+                )
+            )
             self.assertTrue(result)
             s._drafts["old"] = object()
             s._checkouts["old"] = object()
@@ -75,18 +89,32 @@ class SubmissionTests(unittest.TestCase):
     def form(self):
         page = Mock(url=BASE + "/ntussp")
         s = LocalSession(page)
-        d = Draft("draft-token-with-entropy", ITEM, "revision", page, datetime.now(timezone.utc) + timedelta(minutes=15), time.monotonic() + 900)
+        d = Draft(
+            "draft-token-with-entropy",
+            ITEM,
+            "revision",
+            page,
+            datetime.now(timezone.utc) + timedelta(minutes=15),
+            time.monotonic() + 900,
+        )
         s._drafts[d.draft_id] = d
-        info = SimpleNamespace(available_actions=["submit"], ready=True, source_url=page.url)
+        info = SimpleNamespace(
+            available_actions=["submit"], ready=True, source_url=page.url
+        )
         return s, d, info
 
     def test_request_receipt_prevents_duplicate_submission_even_after_redirect(self):
         s, d, info = self.form()
         response = Mock(status=201)
-        response.body.return_value = b'{}'
+        response.body.return_value = b"{}"
         response.json.return_value = {"result": {"sys_id": RECORD, "number": "REQ123"}}
-        d.page.expect_response.return_value = nullcontext(SimpleNamespace(value=response))
-        with patch("onestop.forms.preview", return_value=info), patch("onestop.forms.evaluate") as native:
+        d.page.expect_response.return_value = nullcontext(
+            SimpleNamespace(value=response)
+        )
+        with (
+            patch("onestop.forms.preview", return_value=info),
+            patch("onestop.forms.evaluate") as native,
+        ):
             service = FormService(s)
             receipt = service.submit(d.draft_id)
             self.assertEqual(receipt.resource_id, RECORD)
@@ -95,15 +123,24 @@ class SubmissionTests(unittest.TestCase):
             self.assertEqual(service.submit(d.draft_id).outcome, "unchanged")
             native.assert_called_once()
 
-    def test_uncertain_request_blocks_retry_and_native_required_fields_block_write(self):
+    def test_uncertain_request_blocks_retry_and_native_required_fields_block_write(
+        self,
+    ):
         s, d, info = self.form()
         info.ready = False
         with patch("onestop.forms.preview", return_value=info):
-            self.assertEqual(FormService(s).submit(d.draft_id).outcome, "requires_user_action")
+            self.assertEqual(
+                FormService(s).submit(d.draft_id).outcome, "requires_user_action"
+            )
             s.before_write.assert_not_called()
         info.ready = True
-        d.page.expect_response.return_value = nullcontext(SimpleNamespace(value=Mock(status=500)))
-        with patch("onestop.forms.preview", return_value=info), patch("onestop.forms.evaluate") as native:
+        d.page.expect_response.return_value = nullcontext(
+            SimpleNamespace(value=Mock(status=500))
+        )
+        with (
+            patch("onestop.forms.preview", return_value=info),
+            patch("onestop.forms.evaluate") as native,
+        ):
             self.assertEqual(FormService(s).submit(d.draft_id).outcome, "uncertain")
             with self.assertRaisesRegex(OneStopError, "uncertain"):
                 FormService(s).submit(d.draft_id)
@@ -120,11 +157,14 @@ class SubmissionTests(unittest.TestCase):
         self.assertFalse(s._drafts)
 
 
-@unittest.skipUnless(find_spec("playwright"), "Optional personal extra is not installed")
+@unittest.skipUnless(
+    find_spec("playwright"), "Optional personal extra is not installed"
+)
 class NativeWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from playwright.sync_api import sync_playwright
+
         cls.pw = sync_playwright().start()
         try:
             cls.browser = cls.pw.chromium.launch(headless=True)
@@ -139,7 +179,12 @@ class NativeWorkflowTests(unittest.TestCase):
 
     def setUp(self):
         self.context = self.browser.new_context()
-        self.context.route("**/*", lambda route: route.fulfill(status=200, body="<body></body>", content_type="text/html"))
+        self.context.route(
+            "**/*",
+            lambda route: route.fulfill(
+                status=200, body="<body></body>", content_type="text/html"
+            ),
+        )
         self.page = self.context.new_page()
         self.page.goto(BASE + "/ntussp")
         self.session = LocalSession(self.page)
@@ -179,15 +224,26 @@ class NativeWorkflowTests(unittest.TestCase):
         k = self.knowledge()
         self.assertEqual(k.list_comments(ITEM).comments[0].text, "Visible text")
         k.add_comment(ITEM, "<script>hello</script>\nnext", COMMENT)
-        self.assertEqual(self.calls()[-1], {"action": "reply_comment", "article_id": ITEM,
-                         "parent_id": COMMENT, "comment_text": "&lt;script&gt;hello&lt;/script&gt;<br>next"})
+        self.assertEqual(
+            self.calls()[-1],
+            {
+                "action": "reply_comment",
+                "article_id": ITEM,
+                "parent_id": COMMENT,
+                "comment_text": "&lt;script&gt;hello&lt;/script&gt;<br>next",
+            },
+        )
         k.set_comment_like(ITEM, COMMENT, True)
         self.assertEqual(self.calls()[-1]["action"], "like_comment")
-        self.page.evaluate("widgets.find(s=>s.widget.id==='knowledge-comments').c.comments[0].is_liked=true")
+        self.page.evaluate(
+            "widgets.find(s=>s.widget.id==='knowledge-comments').c.comments[0].is_liked=true"
+        )
         count = len(self.calls())
         self.assertEqual(k.set_comment_like(ITEM, COMMENT, True).outcome, "unchanged")
         self.assertEqual(count, len(self.calls()))
-        self.page.evaluate("widgets.find(s=>s.widget.id==='knowledge-comments').c.getMenuItems=()=>false")
+        self.page.evaluate(
+            "widgets.find(s=>s.widget.id==='knowledge-comments').c.getMenuItems=()=>false"
+        )
         with self.assertRaisesRegex(OneStopError, "does not allow"):
             k.delete_comment(ITEM, COMMENT)
         with self.assertRaisesRegex(OneStopError, "not visible"):
@@ -197,7 +253,10 @@ class NativeWorkflowTests(unittest.TestCase):
     def test_article_feedback_native_actions_and_required_negative_reason(self):
         k = self.knowledge()
         k.rate(ITEM, 5)
-        self.assertEqual(self.calls()[-1], {"action": "submit_rating", "article_id": ITEM, "rating": 5})
+        self.assertEqual(
+            self.calls()[-1],
+            {"action": "submit_rating", "article_id": ITEM, "rating": 5},
+        )
         with self.assertRaisesRegex(OneStopError, "reason_id"):
             k.rate(ITEM, 1)
         k.rate(ITEM, 1, "inaccurate", "Correction")
@@ -217,7 +276,9 @@ class NativeWorkflowTests(unittest.TestCase):
 
     def test_inherited_subscription_requires_broader_explicit_scope(self):
         k = self.knowledge()
-        self.page.evaluate("Object.assign(widgets[0].data,{isSubscribed:true,isArticleSubscribedAtKB:true,kbSysId:'b'.repeat(32),kbName:'Test KB'})")
+        self.page.evaluate(
+            "Object.assign(widgets[0].data,{isSubscribed:true,isArticleSubscribedAtKB:true,kbSysId:'b'.repeat(32),kbName:'Test KB'})"
+        )
         with self.assertRaisesRegex(OneStopError, "whole knowledge base"):
             k.set_subscription(ITEM, False)
         self.assertFalse(self.calls())
@@ -239,14 +300,23 @@ class NativeWorkflowTests(unittest.TestCase):
           const e=document.createElement('div');e.setAttribute('form-model','data.sc_cat_item');e.setAttribute('mandatory','c.mandatory');
           e.native={formModel:f.data.sc_cat_item,getGlideForm:()=>g};document.body.appendChild(e);
         }""")
-        d = Draft("synthetic-draft-token", ITEM, "revision", self.page, datetime.now(timezone.utc) + timedelta(minutes=15), time.monotonic() + 900)
+        d = Draft(
+            "synthetic-draft-token",
+            ITEM,
+            "revision",
+            self.page,
+            datetime.now(timezone.utc) + timedelta(minutes=15),
+            time.monotonic() + 900,
+        )
         info = preview(d)
         self.assertFalse(info.ready)
         self.assertNotIn("private-default", info.model_dump_json())
         self.assertNotIn("secret", [f.name for f in info.fields])
         info = apply_values(d, {"detail": "answer", "kind": "new"})
         self.assertTrue(info.ready)
-        self.assertEqual(next(f.value for f in info.fields if f.name == "detail"), "answer")
+        self.assertEqual(
+            next(f.value for f in info.fields if f.name == "detail"), "answer"
+        )
         for field in ("locked", "secret", "unknown"):
             with self.assertRaises(OneStopError):
                 apply_values(d, {field: "forbidden"})
@@ -274,30 +344,40 @@ class NativeWorkflowTests(unittest.TestCase):
         checkout = cart.prepare_checkout()
         result = cart.submit_checkout(checkout.checkout_id)
         self.assertEqual(result.resource_id, COMMENT)
-        self.assertEqual(cart.submit_checkout(checkout.checkout_id).outcome, "unchanged")
+        self.assertEqual(
+            cart.submit_checkout(checkout.checkout_id).outcome, "unchanged"
+        )
         self.assertEqual(sum(c.get("action") == "checkout" for c in self.calls()), 1)
 
     def test_checkout_failure_blocks_retry(self):
         cart = self.cart()
         checkout = cart.prepare_checkout()
-        self.page.evaluate("() => {widgets[0].server.update=async()=>{calls.push({action:'checkout'});throw new Error('private-detail')};}")
+        self.page.evaluate(
+            "() => {widgets[0].server.update=async()=>{calls.push({action:'checkout'});throw new Error('private-detail')};}"
+        )
         with self.assertRaisesRegex(OneStopError, "may have completed"):
             cart.submit_checkout(checkout.checkout_id)
         with self.assertRaisesRegex(OneStopError, "uncertain"):
             cart.submit_checkout(checkout.checkout_id)
         self.assertEqual(len(self.calls()), 1)
 
-    def test_post_write_refresh_failure_reports_uncertain_instead_of_retryable_read_error(self):
+    def test_post_write_refresh_failure_reports_uncertain_instead_of_retryable_read_error(
+        self,
+    ):
         cart = self.cart()
         current = cart.get()
-        with patch.object(cart, "_get", side_effect=[current, OneStopError("retry later")]):
+        with patch.object(
+            cart, "_get", side_effect=[current, OneStopError("retry later")]
+        ):
             result = cart.update("set_quantity", RECORD, 2)
         self.assertEqual(result.outcome, "uncertain")
         self.assertIn("before repeating", result.message)
         self.assertEqual(len(self.calls()), 1)
 
     def test_favourite_pin_limit_and_unpin_before_delete(self):
-        self.page.evaluate("install('sc-favourite-list',{pinItemCount:4,cartItems:[{sys_id:'b'.repeat(32),item_id:'a'.repeat(32),name:'Test',pin_to_home:0}]})")
+        self.page.evaluate(
+            "install('sc-favourite-list',{pinItemCount:4,cartItems:[{sys_id:'b'.repeat(32),item_id:'a'.repeat(32),name:'Test',pin_to_home:0}]})"
+        )
         f = FavouriteService(self.session)
         with self.assertRaisesRegex(OneStopError, "four home pins"):
             f.update("pin", RECORD)
@@ -315,12 +395,20 @@ class NativeWorkflowTests(unittest.TestCase):
           install('reopen-incident',{});
         }""")
         service = TicketService(self.session, Mock())
-        context = TicketContext(self.session.snapshot, RECORD, "incident", {"actions": ["reopen"], "can_reply": False, "can_upload": False})
+        context = TicketContext(
+            self.session.snapshot,
+            RECORD,
+            "incident",
+            {"actions": ["reopen"], "can_reply": False, "can_upload": False},
+        )
         with patch.object(service, "context", return_value=context):
             activity = service.activity(RECORD)
             self.assertEqual(len(activity.entries), 1)
             self.assertNotIn("private", activity.model_dump_json())
-            for fn in (lambda: service.reply(RECORD, "Reply"), lambda: service.take_action(RECORD, "close")):
+            for fn in (
+                lambda: service.reply(RECORD, "Reply"),
+                lambda: service.take_action(RECORD, "close"),
+            ):
                 with self.assertRaises(OneStopError):
                     fn()
             self.assertFalse(self.calls())
@@ -337,9 +425,19 @@ class NativeWorkflowTests(unittest.TestCase):
         with patch.object(service, "_get_profile", return_value=info):
             self.assertEqual(service.set_notifications(False).outcome, "unchanged")
             service.set_notifications(True)
-        self.assertEqual(self.calls(), [{"url": "/api/now/v1/notification/preference/all", "payload": {"enable_notifications": True}}])
+        self.assertEqual(
+            self.calls(),
+            [
+                {
+                    "url": "/api/now/v1/notification/preference/all",
+                    "payload": {"enable_notifications": True},
+                }
+            ],
+        )
 
-    def test_appointment_slots_are_bound_to_latest_lookup_and_selection_only_fills_form(self):
+    def test_appointment_slots_are_bound_to_latest_lookup_and_selection_only_fills_form(
+        self,
+    ):
         self.page.evaluate("""() => {
           const item=install('ntu-widget-sc-cat-item-v2',{sc_cat_item:{sys_id:'a'.repeat(32),name:'Book',can_view:true,_fields:{}},sys_properties:{}},
             {allowOrder:()=>true,showOrderNowButton:()=>true,showAddCartBtn:()=>false,showAddToWishlist:()=>false,showAttachments:()=>false});
@@ -356,7 +454,14 @@ class NativeWorkflowTests(unittest.TestCase):
           services['$rootScope']={$broadcast:(name,payload)=>{window.selected=true;calls.push({action:name,payload});}};
           window.moment={tz:()=>({toISOString:()=> '2030-01-02T00:00:00+08:00',clone:()=>({endOf:()=>({toISOString:()=> '2030-01-02T23:59:59+08:00'})})})};
         }""")
-        d = Draft("appointment-draft-token", ITEM, "revision", self.page, datetime.now(timezone.utc) + timedelta(minutes=15), time.monotonic() + 900)
+        d = Draft(
+            "appointment-draft-token",
+            ITEM,
+            "revision",
+            self.page,
+            datetime.now(timezone.utc) + timedelta(minutes=15),
+            time.monotonic() + 900,
+        )
         self.session._drafts[d.draft_id] = d
         forms = FormService(self.session)
         service = AppointmentService(self.session, forms)
@@ -391,15 +496,28 @@ class NativeWorkflowTests(unittest.TestCase):
 
     def test_profile_edit_uses_own_native_editor_and_enabled_preference_key(self):
         service = self.profile()
-        self.context.route("**/api/now/v2/table/**", lambda r: r.fulfill(json={"result": {"company": {"value": "Updated", "display_value": "Updated"}}}))
+        self.context.route(
+            "**/api/now/v2/table/**",
+            lambda r: r.fulfill(
+                json={
+                    "result": {
+                        "company": {"value": "Updated", "display_value": "Updated"}
+                    }
+                }
+            ),
+        )
         with self.assertRaisesRegex(OneStopError, "not editable"):
             service.update_profile("password", "blocked")
         self.assertTrue(service.update_profile("company", "Updated").verified)
-        self.page.evaluate("document.querySelector('[field-model]').native.tableId='d'.repeat(32)")
+        self.page.evaluate(
+            "document.querySelector('[field-model]').native.tableId='d'.repeat(32)"
+        )
         with self.assertRaisesRegex(OneStopError, "verified as yours"):
             service.update_profile("company", "Wrong user")
         self.assertTrue(service.set_preference("accessibility", "true").verified)
-        self.assertEqual(self.calls()[-1], {"key": "glide.ui.accessibility", "value": True})
+        self.assertEqual(
+            self.calls()[-1], {"key": "glide.ui.accessibility", "value": True}
+        )
         with self.assertRaisesRegex(OneStopError, "does not offer"):
             service.set_preference("timezone", "UTC")
 
@@ -431,7 +549,14 @@ class NativeWorkflowTests(unittest.TestCase):
           window.jQuery=e=>({data:()=>({opts:{query:({term,page,callback})=>{calls.push({term,page});callback({results:[{sys_id:'b'.repeat(32),text:'<b>Reason</b>'}],more:false});},
             id:r=>r.sys_id,formatSelection:r=>r.text}})});
         }""")
-        d = Draft("reference-draft-token", ITEM, "revision", self.page, datetime.now(timezone.utc) + timedelta(minutes=15), time.monotonic() + 900)
+        d = Draft(
+            "reference-draft-token",
+            ITEM,
+            "revision",
+            self.page,
+            datetime.now(timezone.utc) + timedelta(minutes=15),
+            time.monotonic() + 900,
+        )
         self.session._drafts[d.draft_id] = d
         service = FormService(self.session)
         found = service.search_references(d.draft_id, "reason", "*Help")
@@ -448,10 +573,15 @@ class AttachmentTests(unittest.TestCase):
         self.session = LocalSession(Mock())
         self.service = AttachmentService(self.session, Mock(), Mock())
         self.file = {"sys_id": RECORD, "file_name": "test.txt"}
-        self.context = FileContext(self.session._page, BASE, "sc_req_item", ITEM, [self.file], True, True, 1000)
+        self.context = FileContext(
+            self.session._page, BASE, "sc_req_item", ITEM, [self.file], True, True, 1000
+        )
 
     def test_upload_size_and_absolute_path_are_checked_before_http(self):
-        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}),
+        ):
             f = Path(directory) / "example.txt"
             f.write_bytes(b"content")
             with self.assertRaisesRegex(OneStopError, "size limit"):
@@ -462,19 +592,28 @@ class AttachmentTests(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "Named pipes are not supported")
     def test_upload_named_pipe_is_refused_without_waiting_for_a_writer(self):
-        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}),
+        ):
             path = Path(directory) / "pipe"
             os.mkfifo(path)
             with self.assertRaisesRegex(OneStopError, "not a regular file"):
                 upload_file(str(path))
 
     def test_upload_requires_approved_directory_and_rejects_symlinks(self):
-        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            tempfile.TemporaryDirectory() as outside,
+        ):
             secret = Path(outside) / "secret.txt"
             secret.write_text("private")
             link = Path(directory) / "link.txt"
             link.symlink_to(secret)
-            with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(OneStopError, "disabled"):
+            with (
+                patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": ""}),
+                self.assertRaisesRegex(OneStopError, "disabled"),
+            ):
                 upload_file(str(secret))
             with patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": directory}):
                 with self.assertRaisesRegex(OneStopError, "approved"):
@@ -483,8 +622,14 @@ class AttachmentTests(unittest.TestCase):
                     upload_file(str(link))
 
     def test_delete_rename_require_target_membership_and_edit_permission(self):
-        with patch.object(self.service, "context", return_value=self.context), patch("onestop.attachments.evaluate") as native:
-            for fn in (lambda: self.service.delete({}, COMMENT), lambda: self.service.rename({}, COMMENT, "new.txt")):
+        with (
+            patch.object(self.service, "context", return_value=self.context),
+            patch("onestop.attachments.evaluate") as native,
+        ):
+            for fn in (
+                lambda: self.service.delete({}, COMMENT),
+                lambda: self.service.rename({}, COMMENT, "new.txt"),
+            ):
                 with self.assertRaisesRegex(OneStopError, "verified resource"):
                     fn()
             native.assert_not_called()
@@ -493,22 +638,34 @@ class AttachmentTests(unittest.TestCase):
                 self.service.delete({}, RECORD)
             self.context.can_delete = True
             self.service.rename({}, RECORD, "renamed.txt")
-            self.assertEqual(native.call_args.args[2], {"id": RECORD, "name": "renamed.txt"})
+            self.assertEqual(
+                native.call_args.args[2], {"id": RECORD, "name": "renamed.txt"}
+            )
         for name in ("../file", "file\tname", "file\x7f"):
             with self.assertRaises(OneStopError):
                 self.service.rename({}, RECORD, name)
 
     def test_download_new_file_digest_and_no_overwrite_or_unlisted_id(self):
-        response = Mock(status=200, headers={"content-type": "application/octet-stream"})
+        response = Mock(
+            status=200, headers={"content-type": "application/octet-stream"}
+        )
         response.body.return_value = b"hello"
-        self.session._context = SimpleNamespace(request=SimpleNamespace(get=Mock(return_value=response)))
-        with tempfile.TemporaryDirectory() as directory, patch.object(self.service, "context", return_value=self.context):
+        self.session._context = SimpleNamespace(
+            request=SimpleNamespace(get=Mock(return_value=response))
+        )
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(self.service, "context", return_value=self.context),
+        ):
             destination = str(Path(directory) / "new.txt")
             with self.assertRaisesRegex(OneStopError, "not listed"):
                 self.service.download({}, COMMENT, destination)
             result = self.service.download({}, RECORD, destination)
             self.assertEqual(result.bytes_written, 5)
-            self.assertEqual(result.sha256, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
+            self.assertEqual(
+                result.sha256,
+                "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+            )
             with self.assertRaisesRegex(OneStopError, "must be new"):
                 self.service.download({}, RECORD, destination)
             self.assertEqual(Path(destination).read_bytes(), b"hello")

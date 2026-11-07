@@ -10,6 +10,7 @@ import stat
 from urllib.parse import urlencode
 
 from pydantic import TypeAdapter
+from shared.paths import config_dir
 
 from .browser import action_result, commit, evaluate
 from .forms import draft_for
@@ -42,22 +43,43 @@ class FileContext:
     draft: bool = False
 
 
+def upload_directory() -> Path:
+    configured = os.environ.get("NTU_ONESTOP_UPLOAD_DIR")
+    directory = (
+        config_dir() / "onestop-uploads"
+        if configured is None
+        else Path(configured).expanduser()
+    )
+    if configured == "" or not directory.is_absolute():
+        raise OneStopError(
+            "Uploads are disabled. Set NTU_ONESTOP_UPLOAD_DIR to an approved absolute directory."
+        )
+    if configured is None:
+        try:
+            directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if directory.is_symlink():
+                raise OneStopError(
+                    "The approved upload directory cannot be a symbolic link."
+                )
+        except OSError:
+            raise OneStopError(
+                "The default upload directory could not be created."
+            ) from None
+    return directory
+
+
 def upload_file(path, maximum=MAX_BYTES):
     if not isinstance(path, str) or not Path(path).expanduser().is_absolute():
         raise OneStopError("Choose an explicit absolute path to the file to upload.")
     p = Path(path).expanduser()
-    configured = os.environ.get("NTU_ONESTOP_UPLOAD_DIR", "")
-    if not configured or not Path(configured).expanduser().is_absolute():
-        raise OneStopError(
-            "Uploads are disabled. Set NTU_ONESTOP_UPLOAD_DIR to an approved absolute directory before starting the server."
-        )
+    configured = upload_directory()
     if not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd:
         raise OneStopError(
             "Safe upload directory enforcement is unavailable on this platform; upload through the portal instead."
         )
     try:
         flags = os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_DIRECTORY", 0)
-        dirfd = os.open(Path(configured).expanduser(), flags)
+        dirfd = os.open(configured, flags)
         try:
             parentfd = os.open(p.parent, flags)
             try:

@@ -32,7 +32,7 @@ Reads and status checks revalidate the shared keyring entry. Credential replacem
 
 ## Validation
 
-Synthetic tests exercise all nine MCP tools and schemas, pagination across native page boundaries, append/replace views, unavailable filters, disabled paging controls, safe detail routes, keyring rotation/revocation, login-host checks and sanitized failures. Chromium fixtures intercept all requests; no real applications, saves or bookings occur. On 6 November 2026, a bounded authenticated opportunity search succeeded through the personal-read profile. Other CareerAxis operations were not reverified during this check.
+Synthetic tests exercise all nine MCP tools and schemas, pagination across native page boundaries, append/replace views, unavailable filters, disabled paging controls, safe detail routes, keyring rotation/revocation, login-host checks and sanitized failures. Chromium fixtures intercept all requests; no real applications, saves or bookings occur. On 6 November 2026, a bounded authenticated opportunity search succeeded. Other CareerAxis operations were not reverified during this check.
 
 ```sh
 uv run python -m unittest discover -s tests/careeraxis -t . -v

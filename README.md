@@ -4,19 +4,45 @@ An MCP server for NTU Singapore schedules, learning materials, campus navigation
 
 [STARS](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/stars/README.md) · [NTULearn](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/ntulearn/README.md) · [CareerAxis](src/careeraxis/README.md) · [MazeMap](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/mazemap/README.md) · [DR-NTU](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/drntu/README.md) · [Library](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/library/README.md) · [Faculty](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/faculty/README.md) · [News](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/news/README.md) · [Campus services](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/service/README.md) · [NTU Omnibus](https://github.com/pitchaya-s/all-abt-ntu-mcp/blob/main/src/omnibus/README.md) · [One Stop @ SAC](src/onestop/README.md).
 
-For local stdio usage, install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer. Run the public tools from PyPI:
+## Quick start
+
+Install [uv](https://docs.astral.sh/uv/) and Python 3.10 or newer, then run setup in your terminal:
 
 ```sh
-uvx --from 'all-abt-ntu-mcp@latest' all-abt-ntu
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu setup
 ```
 
-`@latest` refreshes uvx's cached package version on each launch rather than reusing an older cached release.
+Choose a profile and select the tool families you want, such as STARS or NTULearn. Setup saves your choices on this machine. Follow the prompts for any additional setup, then connect your client using one of the examples below.
 
-The local server defaults to public tools. Select `--profile personal-read` for authenticated reads, or `--profile workflows` for portal actions and local file downloads. Profiles are fixed until the server restarts. The client examples below install the `personal` extra and select personal reads; switch to `workflows` only when needed. Portal actions and downloads require MCP host confirmation; clients without form elicitation cannot execute them. Configure your client to show these requests to you: an agent host can choose to answer automatically.
+### Choose tools
 
-One Stop uploads are disabled until you set `NTU_ONESTOP_UPLOAD_DIR` to an absolute directory when starting the workflow server. Only regular files directly in that directory can be uploaded; the directory itself and the file cannot be symbolic links. Place only files you are willing to make available to the MCP client in that directory. On platforms that cannot enforce this boundary, use the portal's own file picker instead.
+To list or change families and individual tools later, run:
+
+```sh
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu tools list
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu tools list --all
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu tools disable ntulearn
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu tools enable ntulearn
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu tools disable mazemap_get_directions
+uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu tools enable mazemap_get_directions
+```
+
+Run `setup` again to change your profile or family selection. `tools list` shows families; `--all` shows individual tools. `[~]` means a family is partially enabled. Commands manage tools available in the active profile. Disabling a family also disables tools added to it later. Explicitly enabling a family enables all its tools in the active profile, including actions and downloads; individual tools can then be disabled. Restart the MCP server after changes. Settings do not affect the hosted server.
+
+Without saved settings, the server uses the public profile. See [Configuration file](#configuration-file) for the file format and service settings.
+
+### Profiles
+
+Profiles limit which tools a local server can offer:
+
+- **public:** public information only.
+- **personal:** public and authenticated tools, with action and download tools unchecked until you enable them. Newly added action tools also start unchecked.
+
+Setup saves your choice, so you do not need to pass `--profile` normally. The optional flag overrides the saved profile for a particular invocation; disabled tools remain disabled. Actions and downloads require MCP host confirmation; configure your client to show these requests, since a host may answer automatically.
 
 ## Custom MCP for Cloud AI
+
+Use this server only if you trust the author of this repository.
 
 In a cloud AI client that supports custom remote MCP servers:
 
@@ -30,25 +56,15 @@ In a cloud AI client that supports custom remote MCP servers:
 3. Select **No authentication** and, if asked, **Streamable HTTP** as the transport.
 4. Save and enable the server.
 
-The hosted server provides **public tools only**. No NTU credentials are needed. Personal tools, such as NTULearn and saving STARS plans, require the local setup below.
+The hosted server provides **public tools only**. No NTU credentials are needed. Personal tools, such as NTULearn and saving STARS plans, require the [local setup](#quick-start).
 
 For self-hosting, start with [Manual install](#manual-install). To connect a private server to ChatGPT or other supported OpenAI products, we recommend [OpenAI's `tunnel-client` (Secure MCP Tunnel)](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels). It supports the local stdio server without exposing a public HTTP endpoint.
 
 With other methods, use HTTPS and authentication and review how your data is handled. **Do not expose personal tools through an unauthenticated public endpoint**: they can access private NTU data and act through your saved account.
 
-## Chromium
-
-The personal profiles require Playwright and its matching Chromium build at startup. If you use the PyPI `uvx` setup, install Chromium from the same package environment as the server:
-
-```sh
-uvx --from 'all-abt-ntu-mcp[personal]@latest' playwright install chromium
-```
-
-For a repository checkout, run `uv sync --extra personal` followed by `uv run --no-sync playwright install chromium`. Playwright versions can require different Chromium builds, so repeat the matching command after upgrading. NTULearn can optionally reuse an existing browser session without launching Chromium, although the shared personal profiles still require Chromium for their other tools.
-
 ## Credentials
 
-Public tools need no credentials. For personal tools, opt into native OS keyring storage by running this **yourself in a local terminal**:
+Public tools need no credentials. When you select personal tools, setup checks for saved credentials and offers to save them if none are found. You can also manage them **yourself in a local terminal**:
 
 ```sh
 uvx --from 'all-abt-ntu-mcp@latest' all-abt-ntu auth save
@@ -69,7 +85,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
-args = ["--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu", "--profile", "personal-read"]
+args = ["--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"]
 env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
@@ -83,7 +99,7 @@ Register for your user:
 
 ```sh
 claude mcp add --scope user all-abt-ntu-mcp \
-  -- uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu --profile personal-read
+  -- uvx --from 'all-abt-ntu-mcp[personal]@latest' all-abt-ntu
 claude mcp list
 ```
 
@@ -99,7 +115,7 @@ Add to `~/.config/opencode/opencode.json`:
   "mcp": {
     "all-abt-ntu-mcp": {
       "type": "local",
-      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu", "--profile", "personal-read"],
+      "command": ["uvx", "--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"],
       "enabled": true,
       "timeout": 240000
     }
@@ -120,9 +136,19 @@ uv sync
 uv run all-abt-ntu
 ```
 
-For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu auth save` in your own terminal. Use `uv run all-abt-ntu auth status` or `auth delete` to inspect storage status or remove the account. Start authenticated reads with `uv run all-abt-ntu --profile personal-read`, or choose `--profile workflows` for writes and file downloads.
+For personal tools, run `uv sync --extra personal`, then `uv run all-abt-ntu setup` to choose your tools. See [Credentials](#credentials) to manage your account.
 
 The process uses MCP stdio, so it stays open while its MCP client is connected. Course responses are cached in memory for one hour by default; vacancy snapshots are cached for at most 60 seconds. Set `NTU_CACHE_TTL_SECONDS` to change the cache time or use `0` to disable caching.
+
+### Chromium
+
+The personal profiles require Playwright and its matching Chromium build at startup. If you use the PyPI `uvx` setup, install Chromium from the same package environment as the server:
+
+```sh
+uvx --from 'all-abt-ntu-mcp[personal]@latest' playwright install chromium
+```
+
+For a repository checkout, run `uv sync --extra personal` followed by `uv run --no-sync playwright install chromium`. Playwright versions can require different Chromium builds, so repeat the matching command after upgrading. NTULearn can optionally reuse an existing browser session without launching Chromium, although the shared personal profiles still require Chromium for their other tools.
 
 ### Run an HTTP server on localhost
 
@@ -134,10 +160,58 @@ uv run uvicorn api.index:app --host 127.0.0.1 --port 8000
 
 Configure the client with `http://127.0.0.1:8000/mcp` and select **Streamable HTTP**. The server listens only on this computer. This HTTP endpoint provides public tools; personal tools require the local stdio command above.
 
+## Configuration file
+
+Local settings are stored in `$XDG_CONFIG_HOME/all-abt-ntu/tools.json` (normally `~/.config/all-abt-ntu/tools.json`), or `%APPDATA%\all-abt-ntu\tools.json` on Windows. Setup and the CLI update this file. For example:
+
+```json
+{
+  "profile": "personal",
+  "tools": {
+    "enabled": ["stars_save_stars_plan"],
+    "disabled": ["mazemap_get_directions"],
+    "families": {
+      "enabled": ["stars", "mazemap"],
+      "disabled": ["news"]
+    }
+  },
+  "env": {
+    "stars": {"cache_ttl_seconds": 3600},
+    "ntulearn": {"headless": false},
+    "onestop": {"upload_dir": "/home/me/ntu-uploads"}
+  }
+}
+```
+
+Family settings apply to tools added later. An individually enabled tool can be used within a disabled family; an individually disabled tool stays off within an enabled family. Personal actions and downloads remain disabled unless explicitly enabled. `tools enable` and `tools disable` accept families or individual names and update the file.
+
+All sections are optional; omitted values use their defaults. You can edit the file or use the CLI:
+
+```sh
+uv run all-abt-ntu config set ntulearn.headless false
+uv run all-abt-ntu config set stars.cache_ttl_seconds 600
+uv run all-abt-ntu config list
+uv run all-abt-ntu config unset ntulearn.headless
+```
+
+For a PyPI install, use the same `uvx --from 'all-abt-ntu-mcp[personal]@latest'` prefix as in Quick start instead of `uv run`. The supported settings under `env` are:
+
+| Group | Settings |
+| --- | --- |
+| `stars` | `cache_ttl_seconds`, `personal_cache_ttl_seconds` |
+| `ntulearn` | `cache_ttl_seconds`, `headless`, `browser_cookies`, `request_concurrency`, `request_interval_seconds`, `timeout_seconds` |
+| `careeraxis` | `cache_ttl_seconds`, `headless` |
+| `onestop` | `upload_dir` |
+| `public_http` | `concurrency`, `interval_seconds`, `timeout_seconds`, `max_retry_delay_seconds` |
+| `browser` | `browsers_path` for Playwright |
+
+Use JSON booleans for switches, numbers for durations and limits, and strings for paths. Other environment variables can be stored under `env.other`, for example with `config set other.CUSTOM_SETTING value`. Configuration-location variables such as `XDG_CONFIG_HOME` must be set outside the file. Process environment variables take precedence over saved settings. Restart the server after changing settings. This file is plain text; use the keyring for credentials.
+
 ## Source layout
 
 ```text
 src/
+├── cli/                    Local setup, tool selection, and configuration
 ├── shared/                 Local/public runtimes, HTTP app, keyring, and parsing
 ├── stars/
 │   ├── mcp_server.py        STARS tool registration and input schemas
@@ -383,6 +457,8 @@ See the [Campus services guide](https://github.com/pitchaya-s/all-abt-ntu-mcp/bl
 | `onestop_get_my_request` | Visible fields, answers and stages for verified own requests/items | Yes |
 
 Additional tools cover request drafts/submission, replies and offered state actions, attachments, article discussions/feedback/subscriptions, dashboard data, profile/preferences, shopping/saved carts, favourites and appointment availability/booking. Payment preparation returns a native gateway link. Writes perform real account actions and should follow the user's specific request. Draft and checkout previews expose validation before submission and guard against duplicate attempts.
+
+One Stop uploads use `~/.config/all-abt-ntu/onestop-uploads` by default (under `$XDG_CONFIG_HOME/all-abt-ntu` when set, or `%APPDATA%\all-abt-ntu\onestop-uploads` on Windows). The folder is created when the upload tool is enabled; you can also create it yourself. Set `NTU_ONESTOP_UPLOAD_DIR` to an absolute directory to override it, or set it to an empty string to disable uploads. Only regular files directly in that directory can be uploaded; the directory itself and the file cannot be symbolic links. Place only files you are willing to make available to the MCP client in that directory. On platforms that cannot enforce this boundary, use the portal's own file picker instead.
 
 Native lists expand up to 500 records where supported; some catalog/search results remain partial. Inspect `complete` and `coverage`; `next_offset` pages retrieved records only. See the [One Stop guide](src/onestop/README.md) for all 59 tools, setup and limitations, including browser handoffs and unverified appointment cancellation/rescheduling.
 

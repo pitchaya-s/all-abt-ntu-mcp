@@ -8,6 +8,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Any, AsyncIterator
 from urllib.parse import urljoin, urlsplit
 
@@ -21,6 +22,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 from ..models import LearnError
 from .browser_cookies import BASE_URL, NTULEARN_HOST, SessionCookie, install_cookies
 from .config import SessionConfig
+from .videos.kaltura import download_kaltura_file as _download_kaltura_file
 
 MAX_JSON_BYTES = 5_000_000
 MAX_FILE_BYTES = 20_000_000
@@ -178,6 +180,7 @@ class LearnHTTP:
         url: str,
         *,
         expected_generation: int | None = None,
+        headers: dict[str, str] | None = None,
     ) -> AsyncIterator[httpx.Response]:
         try:
             if client is self.external_client:
@@ -185,7 +188,7 @@ class LearnHTTP:
                     client.cookies.clear()
                     try:
                         async with self.scheduler.slot():
-                            async with client.stream("GET", url) as response:
+                            async with client.stream("GET", url, headers=headers) as response:
                                 yield response
                     finally:
                         # A vendor response cannot set cookies for another
@@ -198,7 +201,7 @@ class LearnHTTP:
                         and expected_generation != self._auth_generation
                     ):
                         raise AuthGenerationChanged
-                    async with client.stream("GET", url) as response:
+                    async with client.stream("GET", url, headers=headers) as response:
                         if (
                             expected_generation is not None
                             and expected_generation != self._auth_generation
@@ -284,6 +287,15 @@ class LearnHTTP:
             if not redirected:
                 raise LearnError("NTULearn could not complete the attachment download; retry later.")
         raise LearnError("NTULearn returned too many file redirects; no file was saved.")
+
+    async def download_kaltura_file(
+        self,
+        url: str,
+        destination: Path,
+        max_bytes: int,
+        referer: str,
+    ) -> int:
+        return await _download_kaltura_file(self, url, destination, max_bytes, referer)
 
     async def aclose(self) -> None:
         await self.client.aclose()

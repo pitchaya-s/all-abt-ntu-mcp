@@ -326,6 +326,7 @@ Vacancies are available **09:00–22:00 Singapore time**; unknown counts are `nu
 | `ntulearn_get_content_attachments` | Attached files for a leaf content item | Yes |
 | `ntulearn_read_file_content` | Read PDF, Office, and text attachments inline | Yes |
 | `ntulearn_download_file` | Save an attachment to a new, explicit local file path | Yes |
+| `ntulearn_download_video` | Save a Kaltura video embedded in a course content item | Yes |
 | `ntulearn_list_messages` | List inbox or sent messages from course conversations | Yes |
 | `ntulearn_read_message` | Full message body and published conversation recipients | Yes |
 | `ntulearn_list_course_users` | Visible course users and their roles | Yes |

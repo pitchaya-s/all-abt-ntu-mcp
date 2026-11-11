@@ -112,6 +112,16 @@ class LearnClient:
                           description=text(row.get("description")), modified=row.get("modified")) for row in rows]
         return model(Contents, course_id=course_id, contents=contents, offset=offset, next_offset=next_offset, **freshness)
 
+    async def get_content_record(self, course_id, content_id):
+        """Return a fresh content record for internal parsing of supported embeds."""
+        course_id, content_id = identifier(course_id), identifier(content_id)
+        data, _ = await self.session.get(
+            f"{PREFIX}/courses/{course_id}/contents/{content_id}", refresh=True
+        )
+        if not isinstance(data, dict) or data.get("id") not in (None, content_id):
+            raise LearnError("NTULearn returned an unfamiliar course content record.")
+        return data
+
     async def get_announcements(self, course_id, limit=50, offset=0, refresh=False) -> Announcements:
         course_id = identifier(course_id)
         rows, next_offset, freshness = await self._list(f"{PREFIX}/courses/{course_id}/announcements", limit, offset, refresh)

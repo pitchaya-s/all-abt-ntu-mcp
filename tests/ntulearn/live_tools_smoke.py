@@ -42,7 +42,7 @@ async def main():
                         if t.name.startswith("ntulearn_")
                     ]
                 )
-                == 20
+                == 21
             )
             courses = (await call("ntulearn_list_courses", limit=100))["courses"]
             selected = [

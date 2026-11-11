@@ -29,7 +29,7 @@ from .models import (
     Messages,
     Upcoming,
 )
-from .services import content, files, messages, overview, people
+from .services import content, files, messages, overview, people, videos
 
 session = Session()
 client = LearnClient(session)
@@ -40,7 +40,7 @@ INSTRUCTIONS = (
     "Credentials and session cookies are local and never appear in tool responses. Personal academic data "
     "returned by these tools is visible to the AI client. Caches and cookies are in memory only. "
     "MFA is never bypassed; use a visible local browser when interaction is required. "
-    "Read attachment text with ntulearn_read_file_content; ntulearn_download_file and ntulearn_download_course save local copies without modifying NTULearn. "
+    "Read attachment text with ntulearn_read_file_content; ntulearn_download_file, ntulearn_download_course, and ntulearn_download_video save local copies without modifying NTULearn. "
     "Collection results with complete=false have explicit issues; do not present them as full coverage."
 )
 _read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
@@ -103,6 +103,12 @@ async def get_content_attachments(course_id: LearnID, content_id: LearnID, limit
 async def download_file(course_id: LearnID, content_id: LearnID, attachment_id: LearnID, destination: str) -> Download:
     """Download a Blackboard attachment to an explicit local file path, up to 20 MB. Never overwrites an existing file. Does not modify NTULearn or forward university cookies to file-delivery hosts."""
     return await _call(client.download_file, course_id, content_id, attachment_id, destination)
+
+
+async def download_video(course_id: LearnID, content_id: LearnID, destination: str,
+                         max_mb: Annotated[int, Field(ge=1, le=2000, strict=True)] = 1000) -> Download:
+    """Download a Kaltura video embedded in an NTULearn content item to a new local file. Uses your normal course access and a short-lived viewer session; max_mb is 1–2000, existing files are never overwritten, and NTULearn is not modified."""
+    return await _call(videos.download_video, client, course_id, content_id, destination, max_mb)
 
 
 async def get_upcoming(since: datetime | None = None, until: datetime | None = None, course_ids: CourseIDs | None = None,
@@ -186,6 +192,6 @@ def register_tools(server: MCPServer, *, workflows: bool = True) -> None:
                      search_course_content, search_all_courses, get_content_tree, whats_new):
         server.tool(name=f"ntulearn_{function.__name__.removeprefix('ntulearn_')}", annotations=_read)(function)
     if workflows:
-        for download_function in (download_file, download_course):
+        for download_function in (download_file, download_video, download_course):
             name = f"ntulearn_{download_function.__name__.removeprefix('ntulearn_')}"
             server.tool(name=name, annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True))(confirmed_tool(download_function, name))

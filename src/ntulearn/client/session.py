@@ -16,6 +16,7 @@ from .cache import ResponseCache
 from .config import SessionConfig
 from .http import AuthGenerationChanged, MAX_FILE_BYTES, LearnHTTP, allowed_read_path, json_body
 from .sso import login
+from .videos.session import VideoSession
 
 
 class _Operation:
@@ -54,6 +55,7 @@ class Session:
         self._active_operations = 0
         self._closing = False
         self._close_task: asyncio.Task[None] | None = None
+        self._video = VideoSession(self)
 
     async def status(self) -> AuthStatus:
         credentials = await asyncio.to_thread(credential_status)
@@ -149,6 +151,15 @@ class Session:
             return await self._download(path, destination, max_bytes)
         finally:
             await self._end_operation()
+
+    async def get_webdav_wrapper(self, url: str) -> str:
+        return await self._video.get_webdav_wrapper(url)
+
+    async def get_browseandembed_page(self, url: str) -> str:
+        return await self._video.get_browseandembed_page(url)
+
+    async def download_kaltura_video(self, url: str, destination: str, max_bytes: int, referer: str) -> Download:
+        return await self._video.download_kaltura_video(url, destination, max_bytes, referer)
 
     async def _download(self, path: str, destination: str, max_bytes: int) -> Download:
         if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_FILE_BYTES:

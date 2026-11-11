@@ -22,7 +22,7 @@ Passwords are read from the [shared OS keyring](../shared/README.md#credential-s
 
 ### HTTP, cache, and performance settings
 
-NTULearn uses a pooled asynchronous HTTP client for read requests. Multi-course tools run up to four courses at a time, while a shared scheduler limits request concurrency and spaces request starts. 429 and transient 5xx responses are retried with bounded backoff and `Retry-After` when provided. File downloads use a separate cookie-free client; NTU cookies are not sent to Blackboard delivery hosts.
+NTULearn uses a pooled asynchronous HTTP client for read requests. Multi-course tools run up to four courses at a time, while a shared scheduler limits request concurrency and spaces request starts. 429 and transient 5xx responses are retried with bounded backoff and `Retry-After` when provided. Blackboard and Kaltura file delivery use a separate cookie-free client; NTU cookies are not sent to delivery hosts.
 
 | Environment variable | Default | Allowed range / behavior |
 | --- | ---: | --- |
@@ -151,6 +151,16 @@ Unsupported, encrypted, malformed, or oversized documents produce an actionable 
 **Inputs:** `course_id`, `content_id`, `attachment_id`, and an explicit local `destination` file path. Its parent directory must already exist.
 
 **Returns:** saved path, bytes written, and download time. Saves at most 20 MB and never overwrites an existing file. It writes locally and does not modify NTULearn. Supported redirects stay on NTU or Blackboard delivery hosts; university cookies are not forwarded to delivery hosts. HTML/JSON attachments are unsupported.
+
+### `ntulearn_download_video`
+
+**Inputs:** `course_id`, `content_id`, an explicit local `destination` file path, and optional `max_mb` from 1–2000 (default 1000). The parent directory must already exist.
+
+**Returns:** saved path, bytes written, and download time. Supports Kaltura players embedded in NTULearn content. It obtains the player’s short-lived viewer session in a temporary Chromium context, then streams the Kaltura download to disk. NTU cookies are used only for the NTULearn WebDAV wrapper and are never sent to Blackboard or Kaltura. Existing files and symbolic-link directories are rejected; failed partial downloads are removed. The item must be visible to your account and Kaltura must provide a downloadable source. This tool requires the optional `personal` dependencies and installed Chromium.
+
+```json
+{"course_id":"_100_1","content_id":"_200_1","destination":"/path/to/lecture.mp4","max_mb":1000}
+```
 
 ### `ntulearn_download_course`
 

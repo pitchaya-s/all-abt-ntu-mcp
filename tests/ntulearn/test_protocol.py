@@ -41,7 +41,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                 listing = await client.list_tools()
                 self.assertEqual(
                     len([t for t in listing.tools if t.name.startswith("ntulearn_")]),
-                    20,
+                    21,
                 )
                 by_name = {tool.name: tool for tool in listing.tools}
                 self.assertNotIn("register_courses", by_name)
@@ -49,6 +49,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
                 writes = {
                     "ntulearn_download_file",
+                    "ntulearn_download_video",
                     "ntulearn_download_course",
                     "stars_save_stars_plan",
                 }

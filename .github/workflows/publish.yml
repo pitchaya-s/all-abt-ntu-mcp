@@ -41,7 +41,7 @@ jobs:
       - name: Check installed wheel
         run: |
           uvx --from ./dist/*.whl all-abt-ntu --help
-          uv run --no-project --with ./dist/*.whl python -I -c 'from shared.server import mcp'
+          uv run --no-project --with ./dist/*.whl python -I -c 'from server import mcp'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-distributions

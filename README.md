@@ -86,12 +86,17 @@ Add to `~/.codex/config.toml`:
 [mcp_servers.all-abt-ntu-mcp]
 command = "uvx"
 args = ["--from", "all-abt-ntu-mcp[personal]@latest", "all-abt-ntu"]
-env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] # for Linux
 startup_timeout_sec = 120
 tool_timeout_sec = 240
 ```
 
-Restart Codex and check `codex mcp list`. Personal tools use your locally saved keyring account. The `env_vars` line forwards the Linux desktop session needed for keyring access; start Codex from a terminal where `auth status` succeeds. These variables contain no NTU credentials.
+On Linux, depending on your distribution and Secret Service or KWallet setup, you may need to add this optional line to the same MCP server block for keyring access:
+
+```toml
+env_vars = ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"]
+```
+
+These variables forward the current desktop session; they contain no NTU credentials. Start Codex from a terminal where `all-abt-ntu auth status` succeeds. Restart Codex and check `codex mcp list`. Personal tools use your locally saved keyring account.
 
 ## Claude Code
 
@@ -507,3 +512,5 @@ Live checks and service-specific testing instructions: [STARS](https://github.co
 This is an independent project and is not affiliated with, sponsored by, or endorsed by Nanyang Technological University (NTU), Singapore.
 
 Your NTU credentials are retrieved locally from your OS keyring and submitted over HTTPS to NTU or its Microsoft sign-in service. They are never returned through MCP. Academic data returned by tools is visible to the AI client. Keyring storage protects credentials at rest; it does not isolate them from other programs or agents allowed to access your unlocked keyring or the server process.
+
+Use this software only to access accounts and materials you are authorized to access. Do not download, copy, store, or redistribute course recordings, lecture files, library resources, research data, or other restricted or copyrighted material unless you have permission. Follow NTU policies, copyright and license notices, source-service terms, and applicable law. Do not bypass authentication, CAPTCHA, DRM, paywalls, or other access restrictions. **You are responsible for ensuring your access, downloads, retention, and reuse are authorized.**

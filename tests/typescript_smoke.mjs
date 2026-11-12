@@ -26,7 +26,9 @@ for (const profile of ["public", "personal"]) {
     const names = new Set((await profileClient.listTools()).tools.map(tool => tool.name));
     assert(names.has("stars_search_courses"));
     assert.equal(names.has("ntulearn_list_courses"), profile === "personal");
-    for (const name of ["stars_save_stars_plan", "ntulearn_download_file", "onestop_upload_attachment"]) {
+    for (const name of [
+      "stars_save_stars_plan", "ntulearn_download_file", "ntulearn_download_video", "onestop_upload_attachment",
+    ]) {
       assert(!names.has(name), `${profile} must not expose ${name}`);
     }
   } finally {
@@ -97,7 +99,9 @@ try {
     command: "python", args: [join(tests, "ntulearn", "protocol_server.py")], cwd: learnCwd,
     env: { PYTHONPATH: join(tests, "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
   }));
-  assert.equal((await learn.listTools()).tools.filter(tool => tool.name.startsWith("ntulearn_")).length, 20);
+  const learnTools = (await learn.listTools()).tools.filter(tool => tool.name.startsWith("ntulearn_"));
+  assert.equal(learnTools.length, 21);
+  assert(learnTools.some(tool => tool.name === "ntulearn_download_video"));
   for (const [name, parameters] of [
     ["ntulearn_get_content_tree", { course_id: "_100_1" }],
     ["ntulearn_search_course_content", { course_id: "_100_1", query: "slides" }],

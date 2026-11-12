@@ -6,7 +6,7 @@ from jsonschema import Draft202012Validator
 from mcp import Client
 
 from omnibus import mcp_server
-from shared.server import create_server
+from server import create_server
 
 
 async def main():

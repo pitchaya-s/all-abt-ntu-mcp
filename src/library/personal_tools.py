@@ -5,7 +5,7 @@ from mcp.types import ToolAnnotations
 
 from .mcp_server import Day, FacilityID, _call
 from .models import FacilitySchedule
-from .session import FacilitySession
+from .facilities.session import FacilitySession
 
 
 session = FacilitySession()
@@ -27,8 +27,12 @@ def get_facility_schedule(
     return _call(session.get_schedule, date, space_id, location_id, group_id, refresh)
 
 
-
 def register_tools(mcp: MCPServer) -> None:
-    mcp.tool(name="library_get_facility_schedule", annotations=ToolAnnotations(
-        read_only_hint=True, idempotent_hint=True, open_world_hint=True,
-    ))(get_facility_schedule)
+    mcp.tool(
+        name="library_get_facility_schedule",
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            idempotent_hint=True,
+            open_world_hint=True,
+        ),
+    )(get_facility_schedule)

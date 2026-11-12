@@ -14,7 +14,13 @@ from .auth import Authenticator, SessionExpired
 from .browser_cookies import BASE_URL, read_browser_cookie_sets
 from .cache import ResponseCache
 from .config import SessionConfig
-from .http import AuthGenerationChanged, MAX_FILE_BYTES, LearnHTTP, allowed_read_path, json_body
+from .http import (
+    AuthGenerationChanged,
+    MAX_FILE_BYTES,
+    LearnHTTP,
+    allowed_read_path,
+    json_body,
+)
 from .sso import login
 from .videos.session import VideoSession
 
@@ -79,7 +85,9 @@ class Session:
             self._operation.reset(token)
             await self._end_operation()
 
-    async def get(self, path: str, params: dict[str, Any] | None = None, refresh: bool = False):
+    async def get(
+        self, path: str, params: dict[str, Any] | None = None, refresh: bool = False
+    ):
         await self._begin_operation()
         try:
             return await self._get(path, params or {}, refresh)
@@ -88,7 +96,9 @@ class Session:
 
     async def _get(self, path: str, params: dict[str, Any], refresh: bool):
         if not allowed_read_path(path) or path.endswith("/download"):
-            raise LearnError("This NTULearn endpoint is not an academic JSON read endpoint.")
+            raise LearnError(
+                "This NTULearn endpoint is not an academic JSON read endpoint."
+            )
         state = await self._ensure_authenticated()
         key = (path, tuple(sorted(params.items())))
         cached = self.cache.get(key, refresh=refresh)
@@ -107,7 +117,9 @@ class Session:
             except AuthGenerationChanged:
                 generation_changes += 1
                 if generation_changes > 2:
-                    raise LearnError("NTULearn authentication changed repeatedly; retry the request.") from None
+                    raise LearnError(
+                        "NTULearn authentication changed repeatedly; retry the request."
+                    ) from None
                 state = await self._ensure_authenticated()
                 continue
             try:
@@ -121,31 +133,47 @@ class Session:
                 if expired:
                     await response.aclose()
                     if reauthenticated:
-                        raise LearnError("NTULearn's session expired again after reauthentication; retry later.")
+                        raise LearnError(
+                            "NTULearn's session expired again after reauthentication; retry later."
+                        )
                     state = await self.auth.recover(state.generation)
                     self._sync_cache_generation()
                     reauthenticated = True
                     continue
                 if status == 403:
-                    raise LearnError("NTULearn denied access to this resource (HTTP 403); no alternate access was attempted.")
+                    raise LearnError(
+                        "NTULearn denied access to this resource (HTTP 403); no alternate access was attempted."
+                    )
                 if status == 404:
-                    raise LearnError("NTULearn did not find this resource, or it is not visible to your account (HTTP 404).")
+                    raise LearnError(
+                        "NTULearn did not find this resource, or it is not visible to your account (HTTP 404)."
+                    )
                 if status == 429:
-                    raise LearnError("NTULearn is rate limited (HTTP 429); retry this read later.")
+                    raise LearnError(
+                        "NTULearn is rate limited (HTTP 429); retry this read later."
+                    )
                 if status != 200:
-                    raise LearnError(f"NTULearn could not complete this read request (HTTP {status}).")
+                    raise LearnError(
+                        f"NTULearn could not complete this read request (HTTP {status})."
+                    )
                 data = json_body(response)
                 now = datetime.now(timezone.utc)
                 # An account change can clear the cache while this request is
                 # in flight. Do not let the old account repopulate it.
                 if self.auth.generation == state.generation:
                     self.cache.put(key, data, now)
-                return data, {"retrieved_at": now, "from_cache": False, "cache_age_seconds": 0}
+                return data, {
+                    "retrieved_at": now,
+                    "from_cache": False,
+                    "cache_age_seconds": 0,
+                }
             finally:
                 await response.aclose()
         raise LearnError("NTULearn is temporarily unavailable.")
 
-    async def download(self, path: str, destination: str, max_bytes: int = MAX_FILE_BYTES) -> Download:
+    async def download(
+        self, path: str, destination: str, max_bytes: int = MAX_FILE_BYTES
+    ) -> Download:
         await self._begin_operation()
         try:
             return await self._download(path, destination, max_bytes)
@@ -158,17 +186,25 @@ class Session:
     async def get_browseandembed_page(self, url: str) -> str:
         return await self._video.get_browseandembed_page(url)
 
-    async def download_kaltura_video(self, url: str, destination: str, max_bytes: int, referer: str) -> Download:
-        return await self._video.download_kaltura_video(url, destination, max_bytes, referer)
+    async def download_kaltura_video(
+        self, url: str, destination: str, max_bytes: int, referer: str
+    ) -> Download:
+        return await self._video.download_kaltura_video(
+            url, destination, max_bytes, referer
+        )
 
     async def _download(self, path: str, destination: str, max_bytes: int) -> Download:
         if type(max_bytes) is not int or not 1 <= max_bytes <= MAX_FILE_BYTES:
-            raise LearnError("The remaining per-file byte limit must be between 1 and 20000000.")
+            raise LearnError(
+                "The remaining per-file byte limit must be between 1 and 20000000."
+            )
         if not allowed_read_path(path) or not path.endswith("/download"):
             raise LearnError("Use a Blackboard attachment download endpoint.")
         target = Path(destination).expanduser().absolute()
         if target.exists() or not target.parent.is_dir():
-            raise LearnError("Choose a new file path in an existing directory; existing files are never overwritten.")
+            raise LearnError(
+                "Choose a new file path in an existing directory; existing files are never overwritten."
+            )
 
         state = await self._ensure_authenticated()
         reauthenticated = False
@@ -184,21 +220,29 @@ class Session:
             except AuthGenerationChanged:
                 generation_changes += 1
                 if generation_changes > 2:
-                    raise LearnError("NTULearn authentication changed repeatedly; retry the download.") from None
+                    raise LearnError(
+                        "NTULearn authentication changed repeatedly; retry the download."
+                    ) from None
                 state = await self._ensure_authenticated()
             except SessionExpired:
                 if reauthenticated:
-                    raise LearnError("NTULearn's session expired again during the download; retry later.") from None
+                    raise LearnError(
+                        "NTULearn's session expired again during the download; retry later."
+                    ) from None
                 state = await self.auth.recover(state.generation)
                 self._sync_cache_generation()
                 reauthenticated = True
         else:
-            raise LearnError("NTULearn could not complete the attachment download; retry later.")
+            raise LearnError(
+                "NTULearn could not complete the attachment download; retry later."
+            )
 
         try:
             await asyncio.to_thread(self._write_new_file, target, body)
         except OSError:
-            raise LearnError("Could not save the download. Check the destination and available space; existing files were not overwritten.") from None
+            raise LearnError(
+                "Could not save the download. Check the destination and available space; existing files were not overwritten."
+            ) from None
         return Download(
             path=str(target),
             bytes_written=len(body),
@@ -238,7 +282,9 @@ class Session:
     async def _begin_operation(self) -> None:
         async with self._lifecycle:
             if self._closing and self._operation.get() is None:
-                raise LearnError("The NTULearn session is closed; restart the MCP server.")
+                raise LearnError(
+                    "The NTULearn session is closed; restart the MCP server."
+                )
             self._active_operations += 1
 
     async def _end_operation(self) -> None:

@@ -10,7 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from service import mcp_server, parser
 from service.client import ServiceClient
 from service.models import ServiceError
-from shared.public_http import PublicRequestError
+from public_http_client import PublicRequestError
 
 from .fixtures import CATEGORY_ID, FORM, ROWS, TYPE_ID, fake_get
 
@@ -23,14 +23,23 @@ class ServiceTests(unittest.TestCase):
 
     def test_keyword_search_covers_later_pages_and_location_filter(self):
         result = self.client.search("clinic")
-        self.assertEqual((result.total_count, result.directory_count, result.pages_checked), (1, 13, 2))
+        self.assertEqual(
+            (result.total_count, result.directory_count, result.pages_checked),
+            (1, 13, 2),
+        )
         self.assertEqual(result.locations[0].name, "Synthetic Café Clinic")
         self.assertEqual(result.locations[0].phone, "0000 0000")
         self.assertEqual(result.locations[0].email, "clinic@example.org")
-        self.assertEqual(len(self.client.search(location_contains="SOUTH SPINE").locations), 1)
-        self.assertEqual(self.client.search("clinic", location_contains="North").locations, [])
+        self.assertEqual(
+            len(self.client.search(location_contains="SOUTH SPINE").locations), 1
+        )
+        self.assertEqual(
+            self.client.search("clinic", location_contains="North").locations, []
+        )
         self.assertFalse(result.cached)
-        self.assertEqual(result.retrieved_at, datetime(2025, 12, 31, 23, 59, 30, tzinfo=timezone.utc))
+        self.assertEqual(
+            result.retrieved_at, datetime(2025, 12, 31, 23, 59, 30, tzinfo=timezone.utc)
+        )
 
     def test_result_pagination_and_blank_contact_fields(self):
         first = self.client.search(limit=12)
@@ -61,19 +70,34 @@ class ServiceTests(unittest.TestCase):
                     with lock:
                         active -= 1
             items = [
-                {**ROWS[index % len(ROWS)], "title": f"Synthetic location {index}",
-                 "location": f"Building {index}", "mapUrl": f"https://maps.ntu.edu.sg/?place={index}"}
+                {
+                    **ROWS[index % len(ROWS)],
+                    "title": f"Synthetic location {index}",
+                    "location": f"Building {index}",
+                    "mapUrl": f"https://maps.ntu.edu.sg/?place={index}",
+                }
                 for index in range((page - 1) * 12, page * 12)
             ]
-            snapshot = dict(retrieved_at=datetime(2026, 1, 1, tzinfo=timezone.utc), source_url=url, cached=True)
-            return json.dumps({"items": items, "totalItems": 36, "totalPages": 3}).encode(), snapshot
+            snapshot = dict(
+                retrieved_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                source_url=url,
+                cached=True,
+            )
+            return json.dumps(
+                {"items": items, "totalItems": 36, "totalPages": 3}
+            ).encode(), snapshot
 
         with patch.object(self.client.http, "get", side_effect=read_page):
             result = self.client.search(limit=100)
         self.assertEqual(maximum_active, 2)
-        self.assertEqual([item.name for item in result.locations[:3]], [
-            "Synthetic location 0", "Synthetic location 1", "Synthetic location 2",
-        ])
+        self.assertEqual(
+            [item.name for item in result.locations[:3]],
+            [
+                "Synthetic location 0",
+                "Synthetic location 1",
+                "Synthetic location 2",
+            ],
+        )
         self.assertEqual(result.pages_checked, 3)
 
     def test_source_filters_can_return_empty_without_hiding_unfiltered_matches(self):
@@ -90,16 +114,33 @@ class ServiceTests(unittest.TestCase):
             body, snapshot = fake_get(url, refresh)
             if "page=2" in url:
                 data = json.loads(body)
-                data.update(totalItems=14, items=[ROWS[-1], {**ROWS[-1], "title": "Another"}])
+                data.update(
+                    totalItems=14, items=[ROWS[-1], {**ROWS[-1], "title": "Another"}]
+                )
                 body = json.dumps(data).encode()
             return body, snapshot
-        with patch.object(self.client.http, "get", side_effect=changed), self.assertRaisesRegex(ServiceError, "changed"):
+
+        with (
+            patch.object(self.client.http, "get", side_effect=changed),
+            self.assertRaisesRegex(ServiceError, "changed"),
+        ):
             self.client.search()
-        body = json.dumps({"items": ROWS[:12], "totalItems": 601, "totalPages": 51}).encode()
-        with patch.object(self.client.http, "get", return_value=(body, {})), self.assertRaisesRegex(ServiceError, "50-page"):
+        body = json.dumps(
+            {"items": ROWS[:12], "totalItems": 601, "totalPages": 51}
+        ).encode()
+        with (
+            patch.object(self.client.http, "get", return_value=(body, {})),
+            self.assertRaisesRegex(ServiceError, "50-page"),
+        ):
             self.client.search()
-        for rows in [[{**ROWS[0], "title": None}], [{**ROWS[0], "mapUrl": "javascript:alert(1)"}], [ROWS[0], ROWS[0]]]:
-            body = json.dumps({"items": rows, "totalItems": len(rows), "totalPages": 1}).encode()
+        for rows in [
+            [{**ROWS[0], "title": None}],
+            [{**ROWS[0], "mapUrl": "javascript:alert(1)"}],
+            [ROWS[0], ROWS[0]],
+        ]:
+            body = json.dumps(
+                {"items": rows, "totalItems": len(rows), "totalPages": 1}
+            ).encode()
             with self.assertRaises((ValueError, TypeError, ServiceError)):
                 parser.locations(body, 1)
         with self.assertRaises(ValueError):
@@ -108,13 +149,31 @@ class ServiceTests(unittest.TestCase):
     def test_refresh_invalid_inputs_and_errors(self):
         self.client.search(refresh=True)
         self.assertTrue(all(call.args[1] for call in self.fetch.call_args_list))
-        for args in [dict(limit=True), dict(offset=-1), dict(query="bad\nquery"), dict(location_contains="x" * 201),
-                     dict(type_id="33333333-3333-4333-8333-333333333333")]:
+        for args in [
+            dict(limit=True),
+            dict(offset=-1),
+            dict(query="bad\nquery"),
+            dict(location_contains="x" * 201),
+            dict(type_id="33333333-3333-4333-8333-333333333333"),
+        ]:
             with self.assertRaises((ServiceError, ValueError)):
                 self.client.search(**args)
-        for error in (PublicRequestError("NTU returned HTTP 503; try again later."), KeyError("raw provider detail")):
-            with patch.object(mcp_server.client, "search", side_effect=error), self.assertRaises(ToolError) as caught:
+        for error in (
+            PublicRequestError("NTU returned HTTP 503; try again later."),
+            KeyError("raw provider detail"),
+        ):
+            with (
+                patch.object(mcp_server.client, "search", side_effect=error),
+                self.assertRaises(ToolError) as caught,
+            ):
                 mcp_server.search()
             self.assertNotIn("raw provider detail", str(caught.exception))
-        with patch.object(self.client.http, "get", return_value=(FORM.replace(b"</html>", b""), {})), self.assertRaises(ValueError):
+        with (
+            patch.object(
+                self.client.http,
+                "get",
+                return_value=(FORM.replace(b"</html>", b""), {}),
+            ),
+            self.assertRaises(ValueError),
+        ):
             self.client.list_filters()

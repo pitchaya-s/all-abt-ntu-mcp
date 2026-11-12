@@ -7,7 +7,7 @@ from unittest.mock import patch
 from mcp_fixtures import COURSE, EXAM_COURSE, GRADUATE_COURSE
 from room_fixtures import snapshot as room_snapshot
 
-from shared.server import main
+from server import main
 from stars.client import NTURequestError, validate_course_code
 from stars.client.validation import _academic_term
 
@@ -23,10 +23,10 @@ def course_fixture(course_code, academic_year, semester):
 if __name__ == "__main__":
     with ExitStack() as stack:
         stack.enter_context(
-            patch("stars.room_tools.get_teaching_snapshot", side_effect=room_snapshot)
+            patch("stars.tools.rooms.get_teaching_snapshot", side_effect=room_snapshot)
         )
         stack.enter_context(
-            patch("stars.mcp_server.fetch_course", side_effect=course_fixture)
+            patch("stars.tools.academic.fetch_course", side_effect=course_fixture)
         )
         stack.enter_context(
             patch(
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         )
         stack.enter_context(
             patch(
-                "stars.mcp_server.fetch_course_vacancies",
+                "stars.tools.academic.fetch_course_vacancies",
                 return_value={
                     "status": "term_mismatch",
                     "academic_year": 2026,
@@ -53,13 +53,13 @@ if __name__ == "__main__":
         )
         stack.enter_context(
             patch(
-                "stars.mcp_server.fetch_graduate_course_schedule",
+                "stars.tools.academic.fetch_graduate_course_schedule",
                 return_value=GRADUATE_COURSE,
             )
         )
         stack.enter_context(
             patch(
-                "stars.mcp_server.fetch_undergraduate_exam_schedule",
+                "stars.tools.academic.fetch_undergraduate_exam_schedule",
                 return_value=EXAM_COURSE,
             )
         )
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         ):
             stack.enter_context(
                 patch(
-                    f"stars.personal_tools.{target}",
+                    f"stars.tools.personal.{target}",
                     side_effect=NTURequestError(
                         "Personal actions are disabled in protocol fixtures."
                     ),

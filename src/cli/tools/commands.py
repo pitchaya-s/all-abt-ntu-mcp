@@ -30,7 +30,7 @@ def tool_families(names: list[str]) -> dict[str, set[str]]:
 
 def registered_tools(profile: str):
     try:
-        from shared.server import create_server
+        from server import create_server
 
         server = create_server(profile, check_dependencies=False)
         return asyncio.run(server.list_tools())
@@ -47,7 +47,7 @@ def tool_names(profile: str) -> list[str]:
 
 
 def ensure_chromium() -> None:
-    from shared.server import _chromium_installed
+    from server import _chromium_installed
 
     if _chromium_installed():
         return

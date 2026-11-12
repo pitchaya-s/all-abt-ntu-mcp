@@ -7,7 +7,7 @@ from urllib.parse import parse_qs
 
 from mcp import Client
 
-from shared.server import mcp
+from server import mcp
 from stars.client import NTURequestError, vacancy
 from stars.parser import NTUPageError, parse_course_page, parse_course_vacancies
 
@@ -24,7 +24,10 @@ class VacancyParserTests(unittest.TestCase):
             self.assertEqual((result["academic_year"], result["semester"]), (2026, "2"))
             self.assertEqual(len(result["indexes"]), count)
         result = parse_course_vacancies(HTML, "ZZ0001")
-        self.assertEqual(result["indexes"]["00037"], {"vacancies_available": 28, "waitlist_length": 0})
+        self.assertEqual(
+            result["indexes"]["00037"],
+            {"vacancies_available": 28, "waitlist_length": 0},
+        )
         self.assertEqual(result["indexes"]["00043"]["vacancies_available"], 35)
 
     def test_unknown_counts_are_not_zero(self) -> None:
@@ -34,7 +37,9 @@ class VacancyParserTests(unittest.TestCase):
 
     def test_unexpected_or_inconsistent_pages_are_rejected(self) -> None:
         for html in (
-            "", "<html>Service unavailable</html>", "<html>Please log in</html>",
+            "",
+            "<html>Service unavailable</html>",
+            "<html>Please log in</html>",
             HTML.replace("ZZ0001", "ZY0001"),
             HTML.replace("Check Vacancies, 2026 2", "Check Vacancies"),
             HTML.replace("Vacancies<BR>Available", "New Header"),
@@ -88,7 +93,9 @@ class VacancyClientTests(unittest.TestCase):
             vacancy.get_course_vacancies("ZZ0001", 2026, 2)
             fetch.reset_mock()
             for hour, minute in [(0, 0), (8, 59), (22, 0), (23, 59)]:
-                self.clock.now.return_value = datetime(2026, 10, 21, hour, minute, tzinfo=SGT)
+                self.clock.now.return_value = datetime(
+                    2026, 10, 21, hour, minute, tzinfo=SGT
+                )
                 result = vacancy.get_course_vacancies("ZZ0001", 2026, 2)
                 self.assertEqual(result["status"], "closed")
                 self.assertEqual(result["indexes"], {})
@@ -98,8 +105,13 @@ class VacancyClientTests(unittest.TestCase):
     def test_opening_boundaries(self) -> None:
         with patch.object(vacancy, "_fetch_html_request", return_value=HTML) as fetch:
             for hour, minute in [(9, 0), (21, 59)]:
-                self.clock.now.return_value = datetime(2026, 10, 21, hour, minute, tzinfo=SGT)
-                self.assertEqual(vacancy.get_course_vacancies("ZZ0001", 2026, 2)["status"], "available")
+                self.clock.now.return_value = datetime(
+                    2026, 10, 21, hour, minute, tzinfo=SGT
+                )
+                self.assertEqual(
+                    vacancy.get_course_vacancies("ZZ0001", 2026, 2)["status"],
+                    "available",
+                )
             fetch.assert_called_once()
 
     def test_expired_and_disabled_cache_refetch(self) -> None:
@@ -107,16 +119,26 @@ class VacancyClientTests(unittest.TestCase):
             vacancy.get_course_vacancies("ZZ0001", 2026, 2)
             created, result = vacancy._cache["ZZ0001"]
             vacancy._cache["ZZ0001"] = (created - 61, result)
-            self.assertFalse(vacancy.get_course_vacancies("ZZ0001", 2026, 2)["from_cache"])
+            self.assertFalse(
+                vacancy.get_course_vacancies("ZZ0001", 2026, 2)["from_cache"]
+            )
             with patch.object(vacancy, "VACANCY_CACHE_TTL_SECONDS", 0):
-                self.assertFalse(vacancy.get_course_vacancies("ZZ0001", 2026, 2)["from_cache"])
+                self.assertFalse(
+                    vacancy.get_course_vacancies("ZZ0001", 2026, 2)["from_cache"]
+                )
             self.assertEqual(fetch.call_count, 3)
 
     def test_failures_are_not_cached_and_validation_precedes_network(self) -> None:
         for response in [NTURequestError("HTTP 503"), "<html>Service closed</html>"]:
-            with patch.object(vacancy, "_fetch_html_request", **(
-                {"side_effect": response} if isinstance(response, Exception) else {"return_value": response}
-            )):
+            with patch.object(
+                vacancy,
+                "_fetch_html_request",
+                **(
+                    {"side_effect": response}
+                    if isinstance(response, Exception)
+                    else {"return_value": response}
+                ),
+            ):
                 with self.assertRaises(NTURequestError):
                     vacancy.get_course_vacancies("ZZ0001", 2026, 2)
                 self.assertEqual(vacancy._cache, {})
@@ -130,7 +152,11 @@ class VacancyClientTests(unittest.TestCase):
     def test_cache_has_a_size_limit(self) -> None:
         with (
             patch.object(vacancy, "MAX_CACHE_ENTRIES", 1),
-            patch.object(vacancy, "_fetch_html_request", side_effect=[HTML, HTML.replace("ZZ0001", "ZZ0002")]),
+            patch.object(
+                vacancy,
+                "_fetch_html_request",
+                side_effect=[HTML, HTML.replace("ZZ0001", "ZZ0002")],
+            ),
         ):
             vacancy.get_course_vacancies("ZZ0001", 2026, 2)
             vacancy.get_course_vacancies("ZZ0002", 2026, 2)
@@ -139,34 +165,74 @@ class VacancyClientTests(unittest.TestCase):
 
 class VacancyMCPTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_term_does_not_request_or_infer_vacancies(self) -> None:
-        course = parse_course_page((FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252"), "ZZ0001")
-        with patch("stars.mcp_server.fetch_course", return_value=course), patch("stars.mcp_server.fetch_course_vacancies") as fetch:
+        course = parse_course_page(
+            (FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252"),
+            "ZZ0001",
+        )
+        with (
+            patch("stars.tools.academic.fetch_course", return_value=course),
+            patch("stars.tools.academic.fetch_course_vacancies") as fetch,
+        ):
             async with Client(mcp) as client:
-                result = await client.call_tool("stars_get_course_indexes", {
-                    "course_code": "ZZ0001", "academic_year": 2026, "semester": 1,
-                })
+                result = await client.call_tool(
+                    "stars_get_course_indexes",
+                    {
+                        "course_code": "ZZ0001",
+                        "academic_year": 2026,
+                        "semester": 1,
+                    },
+                )
         self.assertFalse(result.is_error)
-        self.assertEqual(result.structured_content["vacancy_metadata"]["status"], "unavailable")
-        self.assertTrue(all(item["vacancy_status"] == "unavailable" for item in result.structured_content["indexes"]))
+        self.assertEqual(
+            result.structured_content["vacancy_metadata"]["status"], "unavailable"
+        )
+        self.assertTrue(
+            all(
+                item["vacancy_status"] == "unavailable"
+                for item in result.structured_content["indexes"]
+            )
+        )
         fetch.assert_not_called()
 
     async def test_counts_and_degraded_responses_for_both_tools(self) -> None:
-        course = parse_course_page((FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252"), "ZZ0001")
-        course = replace(course, academic_year=2026, semester="2", indexes={
-            "00037": tuple(replace(session, index="00037") for session in course.indexes["00001"]),
-            "00000": (),
-        })
-        snapshot = {**parse_course_vacancies(HTML, "ZZ0001"), "status": "available", "retrieved_at": "2026-10-21T04:00:00+00:00"}
-        with patch("stars.mcp_server.fetch_course", return_value=course):
+        course = parse_course_page(
+            (FIXTURES / "zz0001-2026-1.html").read_bytes().decode("windows-1252"),
+            "ZZ0001",
+        )
+        course = replace(
+            course,
+            academic_year=2026,
+            semester="2",
+            indexes={
+                "00037": tuple(
+                    replace(session, index="00037")
+                    for session in course.indexes["00001"]
+                ),
+                "00000": (),
+            },
+        )
+        snapshot = {
+            **parse_course_vacancies(HTML, "ZZ0001"),
+            "status": "available",
+            "retrieved_at": "2026-10-21T04:00:00+00:00",
+        }
+        with patch("stars.tools.academic.fetch_course", return_value=course):
             async with Client(mcp) as client:
                 names = {tool.name for tool in (await client.list_tools()).tools}
                 self.assertIn("stars_get_index", names)
                 self.assertNotIn("get_index_schedule", names)
                 for tool in ["stars_get_index", "stars_get_course_indexes"]:
-                    args = {"course_code": "ZZ0001", "academic_year": 2026, "semester": 2}
+                    args = {
+                        "course_code": "ZZ0001",
+                        "academic_year": 2026,
+                        "semester": 2,
+                    }
                     if tool == "stars_get_index":
                         args["index"] = "00037"
-                    with patch("stars.mcp_server.fetch_course_vacancies", return_value=snapshot):
+                    with patch(
+                        "stars.tools.academic.fetch_course_vacancies",
+                        return_value=snapshot,
+                    ):
                         result = await client.call_tool(tool, args)
                     self.assertFalse(result.is_error)
                     data = result.structured_content
@@ -177,17 +243,27 @@ class VacancyMCPTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(len(index["sessions"]), 4)
                     self.assertNotIn("indexes", data["vacancy_metadata"])
                     if tool == "stars_get_course_indexes":
-                        self.assertEqual(data["indexes"][1]["vacancy_status"], "not_listed")
+                        self.assertEqual(
+                            data["indexes"][1]["vacancy_status"], "not_listed"
+                        )
                         self.assertIsNone(data["indexes"][1]["vacancies_available"])
                     for status in ["closed", "term_mismatch"]:
-                        with patch("stars.mcp_server.fetch_course_vacancies", return_value={**snapshot, "status": status, "indexes": {}}):
+                        with patch(
+                            "stars.tools.academic.fetch_course_vacancies",
+                            return_value={**snapshot, "status": status, "indexes": {}},
+                        ):
                             result = await client.call_tool(tool, args)
                         self.assertFalse(result.is_error)
                         data = result.structured_content
-                        index = data if tool == "stars_get_index" else data["indexes"][0]
+                        index = (
+                            data if tool == "stars_get_index" else data["indexes"][0]
+                        )
                         self.assertEqual(index["vacancy_status"], status)
                         self.assertIsNone(index["vacancies_available"])
-                    with patch("stars.mcp_server.fetch_course_vacancies", side_effect=NTURequestError("unavailable")):
+                    with patch(
+                        "stars.tools.academic.fetch_course_vacancies",
+                        side_effect=NTURequestError("unavailable"),
+                    ):
                         result = await client.call_tool(tool, args)
                     self.assertFalse(result.is_error)
                     data = result.structured_content

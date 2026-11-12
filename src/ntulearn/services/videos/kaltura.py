@@ -3,7 +3,16 @@
 import asyncio
 import re
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import (
+    parse_qs,
+    parse_qsl,
+    quote,
+    unquote,
+    urlencode,
+    urljoin,
+    urlsplit,
+    urlunsplit,
+)
 
 from ...client.browser_cookies import BASE_URL
 from ...models import LearnError
@@ -11,8 +20,12 @@ from ...models import LearnError
 _KALTURA_HOST = "api.sg.kaltura.com"
 _KALTURA_PLAYER_PATH = re.compile(r"/p/\d+/embedPlaykitJs(?:/|$)")
 _ENTRY_ID = re.compile(r"[A-Za-z0-9_-]{1,80}\Z")
-_BROWSE_ENTRY_PATH = re.compile(r"^/browseandembed/index/media/entryid/(?P<entry>[A-Za-z0-9_-]{1,80})(?:/|$)", re.I)
-_KALTURA_UICONF = re.compile(r"api\.sg\.kaltura\.com/p/(\d+)/embedPlaykitJs/uiconf_id/(\d+)", re.I)
+_BROWSE_ENTRY_PATH = re.compile(
+    r"^/browseandembed/index/media/entryid/(?P<entry>[A-Za-z0-9_-]{1,80})(?:/|$)", re.I
+)
+_KALTURA_UICONF = re.compile(
+    r"api\.sg\.kaltura\.com/p/(\d+)/embedPlaykitJs/uiconf_id/(\d+)", re.I
+)
 _KALTURA_OVP_HOST = re.compile(r"api\.[A-Za-z0-9-]+\.ovp\.kaltura\.com\Z")
 _MANIFEST_PATH = re.compile(
     r"/playManifest/entryId/(?P<entry>[A-Za-z0-9_-]{1,80})(?:/|$)"
@@ -98,7 +111,9 @@ def _browseandembed_link(html: str) -> tuple[str, str] | None:
     candidates = [*_values(html), *re.findall(r"https?://[^\s\"'<>]+", html, re.I)]
     for candidate in candidates:
         candidate = candidate.strip().replace("\\/", "/")
-        candidate = re.split(r"&quot;|&#34;|[\"']", candidate, maxsplit=1)[0].rstrip(",; ")
+        candidate = re.split(r"&quot;|&#34;|[\"']", candidate, maxsplit=1)[0].rstrip(
+            ",; "
+        )
         try:
             absolute = urljoin(BASE_URL + "/", candidate)
             parsed = urlsplit(absolute)
@@ -162,7 +177,9 @@ def _download_manifest_url(manifest_url: str, expected_entry: str) -> str:
         or root.group("entry") != expected_entry
         or playback_format is None
     ):
-        raise LearnError("Kaltura did not provide a supported viewer playback session for this entry.")
+        raise LearnError(
+            "Kaltura did not provide a supported viewer playback session for this entry."
+        )
     path_sessions = re.findall(r"/ks/([^/]+)(?=/|$)", parsed.path)
     query_sessions = query.get("ks", [])
     sessions = path_sessions + query_sessions
@@ -170,7 +187,11 @@ def _download_manifest_url(manifest_url: str, expected_entry: str) -> str:
         raise LearnError("Kaltura returned an invalid viewer session for this entry.")
     if sessions and any(ord(char) < 32 or ord(char) == 127 for char in sessions[0]):
         raise LearnError("Kaltura returned an invalid viewer session.")
-    query_pairs = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key != "ks"]
+    query_pairs = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key != "ks"
+    ]
     path = (
         f"/p/{root.group('partner')}/sp/{root.group('subpartner')}"
         f"/playManifest/entryId/{expected_entry}/format/download/protocol/https"
@@ -195,7 +216,9 @@ async def _capture_viewer_manifest(player_url: str, entry_id: str) -> str:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
             try:
-                context = await browser.new_context(service_workers="block", locale="en-US")
+                context = await browser.new_context(
+                    service_workers="block", locale="en-US"
+                )
                 page = await context.new_page()
 
                 async def inspect_request(route):
@@ -212,7 +235,9 @@ async def _capture_viewer_manifest(player_url: str, entry_id: str) -> str:
                     path = parsed.path.lower()
                     if "/playmanifest/" in path:
                         host = (parsed.hostname or "").lower()
-                        if (host == _KALTURA_HOST or _KALTURA_OVP_HOST.fullmatch(host)) and not captured.done():
+                        if (
+                            host == _KALTURA_HOST or _KALTURA_OVP_HOST.fullmatch(host)
+                        ) and not captured.done():
                             try:
                                 _download_manifest_url(request.url, entry_id)
                             except LearnError:
@@ -221,14 +246,18 @@ async def _capture_viewer_manifest(player_url: str, entry_id: str) -> str:
                                 captured.set_result(request.url)
                         await route.abort()
                         return
-                    if request.resource_type == "media" or path.endswith(_MEDIA_SUFFIXES):
+                    if request.resource_type == "media" or path.endswith(
+                        _MEDIA_SUFFIXES
+                    ):
                         await route.abort()
                         return
                     await route.continue_()
 
                 await page.route("**/*", inspect_request)
                 try:
-                    await page.goto(player_url, wait_until="domcontentloaded", timeout=30_000)
+                    await page.goto(
+                        player_url, wait_until="domcontentloaded", timeout=30_000
+                    )
                 except Exception:
                     if not captured.done():
                         raise
@@ -249,11 +278,15 @@ async def _capture_viewer_manifest(player_url: str, entry_id: str) -> str:
                     try:
                         await asyncio.wait_for(asyncio.shield(captured), timeout=25)
                     except asyncio.TimeoutError:
-                        raise LearnError("Kaltura did not start playback for this video; no download was made.") from None
+                        raise LearnError(
+                            "Kaltura did not start playback for this video; no download was made."
+                        ) from None
                 return captured.result()
             finally:
                 await browser.close()
     except LearnError:
         raise
     except Exception:
-        raise LearnError("Could not open the Kaltura player or obtain its short-lived viewer session.") from None
+        raise LearnError(
+            "Could not open the Kaltura player or obtain its short-lived viewer session."
+        ) from None

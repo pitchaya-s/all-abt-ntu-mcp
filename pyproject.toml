@@ -39,10 +39,38 @@ Issues = "https://github.com/pitchaya-s/all-abt-ntu-mcp/issues"
 [project.scripts]
 all-abt-ntu = "cli.cli:main"
 
-[tool.uv.build-backend]
-module-name = ["stars", "ntulearn", "mazemap", "drntu", "library", "faculty", "news", "service", "onestop", "omnibus", "careeraxis", "shared", "cli"]
-source-exclude = [".env", ".env.*", "*.har", "cookies*.json", "storage_state*.json", "*.log"]
+[tool.hatch.build]
+exclude = [
+    "**/.env",
+    "**/.env.*",
+    "**/*.har",
+    "**/cookies*.json",
+    "**/storage_state*.json",
+    "**/*.log",
+]
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "src/careeraxis",
+    "src/cli",
+    "src/drntu",
+    "src/faculty",
+    "src/library",
+    "src/mazemap",
+    "src/news",
+    "src/ntulearn",
+    "src/omnibus",
+    "src/onestop",
+    "src/service",
+    "src/shared",
+    "src/stars",
+    "src/server.py",
+    "src/public_server.py",
+    "src/public_http_server.py",
+    "src/public_http_client.py",
+]
+sources = ["src"]
 
 [build-system]
-requires = ["uv_build>=0.10.11,<0.11.0"]
-build-backend = "uv_build"
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"

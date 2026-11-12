@@ -2,7 +2,7 @@
 
 Catalogue discovery and library facility information in the shared `all-abt-ntu-mcp` server. Public tools need no credentials or API key. Detailed facility schedules use the [shared credential store](../shared/README.md#credential-storage), also used by STARS and NTULearn, and the optional Chromium installation. See the [main README](../../README.md) for installation and client configuration.
 
-`mcp_server.py` registers public tools. `personal_tools.py` registers the authenticated facility schedule tool only for local stdio; it is unavailable on the hosted public HTTP server.
+`mcp_server.py` registers public tools. `personal_tools.py` registers the authenticated facility schedule tool only for local stdio; it is unavailable on the hosted public HTTP server. LibFacilities directory parsing, browser sessions, and schedule parsing are grouped under `facilities/`.
 
 ## Tools
 

@@ -5,14 +5,19 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from shared.public_http import PublicRequestError
+from public_http_client import PublicRequestError
 from .client import ServiceClient
 from .models import Filters, SearchResults, ServiceError
 
 
 client = ServiceClient()
 Query = Annotated[str, Field(max_length=200)]
-FilterID = Annotated[str, Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
+FilterID = Annotated[
+    str,
+    Field(
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    ),
+]
 INSTRUCTIONS = (
     "service_ tools read NTU's public food, retail, clinic and campus service directory without credentials. "
     "service_search collects all pages within the selected source type/category, then applies keyword and address "
@@ -31,14 +36,31 @@ def _call(function, *args):
     except (ServiceError, PublicRequestError) as error:
         raise ToolError(str(error)) from None
     except (KeyError, TypeError, ValueError, AttributeError):
-        raise ToolError("NTU returned an unexpected service directory format or invalid query/filter input; no locations were inferred.") from None
+        raise ToolError(
+            "NTU returned an unexpected service directory format or invalid query/filter input; no locations were inferred."
+        ) from None
 
 
-def search(query: Query = "", type_id: FilterID | None = None, category_id: FilterID | None = None,
-           location_contains: Query = "", limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 20,
-           offset: Annotated[int, Field(ge=0, strict=True)] = 0, refresh: bool = False) -> SearchResults:
+def search(
+    query: Query = "",
+    type_id: FilterID | None = None,
+    category_id: FilterID | None = None,
+    location_contains: Query = "",
+    limit: Annotated[int, Field(ge=1, le=100, strict=True)] = 20,
+    offset: Annotated[int, Field(ge=0, strict=True)] = 0,
+    refresh: bool = False,
+) -> SearchResults:
     """Find NTU food outlets, shops, clinics and campus services by name/address keyword and optional location substring. Optional type_id/category_id come from service_list_filters. Collects all source pages before local matching and result pagination; returns addresses, published hours, contact details and map links. Source taxonomy filters can omit relevant entries; use an unfiltered keyword search for broader coverage. Hours are not a live open-now check."""
-    return _call(client.search, query, type_id, category_id, location_contains, limit, offset, refresh)
+    return _call(
+        client.search,
+        query,
+        type_id,
+        category_id,
+        location_contains,
+        limit,
+        offset,
+        refresh,
+    )
 
 
 def list_filters(refresh: bool = False) -> Filters:
@@ -47,6 +69,8 @@ def list_filters(refresh: bool = False) -> Filters:
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
+    read = ToolAnnotations(
+        read_only_hint=True, idempotent_hint=True, open_world_hint=True
+    )
     for function in (search, list_filters):
         mcp.tool(name="service_" + function.__name__, annotations=read)(function)

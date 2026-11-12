@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from mcp import Client
 
 from shared.credentials import delete_credentials
-from shared.server import create_server
+from server import create_server
 
 mcp = create_server("personal", check_dependencies=False)
 from stars.parser import NTUPageError
@@ -389,7 +389,7 @@ class PlanMCPTests(unittest.IsolatedAsyncioTestCase):
             "source_url": SAVE_PLAN_URL,
         }
         with patch(
-            "stars.personal_tools.persist_stars_plan", return_value=reply
+            "stars.tools.personal.persist_stars_plan", return_value=reply
         ) as save:
             async with Client(mcp, elicitation_callback=approve) as client:
                 tool = next(

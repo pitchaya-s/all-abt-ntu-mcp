@@ -8,7 +8,7 @@ from mcp import Client
 from mcp.types import ElicitResult
 
 from ntulearn import mcp_server
-from shared.server import create_server
+from server import create_server
 
 mcp = create_server("personal")
 

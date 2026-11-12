@@ -8,16 +8,19 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 from shared.confirmation import confirmed_tool
 
-from .compact import personal_fields, saved_plan_fields
-from .client import NTURequestError
-from .wish import (
-    AuthStatus, DegreeAuditResult, SavePlanResult, StarsPlannerResult,
+from ..compact import personal_fields, saved_plan_fields
+from ..client import NTURequestError
+from ..wish import (
+    AuthStatus,
+    DegreeAuditResult,
+    SavePlanResult,
+    StarsPlannerResult,
     get_degree_audit as fetch_degree_audit,
     get_stars_planner as fetch_stars_planner,
     ntu_auth_status as fetch_ntu_auth_status,
     save_stars_plan as persist_stars_plan,
 )
-from .wish.models import SavedPlan
+from ..wish.models import SavedPlan
 
 
 class PlannedIndex(BaseModel):
@@ -33,7 +36,9 @@ def ntu_auth_status() -> AuthStatus:
 def get_stars_planner(refresh: bool = False) -> StarsPlannerResult:
     """Get registered courses, the published term, and saved Plans 1–3 with indexes and timetables. Use refresh after editing a plan."""
     try:
-        return cast(StarsPlannerResult, personal_fields(fetch_stars_planner(refresh=refresh)))
+        return cast(
+            StarsPlannerResult, personal_fields(fetch_stars_planner(refresh=refresh))
+        )
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
@@ -46,8 +51,16 @@ def save_stars_plan(
 ) -> SavePlanResult:
     """Replace saved Plan 1, 2, or 3 with the complete supplied course/index list for the current Planner term. Omitted courses are removed from that plan. Verifies persistence by loading the saved plan. Does not perform course registration, dropping, or index swapping."""
     try:
-        result = persist_stars_plan(plan_number, [course.model_dump() for course in courses], academic_year, semester)
-        return {**result, "saved_plan": cast(SavedPlan, saved_plan_fields(result["saved_plan"]))}
+        result = persist_stars_plan(
+            plan_number,
+            [course.model_dump() for course in courses],
+            academic_year,
+            semester,
+        )
+        return {
+            **result,
+            "saved_plan": cast(SavedPlan, saved_plan_fields(result["saved_plan"])),
+        }
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from error
 
@@ -61,11 +74,19 @@ def get_degree_audit() -> DegreeAuditResult:
 
 
 def register_tools(mcp: MCPServer, *, workflows: bool = True) -> None:
-    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
+    read = ToolAnnotations(
+        read_only_hint=True, idempotent_hint=True, open_world_hint=True
+    )
     mcp.tool(name="stars_auth_status", annotations=read)(ntu_auth_status)
     mcp.tool(name="stars_get_stars_planner", annotations=read)(get_stars_planner)
     mcp.tool(name="stars_get_degree_audit", annotations=read)(get_degree_audit)
     if workflows:
-        mcp.tool(name="stars_save_stars_plan", annotations=ToolAnnotations(
-            read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True,
-        ))(confirmed_tool(save_stars_plan, "stars_save_stars_plan"))
+        mcp.tool(
+            name="stars_save_stars_plan",
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=True,
+                idempotent_hint=True,
+                open_world_hint=True,
+            ),
+        )(confirmed_tool(save_stars_plan, "stars_save_stars_plan"))

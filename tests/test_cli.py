@@ -111,7 +111,7 @@ class CredentialCLITests(unittest.TestCase):
 
     def test_no_command_runs_stdio_server_without_credential_prompts(self):
         with (
-            patch("shared.server.main") as server,
+            patch("server.main") as server,
             patch("builtins.input") as prompt,
             patch("cli.cli.getpass") as password,
         ):

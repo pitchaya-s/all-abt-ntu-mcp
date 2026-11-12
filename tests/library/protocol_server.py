@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from tests.library.fixtures import fake_get
 from tests.library.facility_fixtures import fake_facility_get, fake_schedule
-from shared.server import main
+from server import main
 
 
 if __name__ == "__main__":

@@ -120,7 +120,7 @@ def main() -> None:
                     all_tools=getattr(args, "all", False),
                 )
             else:
-                from shared.server import main as run_server
+                from server import main as run_server
 
                 profile = args.profile or config["profile"]
                 from .tools.commands import effective_disabled

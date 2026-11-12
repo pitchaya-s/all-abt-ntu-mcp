@@ -12,8 +12,8 @@ from jsonschema import Draft202012Validator
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
-from shared.http import create_app
-from shared.http import PublicServer
+from public_http_server import create_app
+from public_http_server import PublicServer
 from tests.faculty.fixtures import fake_get as faculty_get
 from tests.library.fixtures import fake_get as library_get
 from tests.mazemap.fixtures import fake_get as map_get
@@ -100,7 +100,7 @@ class PublicHTTPTests(unittest.IsolatedAsyncioTestCase):
             ]:
                 stack.enter_context(patch(target, side_effect=data))
             stack.enter_context(
-                patch("stars.mcp_server.fetch_course", return_value=COURSE)
+                patch("stars.tools.academic.fetch_course", return_value=COURSE)
             )
             async with http_client() as http:
                 for mode in ("auto", "legacy"):
@@ -253,7 +253,7 @@ import importlib.abc
 import sys
 class RejectPersonal(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname in {"keyring", "shared.credentials", "shared.server", "stars.personal_tools", "library.personal_tools", "library.session"} or fullname.startswith(("ntulearn", "stars.wish", "playwright", "onestop", "careeraxis")):
+        if fullname in {"keyring", "shared.credentials", "server", "stars.tools.personal", "library.personal_tools", "library.facilities.session"} or fullname.startswith(("ntulearn", "stars.wish", "playwright", "onestop", "careeraxis")):
             raise AssertionError("Hosted entrypoint imported a personal module: " + fullname)
 sys.meta_path.insert(0, RejectPersonal())
 from api.index import app

@@ -59,12 +59,19 @@ class PrerequisiteTreeNode(TypedDict):
     path_status: Literal["root", "confirmed", "possible"]
     matched_relations: list[str]
     prerequisite_status: Literal[
-        "parsed", "unparsed", "not_listed", "conflicting_records", "unavailable", "not_loaded"
+        "parsed",
+        "unparsed",
+        "not_listed",
+        "conflicting_records",
+        "unavailable",
+        "not_loaded",
     ]
     prerequisite_text: str | None
     prerequisite_texts: list[str | None]
     prerequisite_expression: dict[str, object] | None
-    eligibility_status: Literal["eligible", "not_eligible", "unknown", "not_evaluated", "not_listed"]
+    eligibility_status: Literal[
+        "eligible", "not_eligible", "unknown", "not_evaluated", "not_listed"
+    ]
     prerequisites: list[dict[str, object]]
     dependents: list[dict[str, object]]
     cycle_detected: NotRequired[bool]
@@ -106,6 +113,7 @@ class Lesson(TypedDict):
 
 class CompactSession(Lesson):
     """Course/index are inherited from the result; unfamiliar day/time text stays explicit."""
+
     raw_time: NotRequired[str]
     raw_day: NotRequired[str]
 
@@ -122,7 +130,9 @@ class VacancyMetadata(TypedDict):
 
 
 class IndexVacancies(TypedDict):
-    vacancy_status: Literal["available", "not_listed", "closed", "term_mismatch", "unavailable"]
+    vacancy_status: Literal[
+        "available", "not_listed", "closed", "term_mismatch", "unavailable"
+    ]
     vacancies_available: int | None
     waitlist_length: int | None
 

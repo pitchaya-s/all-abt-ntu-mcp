@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 
-from shared.public_http import PublicHTTPClient, PublicRequestError
+from public_http_client import PublicHTTPClient, PublicRequestError
 
 from . import parser
 from .models import (

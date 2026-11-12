@@ -5,7 +5,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from shared.public_http import PublicRequestError
+from public_http_client import PublicRequestError
 from .client import LibraryClient
 from .facilities import FacilitiesClient
 from .models import (
@@ -53,13 +53,16 @@ def search(
     query: Query,
     field: Literal["any", "title", "creator", "isbn", "issn", "sub"] = "any",
     match: Literal["contains", "exact"] = "contains",
-    resource_type: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,49}$")] | None = None,
+    resource_type: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,49}$")]
+    | None = None,
     limit: Annotated[int, Field(ge=1, le=50, strict=True)] = 10,
     offset: Annotated[int, Field(ge=0, strict=True)] = 0,
     refresh: bool = False,
 ) -> SearchResults:
     """Search NTU OneSearch for books, articles, journals and other catalogue resources. Choose a field and contains/exact matching; resource_type is a Primo facet token such as books or articles. Returns canonical IDs, bibliographic summaries and published access signals. Follow next_offset; refine the query if the service limits deep paging."""
-    return _call(client.search, query, field, match, resource_type, limit, offset, refresh)
+    return _call(
+        client.search, query, field, match, resource_type, limit, offset, refresh
+    )
 
 
 def get_record(
@@ -92,7 +95,9 @@ def get_map_availability(
 
 
 def register_tools(mcp: MCPServer) -> None:
-    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
+    read = ToolAnnotations(
+        read_only_hint=True, idempotent_hint=True, open_world_hint=True
+    )
     for function in (
         search,
         get_record,

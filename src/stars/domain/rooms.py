@@ -3,7 +3,13 @@
 from dataclasses import dataclass, field
 import re
 
-from ..room_schemas import AvailableRoom, RoomCoverage, RoomIdentity, RoomLesson, minutes
+from ..schemas.rooms import (
+    AvailableRoom,
+    RoomCoverage,
+    RoomIdentity,
+    RoomLesson,
+    minutes,
+)
 
 
 class RoomQueryError(ValueError):
@@ -30,7 +36,9 @@ def room_type(venue):
         return "lecture_theatre"
     if re.search(r"(?:^|-)CL\d+$|[A-Z]*LAB\d+$|(?:^|-)LAB-\d+$", venue):
         return "laboratory"
-    if re.fullmatch(r"(?:[A-Z][A-Z0-9.]*-)+[A-Z0-9]+(?:-[A-Z0-9]+)*", venue) and re.search(r"\d", venue):
+    if re.fullmatch(
+        r"(?:[A-Z][A-Z0-9.]*-)+[A-Z0-9]+(?:-[A-Z0-9]+)*", venue
+    ) and re.search(r"\d", venue):
         return "other"
     if re.fullmatch(r"(?:CR|FTR|ESR|CSKL|TRX)\d+[A-Z]?", venue):
         return "other"
@@ -49,7 +57,9 @@ class Room:
             venue=self.venue,
             room_type=self.kind,
             aliases=sorted(self.aliases - {self.venue}),
-            observed_lesson_types=sorted({s.lesson_type for s in self.lessons.values() if s.lesson_type}),
+            observed_lesson_types=sorted(
+                {s.lesson_type for s in self.lessons.values() if s.lesson_type}
+            ),
         )
 
 
@@ -135,7 +145,11 @@ def build_catalogue(courses):
                     raw_time=session.raw_time,
                 )
                 lesson = room.lessons[identity]
-            if session.venue and session.venue != venue and session.venue not in lesson.source_venue_labels:
+            if (
+                session.venue
+                and session.venue != venue
+                and session.venue not in lesson.source_venue_labels
+            ):
                 lesson.source_venue_labels.append(session.venue)
     for room in rooms.values():
         for lesson in room.lessons.values():
@@ -144,7 +158,9 @@ def build_catalogue(courses):
         rooms,
         RoomCoverage(
             course_count=len(course_codes),
-            courses_without_published_indexes=len(course_codes - {code for code, _ in indexes}),
+            courses_without_published_indexes=len(
+                course_codes - {code for code, _ in indexes}
+            ),
             index_count=len(indexes),
             lesson_count=len(all_lessons),
             observed_room_count=len(rooms),
@@ -168,10 +184,14 @@ def candidate(room, filters):
     identity = room.identity()
     if filters.room_types and room.kind not in filters.room_types:
         return False
-    if filters.venue_contains and normalize_venue(filters.venue_contains) not in room.venue:
+    if (
+        filters.venue_contains
+        and normalize_venue(filters.venue_contains) not in room.venue
+    ):
         return False
     if filters.venue_prefixes and not any(
-        room.venue.startswith(normalize_venue(prefix)) for prefix in filters.venue_prefixes
+        room.venue.startswith(normalize_venue(prefix))
+        for prefix in filters.venue_prefixes
     ):
         return False
     if room.venue in {normalize_venue(v) for v in filters.exclude_venues}:
@@ -201,7 +221,11 @@ def available_rooms(catalogue, window, filters, limit, offset):
         for lesson in room.lessons.values():
             if not relevant(lesson, window.day, window.teaching_weeks):
                 continue
-            if lesson.day is None or lesson.start_time is None or lesson.end_time is None:
+            if (
+                lesson.day is None
+                or lesson.start_time is None
+                or lesson.end_time is None
+            ):
                 uncertain = True
                 continue
             a, b = minutes(lesson.start_time), minutes(lesson.end_time)
@@ -221,7 +245,9 @@ def available_rooms(catalogue, window, filters, limit, offset):
         else:
             matches.append(
                 AvailableRoom(
-                    **room.identity().model_dump(), free_from=clock(before), free_until=clock(after)
+                    **room.identity().model_dump(),
+                    free_from=clock(before),
+                    free_until=clock(after),
                 )
             )
     return dict(
@@ -243,7 +269,9 @@ def room_schedule(catalogue, venue, day, weeks, start_time, end_time, limit, off
     if (start_time is None) != (end_time is None) or (
         start_time and minutes(start_time) >= minutes(end_time)
     ):
-        raise RoomQueryError("Supply both start_time and end_time, with end_time later on the same day.")
+        raise RoomQueryError(
+            "Supply both start_time and end_time, with end_time later on the same day."
+        )
     room = catalogue.rooms[key]
     lessons = []
     for lesson in room.lessons.values():
@@ -260,7 +288,9 @@ def room_schedule(catalogue, venue, day, weeks, start_time, end_time, limit, off
         ):
             continue
         lessons.append(lesson)
-    lessons.sort(key=lambda s: (s.day or "", s.start_time or "", s.course_code, s.group or ""))
+    lessons.sort(
+        key=lambda s: (s.day or "", s.start_time or "", s.course_code, s.group or "")
+    )
     return dict(
         room=room.identity(),
         session_count=len(lessons),

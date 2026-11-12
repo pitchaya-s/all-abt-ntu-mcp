@@ -11,8 +11,8 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 from shared.credentials import CredentialError, read_credentials
-from .facilities import BASE, requested_time
-from .models import FacilitySchedule, LibraryError, SpaceSchedule
+from . import BASE, requested_time
+from ..models import FacilitySchedule, LibraryError, SpaceSchedule
 from .schedule import parse_slots, schedule_path
 
 
@@ -24,7 +24,9 @@ _CHALLENGE = re.compile(
 
 class FacilitySession:
     def __init__(self):
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="libfacilities")
+        self._executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="libfacilities"
+        )
         self._lock = RLock()
         self._closed = False
         self._playwright = self._browser = self._context = self._page = None
@@ -51,12 +53,16 @@ class FacilitySession:
                 finally:
                     self._executor.shutdown()
 
-    def get_schedule(self, day, space_id=None, location_id=None, group_id=None, refresh=False):
+    def get_schedule(
+        self, day, space_id=None, location_id=None, group_id=None, refresh=False
+    ):
         requested_time(day, "00:00")
         path = schedule_path(space_id, location_id, group_id)
         with self._lock:
             if self._closed:
-                raise LibraryError("The library session is closed; restart the MCP server.")
+                raise LibraryError(
+                    "The library session is closed; restart the MCP server."
+                )
             future = self._executor.submit(self._get_schedule, path, day, refresh)
         try:
             return future.result()
@@ -94,7 +100,9 @@ class FacilitySession:
         page = self._page
         response = page.goto(BASE + path, wait_until="domcontentloaded", timeout=30000)
         if response is not None and response.status >= 400:
-            raise LibraryError(f"LibFacilities returned HTTP {response.status}; retry later.")
+            raise LibraryError(
+                f"LibFacilities returned HTTP {response.status}; retry later."
+            )
         deadline = time.monotonic() + 45
         password_sent = False
         while time.monotonic() < deadline:
@@ -121,11 +129,15 @@ class FacilitySession:
             if (
                 parsed.hostname == "libcalendar.ntu.edu.sg"
                 and parsed.path == urlsplit(path).path
-                and page.evaluate("typeof springyPage !== 'undefined' && springyPage.locationId > 0")
+                and page.evaluate(
+                    "typeof springyPage !== 'undefined' && springyPage.locationId > 0"
+                )
             ):
                 return
             if password_sent and re.search(
-                r"incorrect|invalid password|account.*locked|too many.*attempts", body, re.I
+                r"incorrect|invalid password|account.*locked|too many.*attempts",
+                body,
+                re.I,
             ):
                 raise LibraryError(
                     "NTU rejected the library login. Check the saved credentials; no password retry was made."
@@ -141,7 +153,9 @@ class FacilitySession:
                         "A recent library login did not complete. Wait one minute before retrying."
                     )
                 self._login_not_before = time.monotonic() + 60
-                page.locator("#userNameInput").fill(credentials.username + "@student.main.ntu.edu.sg")
+                page.locator("#userNameInput").fill(
+                    credentials.username + "@student.main.ntu.edu.sg"
+                )
                 page.locator("#passwordInput").fill(credentials.password)
                 password_sent = True
                 page.locator("#submitButton").click()
@@ -177,7 +191,15 @@ class FacilitySession:
             if (
                 any(
                     type(settings[k]) is not int or settings[k] < 0
-                    for k in ("lid", "gid", "seat", "seatId", "zone", "pageSize", "count")
+                    for k in (
+                        "lid",
+                        "gid",
+                        "seat",
+                        "seatId",
+                        "zone",
+                        "pageSize",
+                        "count",
+                    )
                 )
                 or type(settings["eid"]) is not int
                 or settings["eid"] < -1
@@ -191,9 +213,13 @@ class FacilitySession:
                 matches = settings["eid"] == int(path.rsplit("/", 1)[1])
             else:
                 query = parse_qs(urlsplit(path).query)
-                matches = settings["lid"] == int(query["lid"][0]) and settings["gid"] == int(query["gid"][0])
+                matches = settings["lid"] == int(query["lid"][0]) and settings[
+                    "gid"
+                ] == int(query["gid"][0])
             if not matches:
-                raise LibraryError("LibFacilities returned a different facility than requested.")
+                raise LibraryError(
+                    "LibFacilities returned a different facility than requested."
+                )
             title = " ".join(page.locator("h1").first.inner_text().split())
             description = (
                 page.locator("#s-lc-group-description").inner_text()
@@ -209,24 +235,42 @@ class FacilitySession:
                 or len(names) != settings["count"]
                 or any(not re.fullmatch(r"[1-9][0-9]*", key) for key in names)
             ):
-                raise LibraryError("LibFacilities returned an inconsistent resource list.")
+                raise LibraryError(
+                    "LibFacilities returned an inconsistent resource list."
+                )
             all_slots = []
             expired = False
             window_end = None
-            for index in range(max(1, math.ceil(settings["count"] / settings["pageSize"]))):
+            for index in range(
+                max(1, math.ceil(settings["count"] / settings["pageSize"]))
+            ):
                 self._pace()
                 response = self._context.request.post(
                     BASE + "/spaces/availability/grid",
                     form={
                         **{
                             k: settings[k]
-                            for k in ("lid", "gid", "eid", "seat", "seatId", "zone", "pageSize")
+                            for k in (
+                                "lid",
+                                "gid",
+                                "eid",
+                                "seat",
+                                "seatId",
+                                "zone",
+                                "pageSize",
+                            )
                         },
                         "start": day,
-                        "end": (date.fromisoformat(day) + timedelta(days=1)).isoformat(),
+                        "end": (
+                            date.fromisoformat(day) + timedelta(days=1)
+                        ).isoformat(),
                         "pageIndex": index,
                     },
-                    headers={"X-Requested-With": "XMLHttpRequest", "Origin": BASE, "Referer": BASE + path},
+                    headers={
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Origin": BASE,
+                        "Referer": BASE + path,
+                    },
                     max_redirects=0,
                     timeout=30000,
                 )
@@ -234,8 +278,10 @@ class FacilitySession:
                     if response.status in (301, 302, 303, 307, 308, 401):
                         expired = True
                         break
-                    if response.status != 200 or "application/json" not in response.headers.get(
-                        "content-type", ""
+                    if (
+                        response.status != 200
+                        or "application/json"
+                        not in response.headers.get("content-type", "")
                     ):
                         raise LibraryError(
                             f"LibFacilities did not return a readable availability grid (HTTP {response.status}); retry later."
@@ -262,7 +308,9 @@ class FacilitySession:
             for item in all_slots:
                 item.name = names.get(item.item_id)
                 if item.item_id not in names:
-                    raise LibraryError("LibFacilities returned slots for an unexpected resource.")
+                    raise LibraryError(
+                        "LibFacilities returned slots for an unexpected resource."
+                    )
             known = {item.item_id for item in all_slots}
             all_slots.extend(
                 SpaceSchedule(item_id=key, name=name, slots=[])

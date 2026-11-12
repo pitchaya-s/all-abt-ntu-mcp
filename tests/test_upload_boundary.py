@@ -68,7 +68,8 @@ class UploadBoundaryTests(unittest.TestCase):
 
             with patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": str(approved)}):
                 with patch(
-                    "onestop.attachments.os.open", side_effect=swap_before_open
+                    "onestop.attachments.local_files.os.open",
+                    side_effect=swap_before_open,
                 ) as mocked_open:
                     with patch.object(os, "supports_dir_fd", {mocked_open}):
                         with self.assertRaises(OneStopError):
@@ -101,7 +102,8 @@ class UploadBoundaryTests(unittest.TestCase):
 
             with patch.dict(os.environ, {"NTU_ONESTOP_UPLOAD_DIR": str(approved)}):
                 with patch(
-                    "onestop.attachments.os.open", side_effect=swap_after_open
+                    "onestop.attachments.local_files.os.open",
+                    side_effect=swap_after_open,
                 ) as mocked_open:
                     with patch.object(os, "supports_dir_fd", {mocked_open}):
                         with self.assertRaisesRegex(OneStopError, "approved"):

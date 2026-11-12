@@ -7,11 +7,11 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 from shared.confirmation import confirmed_tool
 
-from .appointments import AppointmentService
+from .services.appointments import AppointmentService
 from .attachments import AttachmentService
-from .cart import CartService, FavouriteService
-from .forms import FormService
-from .knowledge import KnowledgeService
+from .services.cart import CartService, FavouriteService
+from .services.forms import FormService
+from .services.knowledge import KnowledgeService
 from .models import (
     ActionResult,
     AppointmentConfiguration,
@@ -34,8 +34,8 @@ from .models import (
     RequestActivity,
     RequestDraft,
 )
-from .portal import PortalService
-from .tickets import TicketService
+from .services.portal import PortalService
+from .services.tickets import TicketService
 
 
 ID = Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]

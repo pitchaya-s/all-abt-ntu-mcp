@@ -11,7 +11,7 @@ from tests.credential_fixtures import MemoryKeyring, stored_credentials
 class CredentialTests(unittest.IsolatedAsyncioTestCase):
     async def test_profile_boundaries_and_missing_dependency(self):
         from mcp import Client
-        from shared.server import create_server
+        from server import create_server
 
         names = {}
         for profile in ("public", "personal"):
@@ -33,13 +33,13 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(name, names["public"])
             self.assertIn(name, names["personal"])
         self.assertLess(names["public"], names["personal"])
-        with patch("shared.server.find_spec", return_value=None):
+        with patch("server.find_spec", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "Playwright"):
                 create_server("personal")
             create_server("public")
         with (
-            patch("shared.server.find_spec", return_value=object()),
-            patch("shared.server._chromium_installed", return_value=False),
+            patch("server.find_spec", return_value=object()),
+            patch("server._chromium_installed", return_value=False),
         ):
             with self.assertRaisesRegex(RuntimeError, "Chromium"):
                 create_server("personal")
@@ -90,7 +90,7 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
                 await learn.close()
 
     def test_server_closes_all_sessions_even_if_one_cleanup_fails(self):
-        from shared import server
+        import server
         from careeraxis import mcp_server as careeraxis
         from library import personal_tools as library
         from ntulearn import mcp_server as learn

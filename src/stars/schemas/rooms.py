@@ -8,8 +8,13 @@ Day = Literal["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 Semester = Literal[1, 2, "S"]
 Year = Annotated[int, Field(ge=2000, le=2100, strict=True)]
 TimeText = Annotated[str, Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")]
-Weeks = Annotated[list[Annotated[int, Field(ge=1, le=20, strict=True)]], Field(min_length=1, max_length=20)]
-RoomType = Literal["tutorial_room", "seminar_room", "lecture_theatre", "laboratory", "other"]
+Weeks = Annotated[
+    list[Annotated[int, Field(ge=1, le=20, strict=True)]],
+    Field(min_length=1, max_length=20),
+]
+RoomType = Literal[
+    "tutorial_room", "seminar_room", "lecture_theatre", "laboratory", "other"
+]
 Label = Annotated[str, Field(min_length=1, max_length=80)]
 Limit = Annotated[int, Field(ge=1, le=100, strict=True)]
 Offset = Annotated[int, Field(ge=0, strict=True)]
@@ -50,14 +55,20 @@ class RoomFilters(Model):
     @classmethod
     def nonblank(cls, value):
         if value is not None and (not value.strip() or any(ord(c) < 32 for c in value)):
-            raise ValueError("Venue text must be nonblank and contain no control characters.")
+            raise ValueError(
+                "Venue text must be nonblank and contain no control characters."
+            )
         return value
 
     @field_validator("venue_prefixes", "exclude_venues", "used_for_lesson_types")
     @classmethod
     def nonblank_list(cls, values):
-        if values is not None and any(not v.strip() or any(ord(c) < 32 for c in v) for v in values):
-            raise ValueError("Filter labels must be nonblank and contain no control characters.")
+        if values is not None and any(
+            not v.strip() or any(ord(c) < 32 for c in v) for v in values
+        ):
+            raise ValueError(
+                "Filter labels must be nonblank and contain no control characters."
+            )
         return values
 
 
@@ -140,7 +151,9 @@ class RoomResult(Model):
 
 
 class AvailableRoomsResult(RoomResult):
-    availability_basis: Literal["no_known_scheduled_teaching"] = "no_known_scheduled_teaching"
+    availability_basis: Literal["no_known_scheduled_teaching"] = (
+        "no_known_scheduled_teaching"
+    )
     window: RoomWindow
     match_count: int
     offset: int

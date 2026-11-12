@@ -3,7 +3,7 @@
 from contextlib import nullcontext
 from unittest.mock import patch
 
-from shared.http import create_app
+from public_http_server import create_app
 from tests.faculty.fixtures import fake_get as faculty_get
 from tests.library.fixtures import fake_get as library_get
 from tests.mazemap.fixtures import fake_get as map_get
@@ -15,7 +15,7 @@ from tests.stars.mcp_fixtures import COURSE
 
 
 PATCHES = [
-    patch("stars.mcp_server.fetch_course", return_value=COURSE),
+    patch("stars.tools.academic.fetch_course", return_value=COURSE),
     patch("faculty.mcp_server.client.http.get", side_effect=faculty_get),
     patch("library.mcp_server.client.http.get", side_effect=library_get),
     patch(

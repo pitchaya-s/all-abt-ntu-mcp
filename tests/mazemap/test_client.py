@@ -11,7 +11,7 @@ from mazemap import parser
 from mazemap.client import MapClient
 from mazemap.mcp_server import _call
 from mazemap.models import MapError
-from shared.public_http import PublicRequestError
+from public_http_client import PublicRequestError
 
 from .fixtures import COLLECTION, POI, ROUTING, SEARCH_POI, fake_get
 

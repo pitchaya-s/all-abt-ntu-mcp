@@ -13,7 +13,7 @@ from urllib.request import Request
 
 import httpx
 
-from shared.public_http import defer_host_requests, host_request_slot
+from public_http_client import defer_host_requests, host_request_slot
 
 USER_AGENT = "all-abt-ntu-mcp/0.1 (NTU timetable lookup)"
 REQUEST_TIMEOUT_SECONDS = 20

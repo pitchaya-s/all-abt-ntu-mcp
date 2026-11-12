@@ -212,12 +212,15 @@ Use JSON booleans for switches, numbers for durations and limits, and strings fo
 ```text
 src/
 ├── cli/                    Local setup, tool selection, and configuration
-├── shared/                 Local/public runtimes, HTTP app, keyring, and parsing
+├── server.py               Local public/personal stdio server
+├── public_server.py        Public tool registry
+├── public_http_server.py   Hosted ASGI app and transport security
+├── public_http_client.py   Pooled public HTTP client
+├── shared/                 Credentials, paths, confirmation, and shared helpers
 ├── stars/
-│   ├── mcp_server.py        STARS tool registration and input schemas
-│   ├── personal_tools.py    Local authenticated STARS tools
-│   ├── room_tools.py        Teaching-based room tool registration
-│   ├── room_schemas.py      Typed room constraints and results
+│   ├── mcp_server.py        STARS public tool registration entry point
+│   ├── tools/               Academic, personal, and teaching-room tool groups
+│   ├── schemas/             Course and room tool schemas
 │   ├── domain/             Course models, timetable matching and room searches
 │   ├── client/             Public NTU requests and caching
 │   ├── parser/             Schedule and personal-page parsing
@@ -231,7 +234,7 @@ src/
 ├── careeraxis/
 │   ├── mcp_server.py        Local authenticated CareerAxis tools
 │   ├── client.py            Section searches and record detail requests
-│   ├── session.py           ADFS login and in-memory browser session
+│   ├── browser/             ADFS login, browser session, and page snapshots
 │   ├── parser.py            Rendered section and record normalization
 │   └── models.py            Search, detail, and auth status responses
 ├── mazemap/
@@ -249,9 +252,7 @@ src/
 │   ├── personal_tools.py    Local authenticated facility tool
 │   ├── models.py           Catalogue, access and facility responses
 │   ├── client.py           OneSearch requests and pagination
-│   ├── facilities.py       Public facility directory and map availability
-│   ├── session.py          Optional facility login and daily time grids
-│   ├── schedule.py         Time-grid validation and normalization
+│   ├── facilities/         Directory, map availability, browser, and schedules
 │   └── parser.py           Primo record normalization
 ├── faculty/
 │   ├── mcp_server.py        Public faculty tools and input schemas
@@ -270,6 +271,8 @@ src/
 │   └── parser.py           Contact, hours, and map normalization
 ├── omnibus/                Public shuttle and LTA stops, positions, arrivals and schedules
 └── onestop/                Local ServiceNow reads and native workflows
+    ├── services/           Catalog, form, ticket, cart, knowledge, and portal workflows
+    └── attachments/        Verified attachment actions and safe local-file handling
 tests/
 ├── stars/                  STARS tests and fictionalized fixtures
 ├── ntulearn/               NTULearn tests and synthetic fixtures

@@ -7,8 +7,8 @@ from pathlib import Path
 
 from mcp.server import MCPServer
 
-from . import public_server
-from .version import VERSION
+import public_server
+from shared.version import VERSION
 
 PROFILES = ("public", "personal")
 PERSONAL_INSTRUCTIONS = (
@@ -56,7 +56,7 @@ def create_server(
         from library import personal_tools as library
         from ntulearn import mcp_server as learn
         from onestop import mcp_server as onestop
-        from stars import personal_tools as stars
+        from stars.tools import personal as stars
 
         instructions += " " + PERSONAL_INSTRUCTIONS
         instructions += " ".join(

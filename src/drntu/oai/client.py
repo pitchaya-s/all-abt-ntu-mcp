@@ -3,7 +3,7 @@
 from urllib.parse import urlencode
 from contextlib import contextmanager
 
-from shared.public_http import PublicHTTPClient, PublicRequestError
+from public_http_client import PublicHTTPClient, PublicRequestError
 
 from ..models import RepositoryError
 from .parser import envelope

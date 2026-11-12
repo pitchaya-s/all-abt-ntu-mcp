@@ -6,7 +6,7 @@ from fixtures import COURSE, PREFIX, RESPONSES, FixtureSession
 
 from ntulearn import mcp_server
 from ntulearn.client.client import LearnClient
-from shared.server import main
+from server import main
 
 if __name__ == "__main__":
     RESPONSES[f"{PREFIX}/courses/{COURSE}/contents/_202_1/attachments"]["results"][

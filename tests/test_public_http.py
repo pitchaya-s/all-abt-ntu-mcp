@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import httpx
 
-from shared.public_http import PublicHTTPClient, PublicRequestError
+from public_http_client import PublicHTTPClient, PublicRequestError
 
 URL = "https://example.org/feed"
 
@@ -14,7 +14,9 @@ URL = "https://example.org/feed"
 class PublicHTTPTests(unittest.TestCase):
     def make_client(self, handler, *, content_types=("application/json",)):
         client = PublicHTTPClient(
-            "Example service", ["example.org", "static.example.org"], set(content_types),
+            "Example service",
+            ["example.org", "static.example.org"],
+            set(content_types),
             transport=httpx.MockTransport(handler),
         )
         self.addCleanup(client.close)
@@ -26,16 +28,23 @@ class PublicHTTPTests(unittest.TestCase):
         def handle(request):
             requests.append(request)
             return httpx.Response(
-                200, headers={"content-type": "application/json", "set-cookie": "session=private"},
-                content=b"{}", request=request,
+                200,
+                headers={
+                    "content-type": "application/json",
+                    "set-cookie": "session=private",
+                },
+                content=b"{}",
+                request=request,
             )
 
         client = self.make_client(handle)
-        with patch("shared.public_http.time.sleep"):
+        with patch("public_http_client.time.sleep"):
             first = client.get(URL)
             self.assertFalse(first[1]["cached"])
             self.assertTrue(client.get(URL)[1]["cached"])
-            self.assertEqual(first[1]["retrieved_at"], client.get(URL)[1]["retrieved_at"])
+            self.assertEqual(
+                first[1]["retrieved_at"], client.get(URL)[1]["retrieved_at"]
+            )
             client.get(URL, refresh=True)
             self.assertEqual(len(requests), 2)
             stamp, body, retrieved = client._cache[URL]
@@ -47,10 +56,18 @@ class PublicHTTPTests(unittest.TestCase):
             self.assertNotIn("authorization", request.headers)
 
     def test_cache_evicts_least_recently_used_entries_by_bytes(self):
-        client = self.make_client(lambda request: httpx.Response(
-            200, headers={"content-type": "application/json"}, content=b"1234", request=request,
-        ))
-        with patch("shared.public_http.MAX_CACHE_BYTES", 8), patch("shared.public_http.time.sleep"):
+        client = self.make_client(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"1234",
+                request=request,
+            )
+        )
+        with (
+            patch("public_http_client.MAX_CACHE_BYTES", 8),
+            patch("public_http_client.time.sleep"),
+        ):
             client.get(URL + "?1")
             client.get(URL + "?2")
             client.get(URL + "?1")
@@ -58,16 +75,24 @@ class PublicHTTPTests(unittest.TestCase):
         self.assertEqual(list(client._cache), [URL + "?1", URL + "?3"])
 
     def test_research_data_host_has_conservative_shared_pacing(self):
-        from shared.public_http import _scheduler_for
+        from public_http_client import _scheduler_for
+
         scheduler = _scheduler_for("https://researchdata.ntu.edu.sg/api/datasets")
         self.assertGreaterEqual(scheduler._interval, 60.0)
-        self.assertIs(scheduler, _scheduler_for("https://researchdata.ntu.edu.sg/other"))
+        self.assertIs(
+            scheduler, _scheduler_for("https://researchdata.ntu.edu.sg/other")
+        )
 
     def test_parse_failure_evicts_only_the_response_that_failed(self):
-        client = self.make_client(lambda request: httpx.Response(
-            200, headers={"content-type": "application/json"}, content=b"{}", request=request,
-        ))
-        with patch("shared.public_http.time.sleep"):
+        client = self.make_client(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
+        )
+        with patch("public_http_client.time.sleep"):
             with self.assertRaises(ValueError):
                 with client.parsed_response(URL):
                     raise ValueError("bad response")
@@ -80,42 +105,73 @@ class PublicHTTPTests(unittest.TestCase):
 
     def test_only_allowed_https_redirects_are_followed(self):
         for url in [
-            "http://example.org/feed", "https://evil.example/feed",
-            "https://example.org:8443/feed", "https://user@example.org/feed",
+            "http://example.org/feed",
+            "https://evil.example/feed",
+            "https://example.org:8443/feed",
+            "https://user@example.org/feed",
         ]:
             with self.assertRaises(PublicRequestError):
-                PublicHTTPClient("test", ["example.org"], {"application/json"}).redirects.validate(url)
+                PublicHTTPClient(
+                    "test", ["example.org"], {"application/json"}
+                ).redirects.validate(url)
 
         requests = []
 
         def allowed(request):
             requests.append(request)
             if request.url.host == "example.org":
-                return httpx.Response(302, headers={"location": "https://static.example.org/feed"}, request=request)
-            return httpx.Response(200, headers={"content-type": "application/json"}, content=b"{}", request=request)
+                return httpx.Response(
+                    302,
+                    headers={"location": "https://static.example.org/feed"},
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
 
         client = self.make_client(allowed)
-        with patch("shared.public_http.time.sleep"):
+        with patch("public_http_client.time.sleep"):
             client.get(URL)
-        self.assertEqual([request.url.host for request in requests], ["example.org", "static.example.org"])
+        self.assertEqual(
+            [request.url.host for request in requests],
+            ["example.org", "static.example.org"],
+        )
 
         def denied(request):
-            return httpx.Response(302, headers={"location": "https://evil.example/feed"}, request=request)
+            return httpx.Response(
+                302, headers={"location": "https://evil.example/feed"}, request=request
+            )
 
         unsafe = self.make_client(denied)
-        with patch("shared.public_http.time.sleep"), self.assertRaises(PublicRequestError):
+        with (
+            patch("public_http_client.time.sleep"),
+            self.assertRaises(PublicRequestError),
+        ):
             unsafe.get(URL)
 
     def test_bad_content_and_oversized_responses_are_not_cached(self):
         for response in [
-            lambda request: httpx.Response(200, headers={"content-type": "text/html"}, content=b"<html/>", request=request),
             lambda request: httpx.Response(
-                200, headers={"content-type": "application/json"},
-                content=b" " * (8_000_001), request=request,
+                200,
+                headers={"content-type": "text/html"},
+                content=b"<html/>",
+                request=request,
+            ),
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b" " * (8_000_001),
+                request=request,
             ),
         ]:
             client = self.make_client(response)
-            with patch("shared.public_http.time.sleep"), self.assertRaises(PublicRequestError):
+            with (
+                patch("public_http_client.time.sleep"),
+                self.assertRaises(PublicRequestError),
+            ):
                 client.get(URL)
             self.assertFalse(client._cache)
 
@@ -125,10 +181,15 @@ class PublicHTTPTests(unittest.TestCase):
 
             def handle(request, status=status, seen=seen):
                 seen.append(request)
-                return httpx.Response(status, headers={"retry-after": "0"}, request=request)
+                return httpx.Response(
+                    status, headers={"retry-after": "0"}, request=request
+                )
 
             client = self.make_client(handle)
-            with patch("shared.public_http.time.sleep"), self.assertRaises(PublicRequestError) as caught:
+            with (
+                patch("public_http_client.time.sleep"),
+                self.assertRaises(PublicRequestError) as caught,
+            ):
                 client.get(URL)
             self.assertEqual(len(seen), attempts)
             self.assertNotIn("private error detail", str(caught.exception))
@@ -140,21 +201,34 @@ class PublicHTTPTests(unittest.TestCase):
             raise httpx.ConnectError("private error detail", request=request)
 
         client = self.make_client(connection_error)
-        with patch("shared.public_http.time.sleep"), self.assertRaises(PublicRequestError) as caught:
+        with (
+            patch("public_http_client.time.sleep"),
+            self.assertRaises(PublicRequestError) as caught,
+        ):
             client.get(URL)
         self.assertEqual(len(seen), 2)
         self.assertNotIn("private error detail", str(caught.exception))
 
     def test_rate_limits_honor_long_numeric_and_http_date_delays(self):
-        for value in ["120", (datetime.now(timezone.utc) + timedelta(minutes=5)).strftime("%a, %d %b %Y %H:%M:%S GMT")]:
+        for value in [
+            "120",
+            (datetime.now(timezone.utc) + timedelta(minutes=5)).strftime(
+                "%a, %d %b %Y %H:%M:%S GMT"
+            ),
+        ]:
             seen = []
 
             def handle(request, value=value, seen=seen):
                 seen.append(request)
-                return httpx.Response(429, headers={"retry-after": value}, request=request)
+                return httpx.Response(
+                    429, headers={"retry-after": value}, request=request
+                )
 
             client = self.make_client(handle)
-            with patch("shared.public_http.time.sleep"), self.assertRaises(PublicRequestError):
+            with (
+                patch("public_http_client.time.sleep"),
+                self.assertRaises(PublicRequestError),
+            ):
                 client.get(URL)
             self.assertEqual(len(seen), 1)
 
@@ -165,11 +239,22 @@ class PublicHTTPTests(unittest.TestCase):
         def handle(request):
             requests.append(request.url.path)
             both_started.wait(timeout=2)
-            return httpx.Response(200, headers={"content-type": "application/json"}, content=b"{}", request=request)
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
 
         client = self.make_client(handle)
-        with patch("shared.public_http.REQUEST_INTERVAL_SECONDS", 0), ThreadPoolExecutor(max_workers=2) as pool:
-            futures = [pool.submit(client.get, f"https://example.org/{path}") for path in ("one", "two")]
+        with (
+            patch("public_http_client.REQUEST_INTERVAL_SECONDS", 0),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            futures = [
+                pool.submit(client.get, f"https://example.org/{path}")
+                for path in ("one", "two")
+            ]
             [future.result(timeout=3) for future in futures]
         self.assertCountEqual(requests, ["/one", "/two"])
 
@@ -184,20 +269,40 @@ class PublicHTTPTests(unittest.TestCase):
             first_entered.set()
             if not release_first.wait(timeout=2):
                 raise TimeoutError("first fixture request was not released")
-            return httpx.Response(200, headers={"content-type": "application/json"}, content=b"{}", request=request)
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
 
         def second_handler(request):
             second_entered.set()
-            return httpx.Response(200, headers={"content-type": "application/json"}, content=b"{}", request=request)
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
 
-        first = PublicHTTPClient("first", [host], {"application/json"}, transport=httpx.MockTransport(first_handler))
-        second = PublicHTTPClient("second", [host], {"application/json"}, transport=httpx.MockTransport(second_handler))
+        first = PublicHTTPClient(
+            "first",
+            [host],
+            {"application/json"},
+            transport=httpx.MockTransport(first_handler),
+        )
+        second = PublicHTTPClient(
+            "second",
+            [host],
+            {"application/json"},
+            transport=httpx.MockTransport(second_handler),
+        )
         self.addCleanup(first.close)
         self.addCleanup(second.close)
 
         with (
-            patch("shared.public_http.REQUEST_CONCURRENCY", 1),
-            patch("shared.public_http.REQUEST_INTERVAL_SECONDS", 0),
+            patch("public_http_client.REQUEST_CONCURRENCY", 1),
+            patch("public_http_client.REQUEST_INTERVAL_SECONDS", 0),
             ThreadPoolExecutor(max_workers=2) as pool,
         ):
             first_request = pool.submit(first.get, url)
@@ -220,10 +325,18 @@ class PublicHTTPTests(unittest.TestCase):
             entered.set()
             if not release.wait(timeout=2):
                 raise TimeoutError("test request was not released")
-            return httpx.Response(200, headers={"content-type": "application/json"}, content=b"{}", request=request)
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
 
         client = self.make_client(handle)
-        with patch("shared.public_http.REQUEST_INTERVAL_SECONDS", 0), ThreadPoolExecutor(max_workers=2) as pool:
+        with (
+            patch("public_http_client.REQUEST_INTERVAL_SECONDS", 0),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
             first = pool.submit(client.get, URL)
             self.assertTrue(entered.wait(timeout=2))
             second = pool.submit(client.get, URL)
@@ -233,7 +346,14 @@ class PublicHTTPTests(unittest.TestCase):
         self.assertEqual(requests, ["/feed"])
 
     def test_closed_client_rejects_new_requests(self):
-        client = self.make_client(lambda request: httpx.Response(200, headers={"content-type": "application/json"}, content=b"{}", request=request))
+        client = self.make_client(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                content=b"{}",
+                request=request,
+            )
+        )
         client.close()
         with self.assertRaisesRegex(PublicRequestError, "client is closed"):
             client.get(URL)

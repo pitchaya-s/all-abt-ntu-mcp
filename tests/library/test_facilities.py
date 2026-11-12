@@ -4,10 +4,15 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from shared.credentials import CredentialError, Credentials
-from library.facilities import FacilitiesClient, map_availability, requested_time, script_json
+from library.facilities import (
+    FacilitiesClient,
+    map_availability,
+    requested_time,
+    script_json,
+)
 from library.models import LibraryError
-from library.session import FacilitySession
-from library.schedule import parse_slots, schedule_path
+from library.facilities.session import FacilitySession
+from library.facilities.schedule import parse_slots, schedule_path
 from .facility_fixtures import GRID, MAP, fake_facility_get, fake_schedule, snapshot
 
 
@@ -23,7 +28,8 @@ class FacilityTests(unittest.TestCase):
             self.assertEqual(directory.notices, ["Example closure notice."])
             result = client.get_map_availability("abcdef123456", "2026-10-24", "14:00")
         self.assertEqual(
-            [v.status for v in result.spaces], ["available", "available_later", "unavailable", "unknown"]
+            [v.status for v in result.spaces],
+            ["available", "available_later", "unavailable", "unknown"],
         )
         self.assertEqual(result.at.utcoffset(), timedelta(hours=8))
         self.assertEqual(result.spaces[-1].source_status, 88)
@@ -52,12 +58,18 @@ class FacilityTests(unittest.TestCase):
         self.assertEqual(result[0].slots[-1].status, "unavailable")
         self.assertNotIn("never-output", result[0].model_dump_json())
         self.assertEqual(result[0].slots[0].start.utcoffset(), timedelta(hours=8))
-        self.assertEqual(parse_slots({**GRID, "slots": []}, {100: "Room"}, "2026-10-24")[0].slots, [])
+        self.assertEqual(
+            parse_slots({**GRID, "slots": []}, {100: "Room"}, "2026-10-24")[0].slots, []
+        )
         available = deepcopy(GRID)
         for row in available["slots"]:
             row.pop("className", None)
-        self.assertEqual(parse_slots(available, {}, "2026-10-24")[0].slots[0].status, "available")
-        self.assertIsNone(parse_slots(available, {}, "2026-10-24")[0].slots[0].source_classes)
+        self.assertEqual(
+            parse_slots(available, {}, "2026-10-24")[0].slots[0].status, "available"
+        )
+        self.assertIsNone(
+            parse_slots(available, {}, "2026-10-24")[0].slots[0].source_classes
+        )
 
     def test_grid_wrong_day_overlap_and_unexpected_booking_fail(self):
         cases = []
@@ -76,12 +88,20 @@ class FacilityTests(unittest.TestCase):
     def test_read_paths_and_credentials_are_checked_before_cache(self):
         self.assertEqual(schedule_path(100, None, None), "/space/100")
         self.assertEqual(schedule_path(None, 10, 20), "/spaces?lid=10&gid=20")
-        for ids in [(None, None, None), (100, 10, 20), (-1, None, None), (True, None, None)]:
+        for ids in [
+            (None, None, None),
+            (100, 10, 20),
+            (-1, None, None),
+            (True, None, None),
+        ]:
             with self.assertRaises(LibraryError):
                 schedule_path(*ids)
         session = FacilitySession()
         self.addCleanup(session.close)
-        with patch("library.session.read_credentials", side_effect=CredentialError("Keyring locked")):
+        with patch(
+            "library.facilities.session.read_credentials",
+            side_effect=CredentialError("Keyring locked"),
+        ):
             with self.assertRaisesRegex(LibraryError, "Keyring locked"):
                 session.get_schedule("2026-10-24", 100)
         self.assertIsNone(session._browser)
@@ -89,17 +109,26 @@ class FacilityTests(unittest.TestCase):
     def test_cached_personal_results_require_current_credentials_and_are_copied(self):
         session = FacilitySession()
         self.addCleanup(session.close)
-        credentials = Credentials(username="example", password="synthetic", revision="a" * 32)
+        credentials = Credentials(
+            username="example", password="synthetic", revision="a" * 32
+        )
         session._revision = credentials.revision
         import time
 
-        session._cache[("/space/100", "2026-10-24")] = (time.monotonic(), fake_schedule("2026-10-24", 100))
-        with patch("library.session.read_credentials", return_value=credentials):
+        session._cache[("/space/100", "2026-10-24")] = (
+            time.monotonic(),
+            fake_schedule("2026-10-24", 100),
+        )
+        with patch(
+            "library.facilities.session.read_credentials", return_value=credentials
+        ):
             first = session.get_schedule("2026-10-24", 100)
             first.spaces.clear()
             self.assertTrue(session.get_schedule("2026-10-24", 100).spaces)
             self.assertTrue(first.cached)
-        with patch("library.session.read_credentials", return_value=Credentials()):
+        with patch(
+            "library.facilities.session.read_credentials", return_value=Credentials()
+        ):
             with self.assertRaises(LibraryError):
                 session.get_schedule("2026-10-24", 100)
         self.assertFalse(session._cache)
@@ -107,14 +136,22 @@ class FacilityTests(unittest.TestCase):
     def test_browser_errors_do_not_leak_details(self):
         session = FacilitySession()
         self.addCleanup(session.close)
-        with patch.object(session, "_get_schedule", side_effect=RuntimeError("private-password-and-cookie")):
+        with patch.object(
+            session,
+            "_get_schedule",
+            side_effect=RuntimeError("private-password-and-cookie"),
+        ):
             with self.assertRaises(LibraryError) as error:
                 session.get_schedule("2026-10-24", 100)
         self.assertNotIn("private-password", str(error.exception))
 
     def test_expired_grid_reauthenticates_once_and_permission_errors_do_not(self):
-        credentials = Credentials(username="example", password="synthetic", revision="a" * 32)
-        settings = dict(lid=10, gid=20, eid=100, seat=0, seatId=0, zone=0, pageSize=18, count=1)
+        credentials = Credentials(
+            username="example", password="synthetic", revision="a" * 32
+        )
+        settings = dict(
+            lid=10, gid=20, eid=100, seat=0, seatId=0, zone=0, pageSize=18, count=1
+        )
         for status in (302, 403):
             with self.subTest(status=status):
                 session = FacilitySession()
@@ -128,16 +165,25 @@ class FacilityTests(unittest.TestCase):
                     settings,
                     [["100", "Example Room"]],
                 ]
-                session._page.locator.return_value.inner_text.return_value = "Example Room"
-                session._page.locator.return_value.first.inner_text.return_value = "Example Room"
+                session._page.locator.return_value.inner_text.return_value = (
+                    "Example Room"
+                )
+                session._page.locator.return_value.first.inner_text.return_value = (
+                    "Example Room"
+                )
                 first = MagicMock(status=status, headers={})
-                second = MagicMock(status=200, headers={"content-type": "application/json"})
+                second = MagicMock(
+                    status=200, headers={"content-type": "application/json"}
+                )
                 second.body.return_value = b"{}"
                 second.json.return_value = GRID
                 session._context.request.post.side_effect = [first, second]
                 context = session._context
                 with (
-                    patch("library.session.read_credentials", return_value=credentials),
+                    patch(
+                        "library.facilities.session.read_credentials",
+                        return_value=credentials,
+                    ),
                     patch.object(session, "_navigate") as login,
                     patch.object(session, "_pace"),
                 ):
@@ -159,7 +205,9 @@ class FacilityTests(unittest.TestCase):
                         context.clear_cookies.assert_not_called()
 
     def test_mfa_and_wrong_password_stop_without_repeated_submission(self):
-        credentials = Credentials(username="example", password="synthetic", revision="a" * 32)
+        credentials = Credentials(
+            username="example", password="synthetic", revision="a" * 32
+        )
         for body in (["Verify your identity"], ["Sign in", "Incorrect password"]):
             with self.subTest(body=body):
                 session = FacilitySession()
@@ -172,7 +220,10 @@ class FacilityTests(unittest.TestCase):
                 with patch.object(session, "_open"), patch.object(session, "_pace"):
                     with self.assertRaises(LibraryError):
                         session._navigate("/space/100", credentials)
-                self.assertEqual(page.locator.return_value.fill.call_count, 0 if len(body) == 1 else 2)
+                self.assertEqual(
+                    page.locator.return_value.fill.call_count,
+                    0 if len(body) == 1 else 2,
+                )
 
     def test_category_session_recognizes_configuration_without_room_heading(self):
         session = FacilitySession()
@@ -187,17 +238,23 @@ class FacilityTests(unittest.TestCase):
         page.locator.return_value.fill.assert_not_called()
 
     def test_category_all_resources_sentinel_matches_the_official_grid_query(self):
-        credentials = Credentials(username="example", password="synthetic", revision="a" * 32)
+        credentials = Credentials(
+            username="example", password="synthetic", revision="a" * 32
+        )
         session = FacilitySession()
         self.addCleanup(session.close)
         session._revision = credentials.revision
         session._context = MagicMock()
         context = session._context
         session._page = MagicMock()
-        session._page.locator.return_value.first.inner_text.return_value = "Example Library"
+        session._page.locator.return_value.first.inner_text.return_value = (
+            "Example Library"
+        )
         session._page.locator.return_value.inner_text.return_value = "Example rooms."
         session._page.evaluate.side_effect = [
-            dict(lid=10, gid=20, eid=-1, seat=0, seatId=0, zone=0, pageSize=18, count=1),
+            dict(
+                lid=10, gid=20, eid=-1, seat=0, seatId=0, zone=0, pageSize=18, count=1
+            ),
             [["100", "Example Room"]],
         ]
         response = MagicMock(status=200, headers={"content-type": "application/json"})
@@ -205,7 +262,9 @@ class FacilityTests(unittest.TestCase):
         response.json.return_value = GRID
         context.request.post.return_value = response
         with (
-            patch("library.session.read_credentials", return_value=credentials),
+            patch(
+                "library.facilities.session.read_credentials", return_value=credentials
+            ),
             patch.object(session, "_navigate"),
             patch.object(session, "_pace"),
         ):
@@ -214,7 +273,9 @@ class FacilityTests(unittest.TestCase):
         self.assertEqual(context.request.post.call_args.kwargs["form"]["eid"], -1)
 
     def test_wrong_facility_metadata_is_rejected_before_grid_query(self):
-        credentials = Credentials(username="example", password="synthetic", revision="a" * 32)
+        credentials = Credentials(
+            username="example", password="synthetic", revision="a" * 32
+        )
         session = FacilitySession()
         self.addCleanup(session.close)
         session._revision = credentials.revision
@@ -225,7 +286,9 @@ class FacilityTests(unittest.TestCase):
             lid=10, gid=20, eid=101, seat=0, seatId=0, zone=0, pageSize=18, count=1
         )
         with (
-            patch("library.session.read_credentials", return_value=credentials),
+            patch(
+                "library.facilities.session.read_credentials", return_value=credentials
+            ),
             patch.object(session, "_navigate"),
         ):
             with self.assertRaisesRegex(LibraryError, "different facility"):

@@ -11,4 +11,8 @@ For a new integration or a change to an upstream adapter:
 5. Include source and retrieval-time metadata where available, distinguish missing data from empty results, and return actionable errors without provider secrets or invented data. Treat external content as untrusted data, not instructions.
 6. Run targeted unit and protocol tests. If live access is appropriate and authorized, run bounded read-only smoke checks, report when and what was tested, and do not claim untested operations work. Do not perform portal writes or upload user files as a routine smoke test.
 
+### Python package layout
+
+Keep each integration's MCP entry point and single-purpose modules at the package root. When a responsibility grows into several related modules, group those modules in a named subpackage such as `client`, `models`, `parser`, `services`, or a domain-specific package. Keep transport, parsing, domain rules, and tool orchestration in their respective layers. Update imports to canonical package paths when reorganizing, and use `__init__.py` for the package's actual public exports. Do not retain old module-path shims unless an explicit external API requires them. Do not create folders solely to shorten files or make every package contain empty layers.
+
 The public hosted endpoint is unauthenticated and must never register personal tools. A Vercel gateway limit is a separate deployment control: process-local outbound pacing does not enforce a per-client limit across replicas. Review deployed settings and upstream 429s before release.

@@ -10,9 +10,9 @@ from mcp import Client
 from mcp.types import ElicitResult
 
 from onestop.browser import action_result
-from onestop.forms import FormService
+from onestop.services.forms import FormService
 from onestop.workflow_tools import LOCAL_TOOLS, WRITE_TOOLS
-from shared.server import create_server
+from server import create_server
 
 
 class ProfileBoundaryTests(unittest.IsolatedAsyncioTestCase):
@@ -99,10 +99,10 @@ class ProfileBoundaryTests(unittest.IsolatedAsyncioTestCase):
     def test_public_import_does_not_load_personal_modules(self):
         root = Path(__file__).resolve().parents[1]
         program = (
-            "import sys; import shared.server; "
+            "import sys; import server; "
             "assert not any(name in sys.modules for name in "
             "('ntulearn', 'onestop', 'careeraxis', 'playwright', "
-            "'stars.personal_tools', 'library.personal_tools'))"
+            "'stars.tools.personal', 'library.personal_tools'))"
         )
         completed = subprocess.run(
             [sys.executable, "-c", program], cwd=root, capture_output=True, text=True

@@ -10,7 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from faculty import mcp_server, parser
 from faculty.client import API, DIRECTORY, FacultyClient
 from faculty.models import FacultyError
-from shared.public_http import PublicRequestError
+from public_http_client import PublicRequestError
 
 from .fixtures import INTEREST_ID, OPTIONS, OTHER_ID, PROFILE, fake_get
 
@@ -26,8 +26,13 @@ class FacultyTests(unittest.TestCase):
         person = result.profiles[0]
         self.assertEqual(person.name, "Assoc Prof Example Éclair")
         self.assertEqual(person.school, "School of Example & Testing")
-        self.assertEqual(person.appointments, ["Associate Professor, Example School", "Director, Example Centre"])
-        self.assertEqual(person.interests, ["Artificial & Augmented Intelligence", "Testing"])
+        self.assertEqual(
+            person.appointments,
+            ["Associate Professor, Example School", "Director, Example Centre"],
+        )
+        self.assertEqual(
+            person.interests, ["Artificial & Augmented Intelligence", "Testing"]
+        )
         self.assertEqual(person.summary, "A fictional profile & biography ...")
         absent = parser.profile({"title": "Example", "url": PROFILE["url"]})
         self.assertIsNone(absent.email)
@@ -44,13 +49,18 @@ class FacultyTests(unittest.TestCase):
         self.assertEqual(len(first.profiles), 10)
         self.assertEqual(len(second.profiles), 1)
         self.assertIsNone(second.next_page)
-        self.assertFalse({p.profile_url for p in first.profiles} & {p.profile_url for p in second.profiles})
+        self.assertFalse(
+            {p.profile_url for p in first.profiles}
+            & {p.profile_url for p in second.profiles}
+        )
         empty = self.client.search("no matches")
         self.assertEqual(empty.total_count, 0)
         self.assertIsNone(empty.next_page)
         with self.assertRaisesRegex(FacultyError, "Page exceeds"):
             self.client.search(page=3)
-        self.assertEqual(parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["1"])
+        self.assertEqual(
+            parse_qs(urlsplit(self.fetch.call_args.args[0]).query)["page"], ["1"]
+        )
 
     def test_inconsistent_totals_across_pages_are_rejected(self):
         def changed(url, refresh=False):
@@ -61,6 +71,7 @@ class FacultyTests(unittest.TestCase):
                 data["items"].append({**PROFILE, "url": PROFILE["url"] + "extra"})
                 body = json.dumps(data).encode()
             return body, snapshot
+
         self.fetch.side_effect = changed
         with self.assertRaisesRegex(FacultyError, "changed between pages"):
             self.client.search(page=2)
@@ -81,11 +92,19 @@ class FacultyTests(unittest.TestCase):
         self.assertEqual(parse_qs(urlsplit(url).query)["interests"], [INTEREST_ID])
 
     def test_inputs_are_validated_before_search_requests(self):
-        for args in [dict(query="bad\nquery"), dict(query="x" * 201), dict(page=True), dict(page=0),
-                     dict(interest_id="not an ID"), dict(interest_id="33333333-3333-4333-8333-333333333333")]:
+        for args in [
+            dict(query="bad\nquery"),
+            dict(query="x" * 201),
+            dict(page=True),
+            dict(page=0),
+            dict(interest_id="not an ID"),
+            dict(interest_id="33333333-3333-4333-8333-333333333333"),
+        ]:
             with self.subTest(args=args), self.assertRaises(FacultyError):
                 self.client.search(**args)
-        self.assertTrue(all(call.args[0] == DIRECTORY for call in self.fetch.call_args_list))
+        self.assertTrue(
+            all(call.args[0] == DIRECTORY for call in self.fetch.call_args_list)
+        )
 
     def test_query_is_encoded_without_injecting_parameters(self):
         query = "Example & page=9 + É"
@@ -97,19 +116,38 @@ class FacultyTests(unittest.TestCase):
     def test_changed_or_partial_responses_fail_without_inventing_profiles(self):
         good = {"items": [PROFILE], "totalItems": 1, "totalPages": 1}
         _, snapshot = fake_get(DIRECTORY)
-        cases = [b"<html>Service down</html>", b"{}", b"[]", b'{"items":{},"totalItems":0,"totalPages":0}']
-        for update in [{"totalItems": "1"}, {"totalPages": 2}, {"totalItems": 20}, {"items": []},
-                       {"items": [PROFILE, PROFILE], "totalItems": 2},
-                       {"items": [{**PROFILE, "title": None}]},
-                       {"items": [{**PROFILE, "url": "javascript:alert(1)"}]},
-                       {"items": [{**PROFILE, "url": "https://evil.example/person"}]}]:
+        cases = [
+            b"<html>Service down</html>",
+            b"{}",
+            b"[]",
+            b'{"items":{},"totalItems":0,"totalPages":0}',
+        ]
+        for update in [
+            {"totalItems": "1"},
+            {"totalPages": 2},
+            {"totalItems": 20},
+            {"items": []},
+            {"items": [PROFILE, PROFILE], "totalItems": 2},
+            {"items": [{**PROFILE, "title": None}]},
+            {"items": [{**PROFILE, "url": "javascript:alert(1)"}]},
+            {"items": [{**PROFILE, "url": "https://evil.example/person"}]},
+        ]:
             cases.append(json.dumps({**deepcopy(good), **update}).encode())
         for body in cases:
-            with self.subTest(body=body[:120]), self.assertRaises((FacultyError, KeyError, TypeError, ValueError)):
+            with (
+                self.subTest(body=body[:120]),
+                self.assertRaises((FacultyError, KeyError, TypeError, ValueError)),
+            ):
                 parser.search_results(body, snapshot, 1)
-        for body in [b"<html><body>Unavailable</body></html>", OPTIONS.replace(b"</html>", b""),
-                     OPTIONS.replace(b'<label for="energy">Energy</label>', b""),
-                     OPTIONS.replace(b'for="mobile">Artificial &amp; Augmented Intelligence', b'for="mobile">Conflicting')]:
+        for body in [
+            b"<html><body>Unavailable</body></html>",
+            OPTIONS.replace(b"</html>", b""),
+            OPTIONS.replace(b'<label for="energy">Energy</label>', b""),
+            OPTIONS.replace(
+                b'for="mobile">Artificial &amp; Augmented Intelligence',
+                b'for="mobile">Conflicting',
+            ),
+        ]:
             with self.assertRaises(FacultyError):
                 parser.interest_options(body)
 
@@ -117,13 +155,23 @@ class FacultyTests(unittest.TestCase):
         client = FacultyClient()
         url = API + "?interests=all&page=1&searchFaculty=Example"
         body, _ = fake_get(url)
-        with patch.object(client.http, "_fetch", return_value=(body, datetime.now(timezone.utc))) as fetch:
+        with patch.object(
+            client.http, "_fetch", return_value=(body, datetime.now(timezone.utc))
+        ) as fetch:
             self.assertFalse(client.search("Example").cached)
             self.assertTrue(client.search("Example").cached)
             self.assertFalse(client.search("Example", refresh=True).cached)
             self.assertEqual(fetch.call_count, 2)
-        for error in (PublicRequestError("NTU faculty directory returned HTTP 503; try again later."), KeyError("raw provider detail")):
-            with patch.object(mcp_server.client, "search", side_effect=error), self.assertRaises(ToolError) as caught:
+        for error in (
+            PublicRequestError(
+                "NTU faculty directory returned HTTP 503; try again later."
+            ),
+            KeyError("raw provider detail"),
+        ):
+            with (
+                patch.object(mcp_server.client, "search", side_effect=error),
+                self.assertRaises(ToolError) as caught,
+            ):
                 mcp_server.search()
             self.assertNotIn("raw provider detail", str(caught.exception))
 
@@ -132,7 +180,9 @@ class FacultyTests(unittest.TestCase):
         url = API + "?interests=all&page=1&searchFaculty=Example"
         body, _ = fake_get(url)
         now = datetime.now(timezone.utc)
-        with patch.object(client.http, "_fetch", side_effect=[(b"{}", now), (body, now)]) as fetch:
+        with patch.object(
+            client.http, "_fetch", side_effect=[(b"{}", now), (body, now)]
+        ) as fetch:
             with self.assertRaises(FacultyError):
                 client.search("Example")
             self.assertEqual(client.search("Example").total_count, 11)

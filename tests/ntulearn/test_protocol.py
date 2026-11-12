@@ -11,7 +11,7 @@ from mcp.client.stdio import StdioServerParameters
 from mcp.types import ElicitResult
 
 from ntulearn import mcp_server
-from shared.server import create_server
+from server import create_server
 
 mcp = create_server("personal", check_dependencies=False)
 from ntulearn.models import LearnError

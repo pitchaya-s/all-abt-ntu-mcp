@@ -7,8 +7,8 @@ import re
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
-from shared.public_http import PublicHTTPClient
-from .models import Facilities, Facility, LibraryError, MapAvailability, SpaceStatus
+from public_http_client import PublicHTTPClient
+from ..models import Facilities, Facility, LibraryError, MapAvailability, SpaceStatus
 
 BASE = "https://libcalendar.ntu.edu.sg"
 SGT = ZoneInfo("Asia/Singapore")
@@ -62,29 +62,40 @@ class DirectoryParser(HTMLParser):
             elif re.fullmatch(r"/space/[1-9][0-9]{0,9}", parsed.path):
                 fields["space_id"] = int(parsed.path.rsplit("/", 1)[1])
             elif parsed.path == "/spaces" and all(
-                re.fullmatch(r"[1-9][0-9]{0,9}", params.get(k, [""])[0]) for k in ("lid", "gid")
+                re.fullmatch(r"[1-9][0-9]{0,9}", params.get(k, [""])[0])
+                for k in ("lid", "gid")
             ):
-                fields.update(location_id=int(params["lid"][0]), group_id=int(params["gid"][0]))
+                fields.update(
+                    location_id=int(params["lid"][0]), group_id=int(params["gid"][0])
+                )
             else:
                 return
             name = " ".join("".join(parts).split())
             if not name or not self.library:
-                raise LibraryError("LibFacilities returned an unlabelled directory entry.")
-            self.facilities.append(Facility(library=self.library, name=name, url=parsed.geturl(), **fields))
+                raise LibraryError(
+                    "LibFacilities returned an unlabelled directory entry."
+                )
+            self.facilities.append(
+                Facility(library=self.library, name=name, url=parsed.geturl(), **fields)
+            )
 
 
 def directory(body, snapshot):
     parser = DirectoryParser()
     parser.feed(body.decode("utf-8"))
     if not parser.facilities:
-        raise LibraryError("LibFacilities returned an unexpected directory; no facilities were inferred.")
+        raise LibraryError(
+            "LibFacilities returned an unexpected directory; no facilities were inferred."
+        )
     return Facilities(facilities=parser.facilities, notices=parser.notices, **snapshot)
 
 
 def script_json(html, name):
     match = re.search(r"\b" + re.escape(name) + r"\s*:\s*", html)
     if match is None:
-        raise LibraryError("LibFacilities changed its map format; no availability was inferred.")
+        raise LibraryError(
+            "LibFacilities changed its map format; no availability was inferred."
+        )
     return json.JSONDecoder().raw_decode(html, match.end())[0]
 
 
@@ -101,14 +112,18 @@ def map_availability(body, slug, at, snapshot):
             space_id=value["id"],
             name=value["title"],
             source_status=value["status"],
-            status={10: "available", 5: "available_later", 1: "unavailable"}.get(value["status"], "unknown"),
+            status={10: "available", 5: "available_later", 1: "unavailable"}.get(
+                value["status"], "unknown"
+            ),
         )
         if item.space_id in spaces and spaces[item.space_id] != item:
             raise LibraryError("LibFacilities returned conflicting map statuses.")
         spaces[item.space_id] = item
     if not spaces:
         raise LibraryError("This map returned no identifiable seat or room statuses.")
-    return MapAvailability(map_slug=slug, at=at, spaces=list(spaces.values()), **snapshot)
+    return MapAvailability(
+        map_slug=slug, at=at, spaces=list(spaces.values()), **snapshot
+    )
 
 
 def requested_time(day, time):
@@ -117,14 +132,20 @@ def requested_time(day, time):
             r"(?:[01]\d|2[0-3]):[0-5]\d", time
         ):
             raise ValueError
-        return datetime.combine(date.fromisoformat(day), datetime.strptime(time, "%H:%M").time(), SGT)
+        return datetime.combine(
+            date.fromisoformat(day), datetime.strptime(time, "%H:%M").time(), SGT
+        )
     except ValueError:
-        raise LibraryError("Use a valid date YYYY-MM-DD and Singapore time HH:MM.") from None
+        raise LibraryError(
+            "Use a valid date YYYY-MM-DD and Singapore time HH:MM."
+        ) from None
 
 
 class FacilitiesClient:
     def __init__(self):
-        self.http = PublicHTTPClient("NTU LibFacilities", ["libcalendar.ntu.edu.sg"], {"text/html"})
+        self.http = PublicHTTPClient(
+            "NTU LibFacilities", ["libcalendar.ntu.edu.sg"], {"text/html"}
+        )
 
     def list_facilities(self, refresh=False):
         with self.http.parsed_response(BASE + "/", refresh) as (body, snapshot):
@@ -132,7 +153,9 @@ class FacilitiesClient:
 
     def get_map_availability(self, map_slug, day, time, refresh=False):
         if not re.fullmatch(r"[a-f0-9]{12}", map_slug):
-            raise LibraryError("Use map_slug exactly as returned by library_list_facilities.")
+            raise LibraryError(
+                "Use map_slug exactly as returned by library_list_facilities."
+            )
         at = requested_time(day, time)
         with self.http.parsed_response(BASE + "/map/" + map_slug, refresh) as (body, _):
             map_id = script_json(body.decode("utf-8"), "mapId")

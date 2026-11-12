@@ -45,18 +45,28 @@ GRID = {
 
 
 def snapshot(url):
-    return dict(retrieved_at=datetime(2026, 10, 23, tzinfo=timezone.utc), source_url=url, cached=False)
+    return dict(
+        retrieved_at=datetime(2026, 10, 23, tzinfo=timezone.utc),
+        source_url=url,
+        cached=False,
+    )
 
 
 def fake_facility_get(url, refresh=False):
     path = urlsplit(url).path
-    body = MAP if path == "/maps/search/spaces" else MAP_PAGE if path.startswith("/map/") else DIRECTORY
+    body = (
+        MAP
+        if path == "/maps/search/spaces"
+        else MAP_PAGE
+        if path.startswith("/map/")
+        else DIRECTORY
+    )
     return body, snapshot(url)
 
 
 def fake_schedule(day, space_id=None, location_id=None, group_id=None, refresh=False):
     from library.facilities import BASE
-    from library.schedule import parse_slots, schedule_path
+    from library.facilities.schedule import parse_slots, schedule_path
 
     path = schedule_path(space_id, location_id, group_id)
     return FacilitySchedule(

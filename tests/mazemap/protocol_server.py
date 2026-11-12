@@ -5,7 +5,7 @@ from unittest.mock import patch
 from contextlib import nullcontext
 
 from tests.mazemap.fixtures import fake_get
-from shared.server import main
+from server import main
 
 
 if __name__ == "__main__":

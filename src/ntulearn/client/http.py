@@ -141,7 +141,9 @@ class LearnHTTP:
         expected_generation: int | None = None,
     ) -> httpx.Response:
         if not allowed_read_path(path):
-            raise LearnError("This NTULearn endpoint is not in the read-only allowlist.")
+            raise LearnError(
+                "This NTULearn endpoint is not in the read-only allowlist."
+            )
         url = BASE_URL + path
         for attempt in range(MAX_ATTEMPTS):
             try:
@@ -153,7 +155,9 @@ class LearnHTTP:
                         raise AuthGenerationChanged
                     response = await self.client.get(url, params=params)
             except httpx.HTTPError:
-                raise LearnError("NTULearn connection failed or timed out; retry later.") from None
+                raise LearnError(
+                    "NTULearn connection failed or timed out; retry later."
+                ) from None
             if (
                 expected_generation is not None
                 and expected_generation != self._auth_generation
@@ -188,7 +192,9 @@ class LearnHTTP:
                     client.cookies.clear()
                     try:
                         async with self.scheduler.slot():
-                            async with client.stream("GET", url, headers=headers) as response:
+                            async with client.stream(
+                                "GET", url, headers=headers
+                            ) as response:
                                 yield response
                     finally:
                         # A vendor response cannot set cookies for another
@@ -211,7 +217,9 @@ class LearnHTTP:
                         self._snapshot_auth_cookies()
                         yield response
         except httpx.HTTPError:
-            raise LearnError("NTULearn connection failed or timed out; retry later.") from None
+            raise LearnError(
+                "NTULearn connection failed or timed out; retry later."
+            ) from None
 
     async def download_bytes(
         self,
@@ -225,11 +233,23 @@ class LearnHTTP:
         url = BASE_URL + path
         for _ in range(4):
             parsed = urlsplit(url)
-            if parsed.scheme != "https" or parsed.username or parsed.password or parsed.fragment:
-                raise LearnError("The attachment redirect is not a supported secure download URL.")
+            if (
+                parsed.scheme != "https"
+                or parsed.username
+                or parsed.password
+                or parsed.fragment
+            ):
+                raise LearnError(
+                    "The attachment redirect is not a supported secure download URL."
+                )
             host = parsed.hostname or ""
-            if parsed.port not in (None, 443) or parsed.netloc.lower() not in {host.lower(), f"{host.lower()}:443"}:
-                raise LearnError("The attachment redirect is not a supported secure download URL.")
+            if parsed.port not in (None, 443) or parsed.netloc.lower() not in {
+                host.lower(),
+                f"{host.lower()}:443",
+            }:
+                raise LearnError(
+                    "The attachment redirect is not a supported secure download URL."
+                )
             if parsed.hostname == NTULEARN_HOST:
                 request_client = self.client
                 authenticated = True
@@ -238,7 +258,9 @@ class LearnHTTP:
                     request_client = self.external_client
                     authenticated = False
                 else:
-                    raise LearnError("The file requires an unsupported external download host; open it in NTULearn manually.")
+                    raise LearnError(
+                        "The file requires an unsupported external download host; open it in NTULearn manually."
+                    )
 
             redirected = False
             for attempt in range(MAX_ATTEMPTS):
@@ -262,31 +284,52 @@ class LearnHTTP:
                         location = response.headers.get("location", "")
                         redirect = urljoin(url, location) if location else None
                     elif response_status != 200:
-                        raise LearnError(f"NTULearn could not download this attachment (HTTP {response_status}).")
+                        raise LearnError(
+                            f"NTULearn could not download this attachment (HTTP {response_status})."
+                        )
                     else:
                         content_type = response.headers.get("content-type", "").lower()
-                        if "text/html" in content_type or "application/json" in content_type:
-                            raise LearnError("NTULearn returned a login/error page or unsupported HTML/JSON attachment; no file was saved.")
+                        if (
+                            "text/html" in content_type
+                            or "application/json" in content_type
+                        ):
+                            raise LearnError(
+                                "NTULearn returned a login/error page or unsupported HTML/JSON attachment; no file was saved."
+                            )
                         length = response.headers.get("content-length")
-                        if length and length.isdigit() and int(length) > min(MAX_FILE_BYTES, max_bytes):
-                            raise LearnError("This attachment exceeds the 20 MB file limit or remaining batch limit; no file was saved.")
+                        if (
+                            length
+                            and length.isdigit()
+                            and int(length) > min(MAX_FILE_BYTES, max_bytes)
+                        ):
+                            raise LearnError(
+                                "This attachment exceeds the 20 MB file limit or remaining batch limit; no file was saved."
+                            )
                         async for chunk in response.aiter_bytes():
                             body.extend(chunk)
                             if len(body) > min(MAX_FILE_BYTES, max_bytes):
-                                raise LearnError("This attachment exceeds the 20 MB file limit or remaining batch limit; no file was saved.")
+                                raise LearnError(
+                                    "This attachment exceeds the 20 MB file limit or remaining batch limit; no file was saved."
+                                )
                 if retry_delay_seconds is not None:
                     await asyncio.sleep(retry_delay_seconds)
                     continue
                 if response_status in _REDIRECTS:
                     if redirect is None:
-                        raise LearnError("NTULearn returned too many or incomplete file redirects; no file was saved.")
+                        raise LearnError(
+                            "NTULearn returned too many or incomplete file redirects; no file was saved."
+                        )
                     url = redirect
                     redirected = True
                     break
                 return bytes(body)
             if not redirected:
-                raise LearnError("NTULearn could not complete the attachment download; retry later.")
-        raise LearnError("NTULearn returned too many file redirects; no file was saved.")
+                raise LearnError(
+                    "NTULearn could not complete the attachment download; retry later."
+                )
+        raise LearnError(
+            "NTULearn returned too many file redirects; no file was saved."
+        )
 
     async def download_kaltura_file(
         self,
@@ -315,21 +358,31 @@ def retry_delay(response: httpx.Response, attempt: int) -> float:
                 retry_at = parsedate_to_datetime(value)
                 if retry_at.tzinfo is None:
                     retry_at = retry_at.replace(tzinfo=timezone.utc)
-                delay = max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+                delay = max(
+                    0.0, (retry_at - datetime.now(timezone.utc)).total_seconds()
+                )
             except (TypeError, ValueError, OverflowError):
                 delay = 1.0 if response.status_code == 429 else float(2**attempt)
     if delay > MAX_RETRY_DELAY_SECONDS:
-        raise LearnError("NTULearn requested a retry delay longer than one minute; retry this read later.")
+        raise LearnError(
+            "NTULearn requested a retry delay longer than one minute; retry this read later."
+        )
     return delay
 
 
 def json_body(response: httpx.Response) -> Any:
     if "application/json" not in response.headers.get("content-type", "").lower():
-        raise LearnError("NTULearn returned a non-JSON page instead of academic data; no data was inferred.")
+        raise LearnError(
+            "NTULearn returned a non-JSON page instead of academic data; no data was inferred."
+        )
     body = response.content
     if len(body) > MAX_JSON_BYTES:
-        raise LearnError("NTULearn's response exceeded the 5 MB limit; request a smaller page.")
+        raise LearnError(
+            "NTULearn's response exceeded the 5 MB limit; request a smaller page."
+        )
     try:
         return json.loads(body)
     except (ValueError, UnicodeError):
-        raise LearnError("NTULearn returned malformed JSON; no data was inferred.") from None
+        raise LearnError(
+            "NTULearn returned malformed JSON; no data was inferred."
+        ) from None

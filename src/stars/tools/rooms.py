@@ -3,10 +3,10 @@
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from .domain.rooms import build_catalogue, available_rooms, room_schedule
-from .client.http import NTURequestError
-from .client.teaching import get_teaching_snapshot
-from .room_schemas import (
+from ..domain.rooms import build_catalogue, available_rooms, room_schedule
+from ..client.http import NTURequestError
+from ..client.teaching import get_teaching_snapshot
+from ..schemas.rooms import (
     AvailableRoomsResult,
     RoomScheduleResult,
     RoomWindow,
@@ -64,7 +64,9 @@ def find_available_rooms(
         return AvailableRoomsResult(
             window=window,
             **_source(snapshot, catalogue),
-            **available_rooms(catalogue, window, filters or RoomFilters(), limit, offset),
+            **available_rooms(
+                catalogue, window, filters or RoomFilters(), limit, offset
+            ),
         )
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from None
@@ -85,22 +87,37 @@ def get_room_schedule(
     """Get all published undergraduate course/index lessons using one observed room, including full-time and part-time offerings. Accepts a venue code or returned alias. Shared lessons carry all associated index numbers. Optional day, teaching weeks and overlapping time interval filter the result; uncertain lessons remain included. Missing weeks/times are unknown. Paginate with offset/limit and has_more. This is teaching data, not room bookings or actual occupancy."""
     try:
         if not venue.strip() or any(ord(c) < 32 for c in venue):
-            raise ValueError("venue must be a nonblank venue code without control characters.")
+            raise ValueError(
+                "venue must be a nonblank venue code without control characters."
+            )
         if (start_time is None) != (end_time is None) or (
             start_time and minutes(start_time) >= minutes(end_time)
         ):
-            raise ValueError("Supply both start_time and end_time, with end_time later on the same day.")
+            raise ValueError(
+                "Supply both start_time and end_time, with end_time later on the same day."
+            )
         snapshot = get_teaching_snapshot(academic_year, semester, refresh)
         catalogue = build_catalogue(snapshot.courses)
         return RoomScheduleResult(
             **_source(snapshot, catalogue),
-            **room_schedule(catalogue, venue, day, teaching_weeks, start_time, end_time, limit, offset),
+            **room_schedule(
+                catalogue,
+                venue,
+                day,
+                teaching_weeks,
+                start_time,
+                end_time,
+                limit,
+                offset,
+            ),
         )
     except (NTURequestError, ValueError) as error:
         raise ToolError(str(error)) from None
 
 
 def register_tools(mcp):
-    read = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=True)
+    read = ToolAnnotations(
+        read_only_hint=True, idempotent_hint=True, open_world_hint=True
+    )
     for function in (find_available_rooms, get_room_schedule):
         mcp.tool(name="stars_" + function.__name__, annotations=read)(function)

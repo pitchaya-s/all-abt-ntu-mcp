@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from shared.server import main
+from server import main
 from tests.service.fixtures import fake_get
 
 

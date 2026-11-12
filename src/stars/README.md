@@ -2,7 +2,7 @@
 
 These tools run in the shared `all-abt-ntu-mcp` server. See the [main README](../../README.md) for installation and client configuration.
 
-Public tools are registered in `mcp_server.py` and `room_tools.py`. Authenticated tools live in `personal_tools.py` and are registered only by the local stdio server; the hosted HTTP server exposes public tools only.
+Public academic and room tools are implemented in `tools/academic.py` and `tools/rooms.py`; `mcp_server.py` registers both groups. Authenticated tools live in `tools/personal.py` and are registered only by the local stdio server; the hosted HTTP server exposes public tools only. Tool schemas are grouped in `schemas/`, with room-specific schemas in `schemas/rooms.py`.
 
 ## Inputs and results
 

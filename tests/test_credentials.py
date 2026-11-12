@@ -210,7 +210,7 @@ class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
     async def test_inaccessible_saved_credentials_are_reported_as_unknown_over_mcp(
         self,
     ):
-        from shared.server import create_server
+        from server import create_server
 
         mcp = create_server("personal", check_dependencies=False)
         with stored_credentials("example001", "mcp-test-secret") as backend:
@@ -237,7 +237,7 @@ class MCPCredentialTests(unittest.IsolatedAsyncioTestCase):
                         )
 
     async def test_status_and_credential_errors_never_expose_keyring_secrets(self):
-        from shared.server import create_server
+        from server import create_server
 
         mcp = create_server("personal", check_dependencies=False)
         with stored_credentials("example001", "mcp-test-secret"):

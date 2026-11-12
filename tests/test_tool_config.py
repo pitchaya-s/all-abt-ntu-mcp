@@ -62,11 +62,11 @@ class ToolConfigTests(unittest.TestCase):
 
     def test_saved_profile_and_explicit_override_are_used(self):
         self.seed("personal", {"news_search"})
-        with patch("shared.server.main") as run:
+        with patch("server.main") as run:
             with patch("cli.tools.commands.action_names", return_value=set()):
                 self.call()
                 run.assert_called_once_with("personal", disabled_tools=["news_search"])
-        with patch("shared.server.main") as run:
+        with patch("server.main") as run:
             self.call("--profile", "public")
             run.assert_called_once_with("public", disabled_tools=["news_search"])
 
@@ -74,7 +74,7 @@ class ToolConfigTests(unittest.TestCase):
         path = config_path()
         path.parent.mkdir(parents=True)
         path.write_text("{broken", encoding="utf-8")
-        with patch("shared.server.main") as run, self.assertRaises(SystemExit):
+        with patch("server.main") as run, self.assertRaises(SystemExit):
             self.call()
         run.assert_not_called()
 
@@ -136,7 +136,7 @@ class ToolConfigTests(unittest.TestCase):
             )
 
     def test_disabled_tool_cannot_be_listed_or_called(self):
-        from shared import server
+        import server
 
         instance = server.create_server("public")
 
@@ -342,7 +342,7 @@ class ToolConfigTests(unittest.TestCase):
         self.call("tools", "disable", "news")
         self.assertIn("[ ] news ", self.call("tools", "list"))
         self.assertIn("[ ] news_search", self.call("tools", "list", "--all"))
-        with patch("shared.server.main") as run:
+        with patch("server.main") as run:
             self.call()
             self.assertIn("news_search", run.call_args.kwargs["disabled_tools"])
         from cli.tools.commands import effective_disabled
@@ -460,7 +460,7 @@ class ToolConfigTests(unittest.TestCase):
         import sys
 
         with (
-            patch("shared.server._chromium_installed", side_effect=[False, True]),
+            patch("server._chromium_installed", side_effect=[False, True]),
             patch("builtins.input", side_effect=["invalid", ""]),
             patch(
                 "cli.tools.commands.subprocess.run", return_value=Mock(returncode=0)
@@ -472,7 +472,7 @@ class ToolConfigTests(unittest.TestCase):
                 [sys.executable, "-m", "playwright", "install", "chromium"], check=False
             )
         with (
-            patch("shared.server._chromium_installed", return_value=False),
+            patch("server._chromium_installed", return_value=False),
             patch("builtins.input", return_value="n"),
             patch("cli.tools.commands.subprocess.run") as install,
             redirect_stdout(StringIO()),
@@ -480,7 +480,7 @@ class ToolConfigTests(unittest.TestCase):
             ensure_chromium()
             install.assert_not_called()
         with (
-            patch("shared.server._chromium_installed", return_value=True),
+            patch("server._chromium_installed", return_value=True),
             patch("builtins.input") as prompt,
             patch("cli.tools.commands.subprocess.run") as install,
         ):
@@ -488,7 +488,7 @@ class ToolConfigTests(unittest.TestCase):
             prompt.assert_not_called()
             install.assert_not_called()
         with (
-            patch("shared.server._chromium_installed", return_value=False),
+            patch("server._chromium_installed", return_value=False),
             patch("builtins.input", return_value="y"),
             patch("cli.tools.commands.subprocess.run", return_value=Mock(returncode=1)),
             redirect_stdout(StringIO()),

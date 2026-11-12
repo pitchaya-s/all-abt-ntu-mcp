@@ -11,7 +11,7 @@ import httpx
 from drntu.models import RepositoryError
 from drntu.oai.client import BASE, OAIClient
 from drntu.rest.client import API, RepositoryClient
-from shared.public_http import PublicHTTPClient
+from public_http_client import PublicHTTPClient
 
 URL = "https://example.org/feed"
 

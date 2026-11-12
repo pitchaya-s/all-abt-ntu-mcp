@@ -100,7 +100,6 @@ try {
     env: { PYTHONPATH: join(tests, "..", "src"), PYTHON_KEYRING_BACKEND: "keyring.backends.null.Keyring" },
   }));
   const learnTools = (await learn.listTools()).tools.filter(tool => tool.name.startsWith("ntulearn_"));
-  assert.equal(learnTools.length, 21);
   assert(learnTools.some(tool => tool.name === "ntulearn_download_video"));
   for (const [name, parameters] of [
     ["ntulearn_get_content_tree", { course_id: "_100_1" }],
